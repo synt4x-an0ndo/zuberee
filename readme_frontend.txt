@@ -44,3 +44,71 @@ Logout API
 - Success message: Logout successful.
 - Invalid/missing token: Return 401 Unauthorized
 - Actual logout: Remove the JWT token on the client side
+
+Category API
+Create Category API
+- API endpoint: POST /api/categories
+- Authentication: JWT required
+- Authorization: Admin only
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Request fields: name, slug, description
+- Validation: Category name and slug are required
+- Duplicate check: Prevent duplicate category name or slug
+- Success response: success, message, data
+- Success message: Category created successfully.
+- Invalid/missing token: Return 401 Unauthorized
+- Non-admin user: Return 403 Forbidden
+
+Get All Categories API
+- API endpoint: GET /api/categories
+- Authentication: JWT required
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Retrieve all categories from the database
+- Categories are ordered by creation date
+- Success response: success, message, data
+- Success message: Categories retrieved successfully.
+- Invalid/missing token: Return 401 Unauthorized
+
+Get Category by ID API
+- API endpoint: GET /api/categories/:id
+- Authentication: JWT required
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Validate category ID
+- Retrieve category by ID
+- Category not found: Return 404 Not Found
+- Success response: success, message, data
+- Success message: Category retrieved successfully.
+- Invalid/missing token: Return 401 Unauthorized
+
+Update Category API
+- API endpoint: PUT /api/categories/:id
+- Authentication: JWT required
+- Authorization: Admin only
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Request fields: name, slug, description
+- Validate category ID
+- Prevent duplicate category name or slug
+- Category not found: Return 404 Not Found
+- Success response: success, message, data
+- Success message: Category updated successfully.
+- Invalid/missing token: Return 401 Unauthorized
+- Non-admin user: Return 403 Forbidden
+
+Delete Category API
+- API endpoint: DELETE /api/categories/:id
+- Authentication: JWT required
+- Authorization: Admin only
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Validate category ID
+- Check whether the category exists
+- Prevent deletion if products are associated with the category
+- Category not found: Return 404 Not Found
+- Success response: success, message, data
+- Success message: Category deleted successfully.
+- Invalid/missing token: Return 401 Unauthorized
+- Non-admin user: Return 403 Forbidden
