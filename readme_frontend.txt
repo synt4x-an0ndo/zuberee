@@ -26,6 +26,15 @@ JWT Authentication Middleware
 - Protected APIs: Require a valid JWT token
 - Reusable authentication: Use the same helper across all protected APIs
 
+Get Authenticated User API
+- API endpoint: GET /api/auth/me
+- Authentication: JWT required
+- Authorization header: Bearer JWT token
+- Token validation: Verify using authenticateRequest()
+- Success response: success, message, data
+- Response data: userId, email, role
+- Invalid/missing token: Return 401 Unauthorized
+
 Logout API
 - API endpoint: POST /api/auth/logout
 - Authentication: JWT required
