@@ -48,7 +48,12 @@ export default function CategoryPage({ params }) {
         const r = await api.get(`api/products?${buildQuery(page)}`);
         const list = r?.data?.data ?? [];
         setProducts((prev) => (append ? [...prev, ...list] : list));
-        if (r?.pagination) setPagination(r.pagination);
+        if (r?.data) {
+          setPagination({
+            ...r.data,
+            has_more: r.data.current_page < r.data.last_page,
+          });
+        }
         if (list[0]?.categories?.[0]) setMeta(list[0].categories[0]);
       } catch {
         notify.error("Failed to load products");

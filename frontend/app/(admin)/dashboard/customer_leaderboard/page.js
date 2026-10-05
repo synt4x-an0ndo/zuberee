@@ -48,7 +48,8 @@ function Leaderboard() {
       const p = new URLSearchParams({ page: String(page) });
       Object.entries(filters).forEach(([k, v]) => v && p.append(k, v));
       const r = await api.get(`api/customers/leaderboard?${p.toString()}`);
-      setRows(r?.data?.data || r?.data || []);
+      const rows = r?.data?.data ?? r?.data;
+      setRows(Array.isArray(rows) ? rows : []);
       setPager({
         current_page: r?.data?.current_page || 1,
         last_page: r?.data?.last_page || 1,

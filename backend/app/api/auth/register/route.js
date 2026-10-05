@@ -1,5 +1,8 @@
 import bcrypt from "bcryptjs";
+import { SignJWT } from "jose";
 import prisma from "../../../../directory/prisma/prisma.js";
+
+const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 export async function POST(request) {
     try {
         const body = await request.json();
@@ -86,11 +89,21 @@ export async function POST(request) {
             },
         });
 
+        const token = await new SignJWT({
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+        })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("7d")
+            .sign(secret);
+
         return Response.json(
             {
                 success: true,
                 message: "User registered successfully.",
-                data: user,
+                data: { token, user },
             },
             { status: 201 }
         );

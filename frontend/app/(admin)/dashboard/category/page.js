@@ -32,9 +32,10 @@ function CategoryList() {
       const qs = query
         ? `api/categories?page=${page}&search=${encodeURIComponent(query)}`
         : `api/categories?page=${page}`;
-      const r = await api.get(qs, { auth: false });
-      setRows(r?.data || []);
-      setPager({ current_page: r?.current_page || 1, last_page: r?.last_page || 1 });
+      const r = await api.get(qs);
+      const pageData = r?.data && !Array.isArray(r.data) && Array.isArray(r.data.data) ? r.data : r;
+      setRows(Array.isArray(pageData?.data) ? pageData.data : []);
+      setPager({ current_page: pageData?.current_page || 1, last_page: pageData?.last_page || 1 });
     } catch (e) {
       setError(e.message || "Failed to load categories");
     } finally {

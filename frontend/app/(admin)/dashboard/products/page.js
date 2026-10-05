@@ -47,7 +47,7 @@ function ProductList() {
       qs.set("page", String(page));
       const r = await api.get(`api/products?${qs.toString()}`);
       const pagerData = r?.data || {};
-      setRows(pagerData.data || []);
+      setRows(Array.isArray(pagerData.data) ? pagerData.data : []);
       setPager({
         current_page: pagerData.current_page || 1,
         last_page: pagerData.last_page || 1,

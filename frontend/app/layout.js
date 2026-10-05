@@ -1,7 +1,7 @@
-import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { SiteProvider } from "@/context/SiteContext";
 import { CartProvider } from "@/context/CartContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 /* Common stylesheets - same order as the original site */
 import "@/styles/css/d3df112486f97f47.css";
@@ -37,10 +37,11 @@ export default function RootLayout({ children }) {
     >
       <body>
         <SiteProvider>
-          <CartProvider>
-            {children}
-            <ToastContainer position="top-right" autoClose={2500} theme="colored" />
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              {children}
+            </CartProvider>
+          </AuthProvider>
         </SiteProvider>
       </body>
     </html>
