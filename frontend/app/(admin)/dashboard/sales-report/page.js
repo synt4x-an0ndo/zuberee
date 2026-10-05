@@ -31,7 +31,7 @@ function SalesReport() {
       Object.entries(applied).forEach(([k, v]) => v && p.set(k, v));
       p.set("sort", "revenue");
       const r = await api.get(`api/sales-report?${p.toString()}`);
-      setData(r);
+      setData(r?.data || {});
     } catch (e) {
       setError(e.message || "Could not load the sales report.");
     } finally {

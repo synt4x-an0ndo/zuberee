@@ -82,10 +82,11 @@ export default function ProductPage({ params }) {
         const r = await api.get(
           `api/category-slug-products/${categorySlug}?page=${page}`
         );
-        const list = r?.data || [];
-        setRelated((prev) => (append ? [...prev, ...list] : list));
+        const list = r?.data?.data ?? r?.data;
+        const relatedProducts = Array.isArray(list) ? list : [];
+        setRelated((prev) => (append ? [...prev, ...relatedProducts] : relatedProducts));
         setRelPage(page);
-        setRelHasMore(Array.isArray(list) && list.length >= 10);
+        setRelHasMore(relatedProducts.length >= 10);
       } catch {
         /* optional */
       } finally {
@@ -121,9 +122,14 @@ export default function ProductPage({ params }) {
 
   /* ---------------- derived ---------------- */
   const badge = statusBadge(product);
+  const images = Array.isArray(product.images) ? product.images : [];
+  const colors = Array.isArray(product.colors) ? product.colors : [];
+  const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  const specifications = Array.isArray(product.specifications) ? product.specifications : [];
+  const faqs = Array.isArray(product.faqs) ? product.faqs : [];
   const gallery = [
-    ...(product.images || []).map((im) => imgUrl(im.image)),
-    ...(product.colors || [])
+    ...images.map((im) => imgUrl(im.image)),
+    ...colors
       .filter((c) => c.image)
       .map((c) => imgUrl(c.image)),
   ].filter((v, i, a) => a.indexOf(v) === i);
@@ -134,7 +140,7 @@ export default function ProductPage({ params }) {
       (!activeColor || String(c.color_id) === String(activeColor.id))
   );
 
-  const sizeObj = activeSize || product.sizes?.[0] || null;
+  const sizeObj = activeSize || sizes[0] || null;
   const sizePrice = sizeObj?.pivot?.price;
   const unitPrice =
     sizePrice != null && sizePrice !== ""
@@ -165,7 +171,7 @@ export default function ProductPage({ params }) {
   }. Can you provide more information?`;
 
   const handleAdd = (mode) => {
-    if (product.sizes?.length > 1 && !activeSize && !sizeObj) {
+    if (sizes.length > 1 && !activeSize && !sizeObj) {
       notify.warn("Please Select A Size");
       return;
     }
@@ -283,13 +289,13 @@ export default function ProductPage({ params }) {
           </div>
 
           {/* colors */}
-          {product.colors?.length > 0 && (
+          {colors.length > 0 && (
             <div className="mb-3">
               <div className="fw-semibold small mb-2">
                 Colour{activeColor ? `: ${activeColor.name}` : ""}
               </div>
               <div className="d-flex gap-2 flex-wrap">
-                {product.colors.map((c) => (
+                {colors.map((c) => (
                   <button
                     key={c.id}
                     type="button"
@@ -322,12 +328,12 @@ export default function ProductPage({ params }) {
           )}
 
           {/* sizes */}
-          {product.sizes?.length > 0 && (
+          {sizes.length > 0 && (
             <div className="mb-3">
               <div className="fw-semibold small mb-2">Size</div>
               <div className="d-flex gap-2 flex-wrap">
-                {product.sizes.map((s) => {
-                  const active = (activeSize?.id ?? product.sizes?.[0]?.id) === s.id;
+                {sizes.map((s) => {
+                  const active = (activeSize?.id ?? sizes[0]?.id) === s.id;
                   const stock = Number(s.pivot?.stock);
                   const out = tracked && stock <= 0 && product.status !== "prebook";
                   return (
@@ -431,12 +437,12 @@ export default function ProductPage({ params }) {
           </div>
 
           {/* specifications */}
-          {product.specifications?.length > 0 && (
+          {specifications.length > 0 && (
             <div className="mt-4 border rounded p-3">
               <div className="fw-semibold mb-2">Product Specifications</div>
               <table className="table table-sm mb-0 small">
                 <tbody>
-                  {product.specifications.map((s, i) => (
+                  {specifications.map((s, i) => (
                     <tr key={i}>
                       <td className="text-muted" style={{ width: "40%" }}>
                         {s.key}
@@ -484,9 +490,9 @@ export default function ProductPage({ params }) {
             />
           )}
           {tab === "faq" &&
-            (product.faqs?.length ? (
+            (faqs.length ? (
               <div className="accordion">
-                {product.faqs.map((f, i) => (
+                {faqs.map((f, i) => (
                   <div className="mb-2" key={i}>
                     <div className="fw-semibold">{f.question}</div>
                     <div

@@ -6,7 +6,6 @@ import ProductCard from "@/components/ProductCard";
 import { api, imgUrl } from "@/lib/api";
 import notify from "@/components/notify";
 import Loader from "@/components/Loader";
-import { useSite } from "@/context/SiteContext";
 
 import "@/styles/css/09b8a269a4a7b1a3.css";
 
@@ -24,17 +23,14 @@ export default function HomePage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [banners, setBanners] = useState([]);
   const [bannersLoading, setBannersLoading] = useState(true);
-  const { backendAvailable } = useSite();
 
   /* ---- hero banners (API-driven) ---- */
   useEffect(() => {
     (async () => {
       try {
         const r = await api.get("api/banners");
-        const list = r?.data || [];
-        const images = list
-          .flatMap((b) => b.banner_images || [])
-          .filter((bi) => bi?.image);
+        const list = Array.isArray(r?.data) ? r.data : [];
+        const images = list.filter((banner) => banner?.image);
         setBanners(images);
       } catch {
         setBanners([]);
@@ -127,7 +123,7 @@ export default function HomePage() {
       ) : null}
 
       {/* ---------------- CATEGORY SLOTS ---------------- */}
-      {loading || !backendAvailable ? (
+      {loading ? (
         <Loader />
       ) : visible.length ? (
         <div className="container mb-3 mb-md-5 mt-0 py-2">

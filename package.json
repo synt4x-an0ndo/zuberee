@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend\"",
-    "build": "npm run build --prefix frontend && npm run build --prefix backend"
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "prestart": "npm run build",
+    "start": "concurrently --kill-others-on-fail --names frontend,backend \"npm run start --prefix frontend\" \"npm run start --prefix backend\""
   },
   "repository": {
     "type": "git",

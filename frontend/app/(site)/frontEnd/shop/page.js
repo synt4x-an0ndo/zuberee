@@ -64,10 +64,14 @@ export default function ShopPage() {
           qs.append("max_price", filters.max_price);
         if (filters.search) qs.append("search", filters.search);
         const r = await api.get(`api/shop/products?${qs.toString()}`);
-        const list =
-          Array.isArray(r?.data) ? r.data : r?.data && typeof r.data === "object" ? Object.values(r.data) : [];
+        const pageData = r?.data && !Array.isArray(r.data) ? r.data : r;
+        const list = Array.isArray(pageData?.data) ? pageData.data : [];
         setProducts((prev) => (append ? [...(prev || []), ...list] : list));
-        if (r?.pagination) setPagination(r.pagination);
+        setPagination(
+          pageData && typeof pageData === "object"
+            ? { ...pageData, has_more: pageData.current_page < pageData.last_page }
+            : null
+        );
       } catch {
         notify.error("Error loading products");
       } finally {

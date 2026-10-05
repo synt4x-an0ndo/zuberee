@@ -31,8 +31,10 @@ function RolesPage() {
         api.get("api/roles"),
         api.get("api/permissions").catch(() => ({ permissions: [] })),
       ]);
-      setRoles(r?.roles || r?.data?.roles || []);
-      setPermissions(p?.permissions || p?.data?.permissions || []);
+      const roles = r?.roles || r?.data?.roles;
+      const availablePermissions = p?.permissions || p?.data?.permissions;
+      setRoles(Array.isArray(roles) ? roles : []);
+      setPermissions(Array.isArray(availablePermissions) ? availablePermissions : []);
     } catch (e) {
       notify.error(e.message || "Failed to load roles");
     } finally {

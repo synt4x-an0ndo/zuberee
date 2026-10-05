@@ -278,7 +278,8 @@ function ReceiveModal({ onClose, onDone }) {
     (async () => {
       try {
         const r = await api.get("api/inventory/products");
-        setProducts(r?.data?.data || r?.data || []);
+        const products = r?.data?.data ?? r?.data;
+        setProducts(Array.isArray(products) ? products : []);
       } catch {
         notify.error("Could not load products");
       }
