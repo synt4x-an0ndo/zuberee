@@ -40,6 +40,7 @@ export default function SiteFooter() {
         { label: "All Products", href: "/frontEnd/shop" },
         { label: "New Arrivals", href: "/frontEnd/shop" },
         { label: "Best Sellers", href: "/frontEnd/shop" },
+        { label: "My Account", href: "/account" },
       ],
     },
     {

@@ -44,8 +44,10 @@ export function SiteProvider({ children }) {
       if (s.status === "fulfilled") setSettings(s.value?.data ?? null);
       if (f.status === "fulfilled") setFooter(f.value ?? null);
       if (so.status === "fulfilled") setSocial(so.value ?? null);
-      if (c.status === "fulfilled")
-        setCategories(Array.isArray(c.value) ? c.value : []);
+      if (c.status === "fulfilled") {
+        const categoryData = c.value?.data ?? c.value;
+        setCategories(Array.isArray(categoryData) ? categoryData : []);
+      }
       setBackendAvailable([s, f, so, c].some((result) => result.status === "fulfilled"));
       setLoading(false);
     })();
