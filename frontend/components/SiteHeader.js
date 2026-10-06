@@ -198,12 +198,12 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
             style={
               isMobile
                 ? {
-                    display: "block",
-                    padding: "9px 16px",
-                    fontSize: 14,
-                    color: "#1c1c1c",
-                    borderBottom: "1px solid #eee",
-                  }
+                  display: "block",
+                  padding: "9px 16px",
+                  fontSize: 14,
+                  color: "#1c1c1c",
+                  borderBottom: "1px solid #eee",
+                }
                 : undefined
             }
           >
@@ -215,17 +215,17 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
                 isMobile
                   ? { listStyle: "none", margin: 0, padding: 0 }
                   : {
-                      position: "absolute",
-                      top: 0,
-                      left: "100%",
-                      background: "#fff",
-                      border: "1px solid #ebebeb",
-                      minWidth: 220,
-                      zIndex: 40,
-                      padding: "6px 0",
-                      margin: 0,
-                      listStyle: "none",
-                    }
+                    position: "absolute",
+                    top: 0,
+                    left: "100%",
+                    background: "#fff",
+                    border: "1px solid #ebebeb",
+                    minWidth: 220,
+                    zIndex: 40,
+                    padding: "6px 0",
+                    margin: 0,
+                    listStyle: "none",
+                  }
               }
             >
               {c.all_children.map((s) => (
