@@ -16,12 +16,27 @@ import {
   FaCartShopping as FaShoppingCart,
   FaChevronDown,
   FaXmark as FaTimes,
+  FaUser,
+  FaArrowRightToBracket,
+  FaArrowRightFromBracket,
 } from "react-icons/fa6";
 import { FaWhatsapp } from "react-icons/fa";
 import { useSite } from "@/context/SiteContext";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { api, imgUrl, formatTk } from "@/lib/api";
 import notify from "@/components/notify";
+
+const accountMenuItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  padding: "10px 18px",
+  color: "#68737e",
+  fontSize: 16,
+  textDecoration: "none",
+  cursor: "pointer",
+};
 
 /* ------------------------------------------------------------------ */
 /* Live search dropdown (GET api/product-search?q=...)                 */
@@ -243,17 +258,37 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
 export default function SiteHeader() {
   const { company, social, categories } = useSite();
   const { count, total, setOpen, openCart } = useCart();
+  const { isAuthenticated, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
   const [catOpen, setCatOpen] = useState(false);     // desktop "All Categories" dropdown
   const [drawerOpen, setDrawerOpen] = useState(false); // mobile slide-in drawer
   const [drawerTab, setDrawerTab] = useState("category");
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
 
   useEffect(() => {
     setCatOpen(false);
     setDrawerOpen(false);
+    setAccountOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (accountRef.current && !accountRef.current.contains(event.target)) {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const handleLogout = async () => {
+    setAccountOpen(false);
+    await logout();
+    router.push("/");
+  };
 
   const waNumber = (social?.whatsapp_number || company.phone || "")
     .replace(/[^0-9]/g, "");
@@ -361,6 +396,79 @@ export default function SiteHeader() {
 
             <div className="col-2 col-xl-3 d-flex align-items-center justify-content-end">
               <div className="d-flex align-items-center justify-content-end">
+                <div ref={accountRef} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    className="border-0 bg-transparent p-0 me-3 text-dark"
+                    aria-label="Open account menu"
+                    aria-expanded={accountOpen}
+                    onClick={() => setAccountOpen((open) => !open)}
+                  >
+                    <FaUser size={18} />
+                  </button>
+                  {accountOpen && (
+                    <div
+                      role="menu"
+                      aria-label="Account menu"
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 14px)",
+                        right: 8,
+                        width: 185,
+                        padding: "8px 0",
+                        background: "#fff",
+                        border: "1px solid #d9ddd9",
+                        borderRadius: 0,
+                        boxShadow: "0 10px 24px rgba(24, 37, 30, .12)",
+                        zIndex: 100,
+                      }}
+                    >
+                      {!isAuthenticated ? (
+                        <>
+                          <Link
+                            href="/login"
+                            role="menuitem"
+                            onClick={() => setAccountOpen(false)}
+                            style={accountMenuItemStyle}
+                          >
+                            <FaArrowRightToBracket />
+                            <span>Log In</span>
+                          </Link>
+                          <Link
+                            href="/register"
+                            role="menuitem"
+                            onClick={() => setAccountOpen(false)}
+                            style={accountMenuItemStyle}
+                          >
+                            <FaUser />
+                            <span>Register</span>
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          <Link
+                            href="/account"
+                            role="menuitem"
+                            onClick={() => setAccountOpen(false)}
+                            style={accountMenuItemStyle}
+                          >
+                            <FaUser />
+                            <span>Dashboard</span>
+                          </Link>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={handleLogout}
+                            style={{ ...accountMenuItemStyle, width: "100%", border: 0, background: "transparent", textAlign: "left" }}
+                          >
+                            <FaArrowRightFromBracket />
+                            <span>Log Out</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <button
                   className="cart-icon-btn border-0 bg-transparent position-relative me-3"
                   aria-label="Open cart"
@@ -533,6 +641,7 @@ export default function SiteHeader() {
                       { href: "/", label: "Home" },
                       { href: "/frontEnd/shop", label: "Shop" },
                       { href: "/frontEnd/about_us", label: "About Us" },
+                      { href: isAuthenticated ? "/account" : "/login", label: isAuthenticated ? "My Account" : "Sign In" },
                     ].map((m) => (
                       <li key={m.href}>
                         <Link

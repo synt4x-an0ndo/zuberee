@@ -6,7 +6,11 @@ import { api, clearToken, getToken, setToken } from "@/lib/api";
 const AuthCtx = createContext(null);
 
 function userFromResponse(response) {
-    return response?.data?.user || response?.data || null;
+    return response?.data?.user || response?.data?.data || response?.data || null;
+}
+
+function authData(response) {
+    return response?.data?.data || response?.data || {};
 }
 
 export function AuthProvider({ children }) {
@@ -26,16 +30,18 @@ export function AuthProvider({ children }) {
 
     const login = async (credentials) => {
         const response = await api.post("api/auth/login", credentials, { auth: false });
-        setToken(response.data.token);
-        setUser(response.data.user);
-        return response.data.user;
+        const data = authData(response);
+        setToken(data.token);
+        setUser(data.user);
+        return data.user;
     };
 
     const register = async (details) => {
         const response = await api.post("api/auth/register", details, { auth: false });
-        setToken(response.data.token);
-        setUser(response.data.user);
-        return response.data.user;
+        const data = authData(response);
+        setToken(data.token);
+        setUser(data.user);
+        return data.user;
     };
 
     const logout = async () => {

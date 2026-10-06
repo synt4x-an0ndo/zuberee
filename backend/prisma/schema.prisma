@@ -63,15 +63,23 @@ model Address {
 }
 
 model Category {
-  id          Int       @id @default(autoincrement())
-  name        String    @unique
-  slug        String    @unique
-  description String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  name         String    @unique
+  slug         String    @unique
+  description  String?
+  parentId     Int?
+  homeCategory Boolean   @default(false)
+  priority     Int       @default(0)
+  sizeGuideType String?
+  trackInventory Boolean @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  products    Product[]
+  products     Product[]
+  parent       Category? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[] @relation("CategoryHierarchy")
 
+  @@index([parentId])
   @@map("categories")
 }
 

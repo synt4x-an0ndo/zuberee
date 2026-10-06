@@ -47,7 +47,10 @@ export default function CategoryForm({ initial, id, permissionExtra }) {
     (async () => {
       try {
         const r = await api.get("api/frontend/categories", { auth: false });
-        if (alive) setTree(Array.isArray(r) ? r : []);
+        if (alive) {
+          const categoryData = r?.data ?? r;
+          setTree(Array.isArray(categoryData) ? categoryData : []);
+        }
       } catch {
         notify.error("Failed to load categories");
       } finally {

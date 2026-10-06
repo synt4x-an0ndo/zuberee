@@ -8,6 +8,7 @@ import CartDrawer from "@/components/CartDrawer";
 import "@/styles/css/19e5daabf9cb4494.css";
 import "@/styles/css/5b92b8a8352367c2.css";
 import "@/styles/css/5ff24143f2d57ea6.css";
+import "@/styles/account.css";
 
 /** Storefront shell: header + content + footer + cart drawer. */
 export default function SiteLayout({ children }) {
