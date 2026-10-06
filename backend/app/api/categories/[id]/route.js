@@ -1,19 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
-import { serializeAdminCategory } from "@/directory/categories/categories.js";
-
-function slugify(value) {
-    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-}
-
-async function parentIdFromBody(body, categoryId) {
-    const rawParentId = body.parent_id ?? body.parentId ?? null;
-    if (rawParentId === null || rawParentId === "") return null;
-    const parentId = Number(rawParentId);
-    if (!Number.isInteger(parentId) || parentId === categoryId) throw new Error("INVALID_PARENT");
-    if (!(await prisma.category.findUnique({ where: { id: parentId } }))) throw new Error("PARENT_NOT_FOUND");
-    return parentId;
-}
 
 export async function GET(request, { params }) {
     try {
@@ -48,7 +34,6 @@ export async function GET(request, { params }) {
             where: {
                 id: categoryId,
             },
-            include: { parent: true },
         });
 
         if (!category) {
@@ -66,7 +51,7 @@ export async function GET(request, { params }) {
             {
                 success: true,
                 message: "Category retrieved successfully.",
-                data: serializeAdminCategory(category),
+                data: category,
             },
             { status: 200 }
         );
@@ -143,13 +128,13 @@ export async function PUT(request, { params }) {
 
         const body = await request.json();
 
-        const { name, description } = body;
+        const { name, slug, description } = body;
 
-        if (!name) {
+        if (!name || !slug) {
             return Response.json(
                 {
                     success: false,
-                    message: "Name is required.",
+                    message: "Name and slug are required.",
                     data: null,
                 },
                 { status: 400 }
@@ -157,8 +142,7 @@ export async function PUT(request, { params }) {
         }
 
         const normalizedName = name.trim();
-        const normalizedSlug = slugify(body.slug || normalizedName);
-        const parentId = await parentIdFromBody(body, categoryId);
+        const normalizedSlug = slug.trim().toLowerCase();
 
         const duplicateCategory = await prisma.category.findFirst({
             where: {
@@ -191,11 +175,6 @@ export async function PUT(request, { params }) {
                 name: normalizedName,
                 slug: normalizedSlug,
                 description: description?.trim() || null,
-                parentId,
-                homeCategory: body.home_category === true || body.home_category === "1" || body.homeCategory === true,
-                priority: Number.isInteger(Number(body.priority)) ? Number(body.priority) : 0,
-                sizeGuideType: body.size_guide_type || body.sizeGuideType || null,
-                trackInventory: body.track_inventory === true || body.track_inventory === "1" || body.trackInventory === true,
             },
         });
 
@@ -203,7 +182,7 @@ export async function PUT(request, { params }) {
             {
                 success: true,
                 message: "Category updated successfully.",
-                data: serializeAdminCategory(category),
+                data: category,
             },
             { status: 200 }
         );

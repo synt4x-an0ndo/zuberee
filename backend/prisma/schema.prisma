@@ -63,23 +63,24 @@ model Address {
 }
 
 model Category {
-  id           Int       @id @default(autoincrement())
-  name         String    @unique
-  slug         String    @unique
-  description  String?
-  parentId     Int?
-  homeCategory Boolean   @default(false)
-  priority     Int       @default(0)
-  sizeGuideType String?
-  trackInventory Boolean @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+Have you restored the backend to exactly how it was before today’s changes, while keeping all the frontend updates and files we worked on today intact?
 
-  products     Product[]
-  parent       Category? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children     Category[] @relation("CategoryHierarchy")
+Please make sure that:
+- All frontend changes made today are preserved.
+- The backend has been restored to its previous state.
+- No frontend files or updates were removed or overwritten.
+- No backend files are being modified unnecessarily.
+- Frontend and backend responsibilities remain completely separated.
 
-  @@index([parentId])
+Please confirm this before making any further changes.  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
   @@map("categories")
 }
 
