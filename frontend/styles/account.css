@@ -1,1 +1,439 @@
-.account-page{background:#fbfaf7;min-height:68vh;padding:76px 0 110px;color:#18251e}.account-container{max-width:1060px}.account-heading{border-bottom:1px solid #dfe4df;padding-bottom:26px;margin-bottom:44px}.account-heading span,.section-kicker{color:#47735d;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase}.account-heading h1{font-family:Georgia,serif;font-size:clamp(2.25rem,5vw,4rem);font-weight:400;line-height:1.1;margin:12px 0 0}.account-auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:90px;align-items:start}.account-copy{padding-top:20px;max-width:360px}.account-copy p{font-family:Georgia,serif;color:#33473a;font-size:1.35rem;line-height:1.45;margin-bottom:35px}.account-note{display:flex;align-items:center;gap:12px;margin:17px 0;color:#5b6c61;font-size:14px}.account-note svg{color:#47735d;font-size:11px}.account-form{background:#fff;border:1px solid #e1e5df;padding:32px;box-shadow:0 14px 40px rgba(23,44,31,.06)}.account-form label{display:block;color:#526259;font-size:12px;font-weight:700;letter-spacing:.5px;margin-bottom:20px}.account-form input{display:block;width:100%;border:0;border-bottom:1px solid #bdc9be;padding:11px 0 10px;background:transparent;color:#18251e;font:16px Georgia,serif}.account-form input:focus{border-color:#47735d}.account-submit{display:flex;align-items:center;justify-content:center;gap:16px;width:100%;border:0;background:#1e392b;color:#fff;padding:15px 20px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:10px}.account-submit:hover{background:#47735d}.account-submit:disabled{opacity:.65}.account-switch{text-align:center;color:#68766d;font-size:13px;margin:22px 0 0}.account-switch a,.account-link{color:#47735d;font-weight:700;text-decoration:none}.account-toolbar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #dfe4df;padding:0 0 24px;margin-bottom:35px}.account-toolbar div{display:flex;align-items:center;gap:10px;color:#66746b;font-size:14px}.account-toolbar svg{color:#47735d}.account-toolbar button{border:0;background:transparent;color:#47735d;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px}.account-success{border-left:3px solid #47735d;background:#edf4ee;padding:13px 16px;margin-bottom:30px;color:#385542;font-size:14px}.account-sections{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}.account-section{background:#fff;border:1px solid #e1e5df;padding:27px}.account-section h2{font-family:Georgia,serif;font-size:25px;font-weight:400;margin:8px 0 26px}.profile-form{padding:0;border:0;box-shadow:none}.profile-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}.profile-form-grid label:last-child:nth-child(3){grid-column:1/-1}.profile-divider{border-top:1px solid #e1e5df;padding-top:18px;margin:6px 0 22px}.profile-divider span{display:block;color:#34483a;font-weight:700;font-size:13px}.profile-divider small{color:#87938b;font-size:12px}.account-submit.compact{width:auto;padding:13px 18px;margin-top:6px}.account-empty{text-align:center;padding:28px 0;color:#728078}.account-empty svg{font-size:28px;color:#a9b5ab}.account-empty h3{font-family:Georgia,serif;font-size:20px;font-weight:400;color:#34483a;margin:15px 0 5px}.account-empty p{font-size:13px;margin-bottom:20px}.account-link{display:inline-flex;align-items:center;gap:10px;font-size:12px;text-transform:uppercase;letter-spacing:1px}.orders-list{display:grid;gap:14px}.order-item{border-top:1px solid #e1e5df;padding-top:15px}.order-top,.order-total{display:flex;justify-content:space-between;gap:12px}.order-label{display:block;font-size:13px;font-weight:700;color:#34483a}.order-top time{font-size:11px;color:#8b958e}.order-status{font-size:10px;font-weight:700;letter-spacing:1px;color:#47735d;text-transform:uppercase}.order-status.cancelled{color:#a35c52}.order-products{border-top:1px solid #eef0ed;margin-top:13px;padding-top:10px}.order-product{display:flex;align-items:center;gap:10px;margin:9px 0}.order-product img{width:38px;height:46px;object-fit:cover;background:#f1f3ef}.order-product div{min-width:0;flex:1}.order-product strong,.order-product span{display:block;font-size:12px}.order-product strong{font-weight:600;color:#435349;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.order-product span{color:#8a948d;margin-top:2px}.order-product b{font-size:11px;color:#435349;white-space:nowrap}.order-total{border-top:1px solid #e1e5df;padding-top:13px;margin-top:13px;color:#89948c;font-size:11px}.order-total span{max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.order-total strong{color:#1e392b;font-size:13px;white-space:nowrap}.account-loading{color:#87938b;padding:30px 0;font-size:14px}@media(max-width:767px){.account-page{padding:48px 0 80px}.account-heading{margin-bottom:28px}.account-auth-grid,.account-sections{grid-template-columns:1fr;gap:28px}.account-copy{padding-top:0}.account-copy p{font-size:1.15rem;margin-bottom:20px}.account-form,.account-section{padding:22px}.account-toolbar{align-items:flex-start}.account-toolbar div span{max-width:190px;overflow:hidden;text-overflow:ellipsis}.profile-form-grid{grid-template-columns:1fr}.profile-form-grid label:last-child:nth-child(3){grid-column:auto}.account-submit.compact{width:100%}}
+.account-page {
+    background: #fbfaf7;
+    min-height: 68vh;
+    padding: 76px 0 110px;
+    color: #18251e
+}
+
+.account-container {
+    max-width: 1060px
+}
+
+.account-heading {
+    border-bottom: 1px solid #dfe4df;
+    padding-bottom: 26px;
+    margin-bottom: 44px
+}
+
+.account-heading span,
+.section-kicker {
+    color: #47735d;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase
+}
+
+.account-heading h1 {
+    font-family: Georgia, serif;
+    font-size: clamp(2.25rem, 5vw, 4rem);
+    font-weight: 400;
+    line-height: 1.1;
+    margin: 12px 0 0
+}
+
+.account-auth-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 90px;
+    align-items: start
+}
+
+.account-copy {
+    padding-top: 20px;
+    max-width: 360px
+}
+
+.account-copy p {
+    font-family: Georgia, serif;
+    color: #33473a;
+    font-size: 1.35rem;
+    line-height: 1.45;
+    margin-bottom: 35px
+}
+
+.account-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 17px 0;
+    color: #5b6c61;
+    font-size: 14px
+}
+
+.account-note svg {
+    color: #47735d;
+    font-size: 11px
+}
+
+.account-form {
+    background: #fff;
+    border: 1px solid #e1e5df;
+    padding: 32px;
+    box-shadow: 0 14px 40px rgba(23, 44, 31, .06)
+}
+
+.account-form label {
+    display: block;
+    color: #526259;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin-bottom: 20px
+}
+
+.account-form input {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid #bdc9be;
+    padding: 11px 0 10px;
+    background: transparent;
+    color: #18251e;
+    font: 16px Georgia, serif
+}
+
+.account-form input:focus {
+    border-color: #47735d
+}
+
+.account-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 100%;
+    border: 0;
+    background: #1e392b;
+    color: #fff;
+    padding: 15px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 10px
+}
+
+.account-submit:hover {
+    background: #47735d
+}
+
+.account-submit:disabled {
+    opacity: .65
+}
+
+.account-switch {
+    text-align: center;
+    color: #68766d;
+    font-size: 13px;
+    margin: 22px 0 0
+}
+
+.account-switch a,
+.account-link {
+    color: #47735d;
+    font-weight: 700;
+    text-decoration: none
+}
+
+.account-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #dfe4df;
+    padding: 0 0 24px;
+    margin-bottom: 35px
+}
+
+.account-toolbar div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #66746b;
+    font-size: 14px
+}
+
+.account-toolbar svg {
+    color: #47735d
+}
+
+.account-toolbar button {
+    border: 0;
+    background: transparent;
+    color: #47735d;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px
+}
+
+.account-success {
+    border-left: 3px solid #47735d;
+    background: #edf4ee;
+    padding: 13px 16px;
+    margin-bottom: 30px;
+    color: #385542;
+    font-size: 14px
+}
+
+.account-sections {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 28px
+}
+
+.account-section {
+    background: #fff;
+    border: 1px solid #e1e5df;
+    padding: 27px
+}
+
+.account-section h2 {
+    font-family: Georgia, serif;
+    font-size: 25px;
+    font-weight: 400;
+    margin: 8px 0 26px
+}
+
+.profile-form {
+    padding: 0;
+    border: 0;
+    box-shadow: none
+}
+
+.profile-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 22px
+}
+
+.profile-form-grid label:last-child:nth-child(3) {
+    grid-column: 1/-1
+}
+
+.profile-divider {
+    border-top: 1px solid #e1e5df;
+    padding-top: 18px;
+    margin: 6px 0 22px
+}
+
+.profile-divider span {
+    display: block;
+    color: #34483a;
+    font-weight: 700;
+    font-size: 13px
+}
+
+.profile-divider small {
+    color: #87938b;
+    font-size: 12px
+}
+
+.account-submit.compact {
+    width: auto;
+    padding: 13px 18px;
+    margin-top: 6px
+}
+
+.account-empty {
+    text-align: center;
+    padding: 28px 0;
+    color: #728078
+}
+
+.account-empty svg {
+    font-size: 28px;
+    color: #a9b5ab
+}
+
+.account-empty h3 {
+    font-family: Georgia, serif;
+    font-size: 20px;
+    font-weight: 400;
+    color: #34483a;
+    margin: 15px 0 5px
+}
+
+.account-empty p {
+    font-size: 13px;
+    margin-bottom: 20px
+}
+
+.account-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px
+}
+
+.orders-list {
+    display: grid;
+    gap: 14px
+}
+
+.order-item {
+    border-top: 1px solid #e1e5df;
+    padding-top: 15px
+}
+
+.order-top,
+.order-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.order-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #34483a
+}
+
+.order-top time {
+    font-size: 11px;
+    color: #8b958e
+}
+
+.order-status {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #47735d;
+    text-transform: uppercase
+}
+
+.order-status.cancelled {
+    color: #a35c52
+}
+
+.order-products {
+    border-top: 1px solid #eef0ed;
+    margin-top: 13px;
+    padding-top: 10px
+}
+
+.order-product {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 9px 0
+}
+
+.order-product img {
+    width: 38px;
+    height: 46px;
+    object-fit: cover;
+    background: #f1f3ef
+}
+
+.order-product div {
+    min-width: 0;
+    flex: 1
+}
+
+.order-product strong,
+.order-product span {
+    display: block;
+    font-size: 12px
+}
+
+.order-product strong {
+    font-weight: 600;
+    color: #435349;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.order-product span {
+    color: #8a948d;
+    margin-top: 2px
+}
+
+.order-product b {
+    font-size: 11px;
+    color: #435349;
+    white-space: nowrap
+}
+
+.order-total {
+    border-top: 1px solid #e1e5df;
+    padding-top: 13px;
+    margin-top: 13px;
+    color: #89948c;
+    font-size: 11px
+}
+
+.order-total span {
+    max-width: 70%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.order-total strong {
+    color: #1e392b;
+    font-size: 13px;
+    white-space: nowrap
+}
+
+.account-loading {
+    color: #87938b;
+    padding: 30px 0;
+    font-size: 14px
+}
+
+@media(max-width:767px) {
+    .account-page {
+        padding: 48px 0 80px
+    }
+
+    .account-heading {
+        margin-bottom: 28px
+    }
+
+    .account-auth-grid,
+    .account-sections {
+        grid-template-columns: 1fr;
+        gap: 28px
+    }
+
+    .account-copy {
+        padding-top: 0
+    }
+
+    .account-copy p {
+        font-size: 1.15rem;
+        margin-bottom: 20px
+    }
+
+    .account-form,
+    .account-section {
+        padding: 22px
+    }
+
+    .account-toolbar {
+        align-items: flex-start
+    }
+
+    .account-toolbar div span {
+        max-width: 190px;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .profile-form-grid {
+        grid-template-columns: 1fr
+    }
+
+    .profile-form-grid label:last-child:nth-child(3) {
+        grid-column: auto
+    }
+
+    .account-submit.compact {
+        width: 100%
+    }
+}
