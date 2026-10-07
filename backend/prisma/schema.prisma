@@ -63,16 +63,7 @@ model Address {
 }
 
 model Category {
-Have you restored the backend to exactly how it was before today’s changes, while keeping all the frontend updates and files we worked on today intact?
-
-Please make sure that:
-- All frontend changes made today are preserved.
-- The backend has been restored to its previous state.
-- No frontend files or updates were removed or overwritten.
-- No backend files are being modified unnecessarily.
-- Frontend and backend responsibilities remain completely separated.
-
-Please confirm this before making any further changes.  id          Int       @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String    @unique
   slug        String    @unique
   description String?

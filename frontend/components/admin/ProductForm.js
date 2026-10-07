@@ -13,7 +13,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
  * Shared product create/edit form.
  * create: POST  api/products                 (multipart/form-data)
  * edit:   POST  api/products/{id}            (multipart + _method=PUT)
- * lists : GET   api/product_add_category, api/sizes
+ * lists : GET   api/categories, api/sizes
  *
  * Array fields use Laravel conventions:
  *   colors[i][code|name|image], sizes[i][size_id|price|stock],
@@ -56,7 +56,7 @@ export default function ProductForm({ id, initial }) {
     (async () => {
       try {
         const [c, s] = await Promise.all([
-          api.get("api/product_add_category").catch(() => ({ data: [] })),
+          api.get("api/categories").catch(() => ({ data: [] })),
           api.get("api/sizes", { auth: false }).catch(() => ({ data: [] })),
         ]);
         if (!alive) return;
@@ -271,9 +271,8 @@ export default function ProductForm({ id, initial }) {
                   return (
                     <label
                       key={c.id}
-                      className={`badge border px-3 py-2 ${
-                        on ? "bg-primary text-white" : "bg-light text-dark"
-                      }`}
+                      className={`badge border px-3 py-2 ${on ? "bg-primary text-white" : "bg-light text-dark"
+                        }`}
                       style={{ cursor: "pointer" }}
                     >
                       <input

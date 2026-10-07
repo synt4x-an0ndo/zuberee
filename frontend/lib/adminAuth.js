@@ -9,8 +9,8 @@ import notify from "@/components/notify";
  * Admin auth helpers (same contract as the original dashboard):
  *  - token / user_id / roles / permissions kept in localStorage + cookies
  *  - hasPermission(): super-admin bypasses every permission check
- *  - refreshUserData(): GET api/me -> latest roles + permissions
- *  - logout(): POST api/logOut then clear everything
+ *  - refreshUserData(): GET api/auth/me -> latest roles + permissions
+ *  - logout(): POST api/auth/logout then clear everything
  */
 export function readJSON(key, fallback) {
   try {
@@ -20,6 +20,16 @@ export function readJSON(key, fallback) {
   }
 }
 
+function adminAccess(user) {
+  const roles = Array.isArray(user?.roles) && user.roles.length
+    ? user.roles
+    : String(user?.role || "").toUpperCase() === "ADMIN"
+      ? ["super-admin"]
+      : [];
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return { roles, permissions };
+}
+
 export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -27,6 +37,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   const [roles, setRoles] = useState([]);
   const [userName, setUserName] = useState("");
   const [allowed, setAllowed] = useState(true);
+  const [refreshing, setRefreshing] = useState(autoRefresh);
 
   const load = useCallback(() => {
     setPermissions(readJSON("permissions", []));
@@ -61,19 +72,18 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   const refreshUserData = useCallback(
     async ({ silent = false } = {}) => {
       try {
-        const r = await api.get("api/me");
-        if (r?.user) {
-          localStorage.setItem("roles", JSON.stringify(r.user.roles || []));
-          localStorage.setItem(
-            "permissions",
-            JSON.stringify(r.user.permissions || [])
-          );
-          localStorage.setItem("user_name", r.user.name || "");
-          setRoles(r.user.roles || []);
-          setPermissions(r.user.permissions || []);
-          setUserName(r.user.name || "");
+        const r = await api.get("api/auth/me");
+        const user = r?.data?.user || r?.data?.data?.user || r?.data?.data || r?.user;
+        if (user) {
+          const access = adminAccess(user);
+          localStorage.setItem("roles", JSON.stringify(access.roles));
+          localStorage.setItem("permissions", JSON.stringify(access.permissions));
+          localStorage.setItem("user_name", user.name || "");
+          setRoles(access.roles);
+          setPermissions(access.permissions);
+          setUserName(user.name || "");
         }
-        return r?.user;
+        return user;
       } catch (e) {
         if (e.status === 401) {
           clearToken();
@@ -88,14 +98,15 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   );
 
   useEffect(() => {
-    if (ready && autoRefresh) refreshUserData({ silent: true });
+    if (!ready || !autoRefresh) return;
+    refreshUserData({ silent: true }).finally(() => setRefreshing(false));
   }, [ready, autoRefresh, refreshUserData]);
 
   const logout = useCallback(async () => {
     try {
       const token = getToken();
       if (token) {
-        await api.post("api/logOut", undefined, { auth: true });
+        await api.post("api/auth/logout", null, { auth: true });
       }
     } catch {
       /* ignore */
@@ -121,6 +132,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   return useMemo(
     () => ({
       ready,
+      refreshing,
       allowed,
       permissions,
       roles,
@@ -130,6 +142,6 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
       refreshUserData,
       logout,
     }),
-    [ready, allowed, permissions, roles, userName, hasPermission, hasRole, refreshUserData, logout]
+    [ready, refreshing, allowed, permissions, roles, userName, hasPermission, hasRole, refreshUserData, logout]
   );
 }

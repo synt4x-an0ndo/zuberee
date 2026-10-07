@@ -199,7 +199,7 @@ export default function AdminShell({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  if (!auth.ready) {
+  if (!auth.ready || auth.refreshing) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "100vh" }}>
         <span className="spinner-border" style={{ color: "var(--primary-color)" }} />

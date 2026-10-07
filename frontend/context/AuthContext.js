@@ -6,7 +6,7 @@ import { api, clearToken, getToken, setToken } from "@/lib/api";
 const AuthCtx = createContext(null);
 
 function userFromResponse(response) {
-    return response?.data?.user || response?.data?.data || response?.data || null;
+    return response?.data?.user || response?.data?.data?.user || response?.data?.data || response?.data || null;
 }
 
 function authData(response) {
@@ -22,9 +22,11 @@ export function AuthProvider({ children }) {
             setLoading(false);
             return;
         }
-        api.get("api/account/profile")
+        api.get("api/auth/me")
             .then((response) => setUser(userFromResponse(response)))
-            .catch(() => clearToken())
+            .catch((error) => {
+                if (error.status === 401 || error.status === 403) clearToken();
+            })
             .finally(() => setLoading(false));
     }, []);
 
@@ -37,11 +39,7 @@ export function AuthProvider({ children }) {
     };
 
     const register = async (details) => {
-        const response = await api.post("api/auth/register", details, { auth: false });
-        const data = authData(response);
-        setToken(data.token);
-        setUser(data.user);
-        return data.user;
+        return api.post("api/auth/register", details, { auth: false });
     };
 
     const logout = async () => {

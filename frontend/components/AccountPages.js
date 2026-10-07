@@ -34,10 +34,15 @@ function AuthPanel({ register = false }) {
         event.preventDefault();
         setLoading(true);
         try {
-            if (register) await createAccount(form);
-            else await login({ email: form.email, password: form.password });
-            notify.success(register ? "Your account is ready." : "Welcome back.");
-            router.push("/account");
+            const response = register
+                ? await createAccount(form)
+                : await login({ email: form.email, password: form.password });
+            notify.success(
+                register
+                    ? response?.message || "Your account is ready."
+                    : "Welcome back."
+            );
+            router.push(register ? "/login" : "/");
         } catch (error) {
             notify.error(error?.message || "Please check your details and try again.");
         } finally {

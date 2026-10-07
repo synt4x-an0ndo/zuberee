@@ -5,6 +5,7 @@ import CategoryForm from "@/components/admin/CategoryForm";
 import PageGate from "@/components/admin/PageGate";
 import { api } from "@/lib/api";
 import Loader from "@/components/Loader";
+import notify from "@/components/notify";
 
 /**
  * Edit collection - GET + PUT api/categories/{id}
@@ -19,17 +20,18 @@ function EditForm({ id }) {
       try {
         const r = await api.get(`api/categories/${id}`);
         if (!alive) return;
-        const c = r?.data && typeof r.data === "object" && !Array.isArray(r.data) ? r.data : r;
+        const payload = r?.data ?? r;
+        const c = payload?.category || payload?.data || payload;
         setInitial({
           name: c.name || "",
-          parent_id: c.parent_id ?? "",
-          home_category: c.home_category ? "1" : "0",
-          priority: c.priority ?? 0,
-          size_guide_type: c.size_guide_type ?? "",
-          track_inventory: !!c.track_inventory,
+          slug: c.slug || "",
+          description: c.description || "",
         });
-      } catch {
-        if (alive) setMissing(true);
+      } catch (error) {
+        if (alive) {
+          setMissing(true);
+          notify.error(error?.message || "Category not found.");
+        }
       }
     })();
     return () => {
