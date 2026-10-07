@@ -238,9 +238,8 @@ export default function AdminShell({ children }) {
 
       {/* ------------- SIDEBAR ------------- */}
       <div
-        className={`sideBarDiv d-flex flex-column ${
-          (isMobile ? mobile : open) ? "sidebar-open" : "sidebar-closed"
-        } ${isMobile ? "mobile-sidebar" : ""}`}
+        className={`sideBarDiv d-flex flex-column ${(isMobile ? mobile : open) ? "sidebar-open" : "sidebar-closed"
+          } ${isMobile ? "mobile-sidebar" : ""}`}
       >
         <div className="d-flex justify-content-between align-items-center sideBar_icon_siteName">
           <div style={{ display: open || mobile ? "block" : "none", minWidth: 0 }}>
@@ -273,9 +272,8 @@ export default function AdminShell({ children }) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`d-flex align-items-center gap-2 mb-3 text-white sidebar-item ${
-                      isActive(item.href) ? "active" : ""
-                    }`}
+                    className={`d-flex align-items-center gap-2 mb-3 text-white sidebar-item ${isActive(item.href) ? "active" : ""
+                      }`}
                     style={{ textDecoration: "none" }}
                     onClick={() => setMobile(false)}
                   >
@@ -289,9 +287,8 @@ export default function AdminShell({ children }) {
               return (
                 <div key={item.label} className="mb-2">
                   <div
-                    className={`sidebar-menu-header d-flex align-items-center justify-content-between gap-2 text-white ${
-                      isOpen ? "active" : ""
-                    }`}
+                    className={`sidebar-menu-header d-flex align-items-center justify-content-between gap-2 text-white ${isOpen ? "active" : ""
+                      }`}
                     onClick={() => setExpanded(isOpen ? null : item.label)}
                   >
                     <div className="d-flex align-items-center gap-2">
@@ -316,9 +313,8 @@ export default function AdminShell({ children }) {
                           <Link
                             key={s.href}
                             href={s.href}
-                            className={`sidebar-item sidebar-subitem d-flex align-items-center gap-2 mb-2 text-white ${
-                              isActive(s.href) ? "active" : ""
-                            }`}
+                            className={`sidebar-item sidebar-subitem d-flex align-items-center gap-2 mb-2 text-white ${isActive(s.href) ? "active" : ""
+                              }`}
                             style={{ textDecoration: "none" }}
                             onClick={() => setMobile(false)}
                           >
