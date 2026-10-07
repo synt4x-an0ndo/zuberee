@@ -250,3 +250,18 @@ model OrderItem {
   @@index([productId])
   @@map("order_items")
 }
+
+model Banner {
+  id              Int      @id @default(autoincrement())
+  image           Bytes
+  imageType       String
+  link            String?
+  displayPriority Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([displayPriority])
+  @@index([isActive])
+  @@map("banners")
+}
