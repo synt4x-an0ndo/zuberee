@@ -5,17 +5,17 @@
  * Every piece of data rendered by this frontend comes from the backend API.
  * The base URL comes from NEXT_PUBLIC_API_BASE_URL (see .env.local).
  *
- * Auth model (same as the original site):
- *  - Admin logs in  -> POST {API}/api/admin/logIn  -> { status, token, user }
+ * Auth model:
+ *  - Login           -> POST {API}/api/auth/login  -> { success, message, data }
  *  - Token is stored in localStorage("token") AND a `token` cookie
  *  - All authenticated calls send:  Authorization: Bearer <token>
- *  - GET {API}/api/me returns the current user + roles + permissions
- *  - POST {API}/api/logOut invalidates the token
+ *  - GET {API}/api/auth/me returns the current user
+ *  - POST {API}/api/auth/logout invalidates the token
  * =========================================================================
  */
 
 export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || ""
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001"
 ).replace(/\/+$/, "");
 
 /* ------------------------------------------------------------------ */

@@ -1,0 +1,13 @@
+BACKEND CHANGE LOG
+
+Date/time: 2026-10-07 19:11:59 +06:00
+
+1. File: backend/prisma/schema.prisma
+   What changed: Removed an accidentally embedded user-facing confirmation paragraph from inside the Prisma `Category` model and restored the `id` field as a valid Prisma field definition.
+   Why it changed: The plain-language text was being parsed as Prisma schema content.
+   Problem fixed: Prisma validation failed with P1012 invalid field/attribute definition errors and a secondary missing `Category.id` relation error. This prevented Prisma generation and the backend build.
+   Database/schema/API behavior: No database schema semantics changed. No migration was created or applied. No database data, relations, API endpoints, request/response contracts, or backend functionality changed.
+
+NO OTHER BACKEND CHANGES
+
+No other backend files, APIs, routes, database logic, dependencies, or configurations were changed during this task unless specifically listed above. Frontend files and frontend updates were preserved.

@@ -9,7 +9,7 @@ import notify from "@/components/notify";
 
 /**
  * Admin login (/frontEnd/admin)
- *  POST api/admin/logIn  ->  { status, token, token_type, user }
+ *  POST api/auth/login  ->  { success, message, data: { token, user } }
  *  Persists: token (localStorage + cookie), user_id, user_name,
  *            roles[], permissions[]  - then redirects to /dashboard.
  */
@@ -34,23 +34,29 @@ function LoginForm() {
     }
     setLoading(true);
     try {
-      const res = await api.post("api/admin/logIn", { email, password }, { auth: false });
-      if (!res?.status || !res?.token || !res?.user?.id) {
+      const res = await api.post("api/auth/login", { email, password }, { auth: false });
+      const data = res?.data || {};
+      if (!res?.success || !data.token || !data.user?.id) {
         notify.error(res?.message || "Admin login failed.");
         return;
       }
       /* same persistence as the original site */
-      setToken(res.token);
-      localStorage.setItem("user_id", String(res.user.id));
-      localStorage.setItem("user_name", res.user.name || "");
-      localStorage.setItem("roles", JSON.stringify(res.user.roles || []));
-      localStorage.setItem("permissions", JSON.stringify(res.user.permissions || []));
+      setToken(data.token);
+      localStorage.setItem("user_id", String(data.user.id));
+      localStorage.setItem("user_name", data.user.name || "");
+      const roles = data.user.roles?.length
+        ? data.user.roles
+        : String(data.user.role || "").toUpperCase() === "ADMIN"
+          ? ["super-admin"]
+          : [];
+      localStorage.setItem("roles", JSON.stringify(roles));
+      localStorage.setItem("permissions", JSON.stringify(data.user.permissions || []));
       const exp = new Date(Date.now() + 864e5 * 7).toUTCString();
       const cookie = (k, v) =>
         (document.cookie = `${k}=${encodeURIComponent(v)}; expires=${exp}; path=/; SameSite=Lax; Secure`);
-      cookie("user_id", String(res.user.id));
-      cookie("roles", JSON.stringify(res.user.roles || []));
-      cookie("permissions", JSON.stringify(res.user.permissions || []));
+      cookie("user_id", String(data.user.id));
+      cookie("roles", JSON.stringify(roles));
+      cookie("permissions", JSON.stringify(data.user.permissions || []));
 
       notify.success("Successfully logged in");
       window.location.href = redirectTarget();

@@ -111,4 +111,4 @@ Delete Category API
 - Success response: success, message, data
 - Success message: Category deleted successfully.
 - Invalid/missing token: Return 401 Unauthorized
-- Non-admin user: Return 403 Forbidden
+- Non-admin user: Return 403 Forbidden 

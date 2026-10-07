@@ -10,55 +10,44 @@ import PageGate from "@/components/admin/PageGate";
 
 /**
  * Collections / Categories list (/dashboard/category)
- *  - GET    api/categories?page=&search=      (paged: data, current_page, last_page)
+ *  - GET    api/categories                   (all categories)
  *  - DELETE api/categories/{id}               (removes subcategories too)
  * This is the "collection editor" hub: from here the admin can create,
  * edit, reorder and delete every storefront collection.
  */
 function CategoryList() {
   const [rows, setRows] = useState([]);
-  const [page, setPage] = useState(1);
-  const [pager, setPager] = useState({ current_page: 1, last_page: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const qs = query
-        ? `api/categories?page=${page}&search=${encodeURIComponent(query)}`
-        : `api/categories?page=${page}`;
-      const r = await api.get(qs);
-      const pageData = r?.data && !Array.isArray(r.data) && Array.isArray(r.data.data) ? r.data : r;
-      setRows(Array.isArray(pageData?.data) ? pageData.data : []);
-      setPager({ current_page: pageData?.current_page || 1, last_page: pageData?.last_page || 1 });
+      const r = await api.get("api/categories");
+      const payload = r?.data ?? r;
+      const items = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+      setRows(items);
     } catch (e) {
       setError(e.message || "Failed to load categories");
     } finally {
       setLoading(false);
-      setSearching(false);
     }
-  }, [page, query]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  /* debounced search */
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (search !== query) {
-        setPage(1);
-        setQuery(search);
-        setSearching(true);
-      }
-    }, 500);
-    return () => clearTimeout(t);
-  }, [search, query]);
+  const visibleRows = rows.filter((category) => {
+    const term = search.trim().toLowerCase();
+    return !term || category.name?.toLowerCase().includes(term) || category.slug?.toLowerCase().includes(term);
+  });
 
   const remove = async (id) => {
     const res = await Swal.fire({
@@ -75,8 +64,8 @@ function CategoryList() {
       Swal.fire("Deleted!", "", "success");
       notify.success("Category deleted. Refresh to see updated list.");
       load();
-    } catch {
-      notify.error("Failed to delete category");
+    } catch (error) {
+      notify.error(error?.message || "Failed to delete category");
     }
   };
 
@@ -112,7 +101,6 @@ function CategoryList() {
               className="btn btn-outline-secondary"
               onClick={() => {
                 setSearch("");
-                setPage(1);
               }}
             >
               Clear search
@@ -140,11 +128,11 @@ function CategoryList() {
                 </tr>
               </thead>
               <tbody>
-                {loading || searching ? (
+                {loading ? (
                   <tr>
                     <td colSpan={9} className="text-center py-4 text-muted">
                       <span className="spinner-border spinner-border-sm me-2" />
-                      {searching ? "Searching categories..." : "Loading..."}
+                      Loading...
                     </td>
                   </tr>
                 ) : error ? (
@@ -153,14 +141,14 @@ function CategoryList() {
                       {error}
                     </td>
                   </tr>
-                ) : rows.length === 0 ? (
+                ) : visibleRows.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="text-center py-4 text-muted">
                       No Categories Found
                     </td>
                   </tr>
                 ) : (
-                  rows.map((c) => (
+                  visibleRows.map((c) => (
                     <tr key={c.id}>
                       <td>{c.id}</td>
                       <td className="fw-semibold">{c.name}</td>
@@ -212,27 +200,8 @@ function CategoryList() {
           </div>
         </div>
 
-        {/* pagination */}
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-          <small className="text-muted">
-            Page {pager.current_page} of {pager.last_page}
-          </small>
-          <div className="btn-group">
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Prev
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              disabled={page >= pager.last_page}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </button>
-          </div>
+        <div className="card-footer bg-white">
+          <small className="text-muted">{visibleRows.length} categories</small>
         </div>
       </div>
     </div>

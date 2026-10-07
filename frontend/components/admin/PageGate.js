@@ -9,8 +9,8 @@ import { useAdminAuth } from "@/lib/adminAuth";
  * super-admin always passes.
  */
 export default function PageGate({ permission, role, children }) {
-  const auth = useAdminAuth({ permission, role, autoRefresh: false });
-  if (!auth.ready) {
+  const auth = useAdminAuth({ permission, role, autoRefresh: true });
+  if (!auth.ready || auth.refreshing) {
     return (
       <div className="text-center py-5">
         <span className="spinner-border" style={{ color: "var(--primary-color)" }} />

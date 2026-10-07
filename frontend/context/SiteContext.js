@@ -8,7 +8,7 @@ import { api, API_BASE } from "@/lib/api";
  *  - site settings (primary color, feature flags)  -> GET api/site-settings
  *  - footer / company info                        -> GET api/footer-settings
  *  - social links + whatsapp number               -> GET api/social-links-first
- *  - category tree (navigation + mega menu)        -> GET api/frontend/categories
+ *  - category tree (navigation + mega menu)        -> GET api/categories
  * Nothing here is hardcoded; the UI degrades gracefully when an endpoint
  * is unavailable.
  * ===================================================================== */
@@ -38,14 +38,14 @@ export function SiteProvider({ children }) {
         api.get("api/site-settings"),
         api.get("api/footer-settings"),
         api.get("api/social-links-first"),
-        api.get("api/frontend/categories"),
+        api.get("api/categories"),
       ]);
       if (!alive) return;
       if (s.status === "fulfilled") setSettings(s.value?.data ?? null);
       if (f.status === "fulfilled") setFooter(f.value ?? null);
       if (so.status === "fulfilled") setSocial(so.value ?? null);
       if (c.status === "fulfilled") {
-        const categoryData = c.value?.data ?? c.value;
+        const categoryData = c.value?.data?.data ?? c.value?.data ?? c.value;
         setCategories(Array.isArray(categoryData) ? categoryData : []);
       }
       setBackendAvailable([s, f, so, c].some((result) => result.status === "fulfilled"));
