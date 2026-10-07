@@ -150,8 +150,8 @@ export function statusBadge(p) {
   const inStock = summary
     ? !!summary.in_stock
     : typeof summary?.total_available === "number"
-    ? summary.total_available > 0
-    : p.status === "in-stock";
+      ? summary.total_available > 0
+      : p.status === "in-stock";
   if (p.status === "in-stock") return "in-stock";
   if (tracked && inStock) return "in-stock";
   return null;
