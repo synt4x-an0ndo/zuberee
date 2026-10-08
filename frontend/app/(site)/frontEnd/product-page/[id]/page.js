@@ -122,8 +122,8 @@ export default function ProductPage({ params }) {
     sizePrice != null && sizePrice !== ""
       ? Number(sizePrice)
       : product.discount
-      ? Number(product.discount)
-      : Number(product.price) || 0;
+        ? Number(product.discount)
+        : Number(product.price) || 0;
 
   const sizeStock =
     sizeObj?.pivot?.stock != null ? Number(sizeObj.pivot.stock) : null;
@@ -142,9 +142,8 @@ export default function ProductPage({ params }) {
     product.created_at &&
     Date.now() - new Date(product.created_at).getTime() < 7 * 864e5;
 
-  const waText = `Hello! I'm interested in this product: ${
-    product.title || "Product"
-  }. Can you provide more information?`;
+  const waText = `Hello! I'm interested in this product: ${product.title || "Product"
+    }. Can you provide more information?`;
 
   const handleAdd = (mode) => {
     if (sizes.length > 1 && !activeSize && !sizeObj) {
@@ -330,8 +329,8 @@ export default function ProductPage({ params }) {
                         out
                           ? "Sold out"
                           : s.pivot?.price != null
-                          ? `${formatTk(s.pivot.price)}৳`
-                          : ""
+                            ? `${formatTk(s.pivot.price)}৳`
+                            : ""
                       }
                     >
                       {s.size}
