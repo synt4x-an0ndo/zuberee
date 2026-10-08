@@ -85,7 +85,7 @@ model Category {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  parent          Category?      @relation("CategoryParent", fields: [parentId], references: [id])
+  parent          Category?      @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
   children        Category[]     @relation("CategoryParent")
 
   products        Product[]
@@ -111,7 +111,7 @@ model Product {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
-  category         Category           @relation(fields: [categoryId], references: [id])
+  category         Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   images           ProductImage[]
   variants         ProductVariant[]
   colors           ProductColor[]

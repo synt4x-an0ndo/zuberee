@@ -493,57 +493,53 @@ export async function DELETE(request, { params }) {
         }
 
         // -----------------------------
-        // Check child categories
+        // Delete category subtree and any products in it.
+        // The admin UI expects deleting a category to remove child categories too.
         // -----------------------------
 
-        const childCount = await prisma.category.count({
-            where: {
-                parentId: categoryId,
-            },
-        });
-
-        if (childCount > 0) {
-            return Response.json(
-                {
-                    success: false,
-                    message:
-                        "Category cannot be deleted because it has child categories.",
-                    data: null,
+        const collectCategoryIds = async (currentCategoryId, accumulatedIds = []) => {
+            const childCategories = await prisma.category.findMany({
+                where: {
+                    parentId: currentCategoryId,
                 },
-                { status: 409 }
-            );
-        }
-
-        // -----------------------------
-        // Check products
-        // -----------------------------
-
-        const productCount = await prisma.product.count({
-            where: {
-                categoryId,
-            },
-        });
-
-        if (productCount > 0) {
-            return Response.json(
-                {
-                    success: false,
-                    message:
-                        "Category cannot be deleted because it has products.",
-                    data: null,
+                select: {
+                    id: true,
                 },
-                { status: 409 }
+            });
+
+            const nextIds = [...accumulatedIds, currentCategoryId];
+
+            if (childCategories.length === 0) {
+                return nextIds;
+            }
+
+            const nestedIds = await Promise.all(
+                childCategories.map((child) =>
+                    collectCategoryIds(child.id, nextIds)
+                )
             );
-        }
 
-        // -----------------------------
-        // Delete category
-        // -----------------------------
+            return [...new Set(nestedIds.flat())];
+        };
 
-        await prisma.category.delete({
-            where: {
-                id: categoryId,
-            },
+        const categoryIdsToDelete = await collectCategoryIds(categoryId);
+
+        await prisma.$transaction(async (tx) => {
+            await tx.product.deleteMany({
+                where: {
+                    categoryId: {
+                        in: categoryIdsToDelete,
+                    },
+                },
+            });
+
+            await tx.category.deleteMany({
+                where: {
+                    id: {
+                        in: categoryIdsToDelete,
+                    },
+                },
+            });
         });
 
         return Response.json(
