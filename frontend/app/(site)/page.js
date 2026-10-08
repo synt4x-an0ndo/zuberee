@@ -12,15 +12,12 @@ import "@/styles/css/09b8a269a4a7b1a3.css";
 /**
  * Home page.
  *  - Hero banner:   GET api/banners
- *  - Category slots: GET api/product-slots_index/frontEndIndex?page=N
- *    (each slot = category name + slug + products + has_more for "Load More")
+ *  - Homepage categories/products: GET api/categories and GET api/products
  */
 export default function HomePage() {
   const [slots, setSlots] = useState([]);
-  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [banners, setBanners] = useState([]);
   const [bannersLoading, setBannersLoading] = useState(true);
 
@@ -29,7 +26,13 @@ export default function HomePage() {
     (async () => {
       try {
         const r = await api.get("api/banners");
-        const list = Array.isArray(r?.data) ? r.data : [];
+        const list = Array.isArray(r)
+          ? r
+          : Array.isArray(r?.data)
+          ? r.data
+          : Array.isArray(r?.data?.data)
+          ? r.data.data
+          : [];
         const images = list.filter((banner) => banner?.image);
         setBanners(images);
       } catch {
@@ -44,10 +47,29 @@ export default function HomePage() {
   const loadSlots = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.get("api/product-slots_index/frontEndIndex?page=1");
-      setSlots(Array.isArray(r?.data) ? r.data : []);
-      setHasMore(!!r?.has_more);
-      setPage(1);
+      const [categoriesResponse, productsResponse] = await Promise.all([
+        api.get("api/categories"),
+        api.get("api/products"),
+      ]);
+      const categoriesPayload = categoriesResponse?.data || {};
+      const categories = Array.isArray(categoriesPayload?.categories)
+        ? categoriesPayload.categories
+        : [];
+      const products = Array.isArray(productsResponse?.data)
+        ? productsResponse.data
+        : [];
+      const grouped = categories
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          products: products.filter((product) =>
+            (product.category || []).some((item) => item.id === category.id)
+          ),
+        }))
+        .filter((slot) => slot.products.length > 0);
+      setSlots(grouped);
+      setHasMore(false);
     } catch (e) {
       notify.error("Failed to load categories");
     } finally {
@@ -58,26 +80,6 @@ export default function HomePage() {
   useEffect(() => {
     loadSlots();
   }, [loadSlots]);
-
-  const loadMore = async () => {
-    setLoadingMore(true);
-    try {
-      const next = page + 1;
-      const r = await api.get(`api/product-slots_index/frontEndIndex?page=${next}`);
-      const list = Array.isArray(r?.data) ? r.data : [];
-      if (list.length) {
-        setSlots((prev) => [...prev, ...list]);
-        setPage(next);
-        setHasMore(!!r?.has_more);
-      } else {
-        setHasMore(false);
-      }
-    } catch {
-      notify.error("Failed to load more categories");
-    } finally {
-      setLoadingMore(false);
-    }
-  };
 
   const visible = slots.filter((s) => (s.products || []).length > 0);
 
@@ -161,10 +163,10 @@ export default function HomePage() {
               <div className="col-12 text-center my-4">
                 <button
                   className="slot-loadmore-btn"
-                  onClick={loadMore}
-                  disabled={loadingMore}
+                  onClick={loadSlots}
+                  disabled={loading}
                 >
-                  {loadingMore ? (
+                  {loading ? (
                     <>
                       <span
                         className="spinner-border spinner-border-sm me-2"

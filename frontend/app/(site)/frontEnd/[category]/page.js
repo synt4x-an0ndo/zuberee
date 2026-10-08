@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import ProductCard from "@/components/ProductCard";
 import { api, imgUrl } from "@/lib/api";
 import notify from "@/components/notify";
@@ -9,9 +9,9 @@ import "@/styles/css/b2790d3f6ef2e460.css";
 
 /**
  * Category / collection listing page (/frontEnd/[category])
- *  - Products : GET api/products?slug={slug}&page=&sizes=&colors=&in_stock_only=1
- *  - Filters  : GET api/category-filters/{slug}  (sizes with availability,
- *                                                 colours with availability)
+ *  - Products : GET api/products?category={slug}
+ *  - Filters  : derived from the product response because the backend exposes
+ *               no separate category-filter endpoint.
  *
  * NOTE: `params` arrives as a Promise in Next 14 client components -> unwrap
  * with React.use().
@@ -19,9 +19,8 @@ import "@/styles/css/b2790d3f6ef2e460.css";
 export default function CategoryPage({ params }) {
   const { category } = use(params);
 
-  const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [pagination, setPagination] = useState(null);
-  const [filters, setFilters] = useState(null); // {category, sizes, colors}
   const [activeSizes, setActiveSizes] = useState([]);
   const [activeColors, setActiveColors] = useState([]);
   const [inStockOnly, setInStockOnly] = useState(false);
@@ -31,13 +30,10 @@ export default function CategoryPage({ params }) {
 
   const buildQuery = useCallback(
     (page) => {
-      const qs = new URLSearchParams({ slug: category, page: String(page) });
-      if (activeSizes.length) qs.set("sizes", activeSizes.join(","));
-      if (activeColors.length) qs.set("colors", activeColors.join(","));
-      if (inStockOnly) qs.set("in_stock_only", "1");
+      const qs = new URLSearchParams({ category });
       return qs.toString();
     },
-    [category, activeSizes, activeColors, inStockOnly]
+    [category]
   );
 
   const fetchProducts = useCallback(
@@ -46,15 +42,10 @@ export default function CategoryPage({ params }) {
       else setLoadingMore(true);
       try {
         const r = await api.get(`api/products?${buildQuery(page)}`);
-        const list = r?.data?.data ?? [];
-        setProducts((prev) => (append ? [...prev, ...list] : list));
-        if (r?.data) {
-          setPagination({
-            ...r.data,
-            has_more: r.data.current_page < r.data.last_page,
-          });
-        }
-        if (list[0]?.categories?.[0]) setMeta(list[0].categories[0]);
+        const list = Array.isArray(r?.data) ? r.data : [];
+        setAllProducts((prev) => (append ? [...prev, ...list] : list));
+        setPagination({ total: list.length, current_page: 1, last_page: 1, has_more: false });
+        if (list[0]?.category?.[0]) setMeta(list[0].category[0]);
       } catch {
         notify.error("Failed to load products");
       } finally {
@@ -65,26 +56,48 @@ export default function CategoryPage({ params }) {
     [buildQuery]
   );
 
-  /* filters metadata */
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const r = await api.get(`api/category-filters/${category}`);
-        if (alive && r?.data) setFilters(r.data);
-      } catch {
-        /* optional */
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [category]);
-
   /* products (refetch on any filter change) */
   useEffect(() => {
     fetchProducts(1, false);
   }, [fetchProducts]);
+
+  const filters = useMemo(() => {
+    const sizes = new Map();
+    const colors = new Map();
+    allProducts.forEach((product) => {
+      (product.sizes || []).forEach((variant) => {
+        const size = String(variant.size ?? "");
+        if (!size) return;
+        const current = sizes.get(size) || { id: variant.id, size, available: 0 };
+        current.available += Number(variant.pivot?.stock) || 0;
+        sizes.set(size, current);
+      });
+      (product.colors || []).forEach((color) => {
+        if (!color.name) return;
+        const current = colors.get(color.name) || {
+          name: color.name,
+          code: color.code,
+          image: color.image,
+          available: 0,
+        };
+        current.available += Number(product.stock) || 0;
+        colors.set(color.name, current);
+      });
+    });
+    return { category: meta, sizes: [...sizes.values()], colors: [...colors.values()] };
+  }, [allProducts, meta]);
+
+  const products = useMemo(() => allProducts.filter((product) => {
+    const matchesSize = !activeSizes.length || (product.sizes || []).some((size) =>
+      activeSizes.includes(String(size.size))
+    );
+    const matchesColor = !activeColors.length || (product.colors || []).some((color) =>
+      activeColors.includes(color.name)
+    );
+    const matchesStock = !inStockOnly || product.status === "in-stock" ||
+      (product.sizes || []).some((size) => Number(size.pivot?.stock) > 0);
+    return matchesSize && matchesColor && matchesStock;
+  }), [activeColors, activeSizes, allProducts, inStockOnly]);
 
   const toggle = (list, setList, value) =>
     setList((arr) =>

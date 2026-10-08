@@ -6,7 +6,7 @@ import PageGate from "@/components/admin/PageGate";
 import { api } from "@/lib/api";
 import Loader from "@/components/Loader";
 
-/** Edit product - GET api/products/{id}, save via POST api/products/{id} (_method=PUT) */
+/** Edit product - GET api/products/{id}, save via PUT api/products/{id}. */
 function EditForm({ id }) {
   const [initial, setInitial] = useState(null);
   const [missing, setMissing] = useState(false);
@@ -23,10 +23,13 @@ function EditForm({ id }) {
           sku: p.sku || "",
           price: p.price ?? "",
           discount: p.discount ?? "",
-          status: p.status || "in-stock",
+          status: String(p.status || "IN_STOCK").toUpperCase().replace("-", "_"),
           short_description: p.short_description || "",
           description: p.description || "",
           video_url: p.video_url || "",
+          stock: p.stock ?? p.inventory?.stock ?? "",
+          isActive: p.isActive ?? p.is_active ?? true,
+          categoryId: p.category?.[0]?.id ?? p.categoryId ?? "",
           categories: (p.category || p.categories || []).map((c) => ({ id: c.id })),
           colors: (p.colors || []).map((c) => ({
             name: c.name || "",

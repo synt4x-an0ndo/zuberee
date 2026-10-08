@@ -45,7 +45,12 @@ export function SiteProvider({ children }) {
       if (f.status === "fulfilled") setFooter(f.value ?? null);
       if (so.status === "fulfilled") setSocial(so.value ?? null);
       if (c.status === "fulfilled") {
-        const categoryData = c.value?.data?.data ?? c.value?.data ?? c.value;
+        const categoryData =
+          c.value?.data?.data?.categories ??
+          c.value?.data?.categories ??
+          c.value?.data?.data ??
+          c.value?.data ??
+          c.value;
         setCategories(Array.isArray(categoryData) ? categoryData : []);
       }
       setBackendAvailable([s, f, so, c].some((result) => result.status === "fulfilled"));

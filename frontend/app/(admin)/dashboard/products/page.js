@@ -22,8 +22,7 @@ import "@/styles/css/19b7b7f3433c440d.css";
 
 /**
  * Products admin list (/dashboard/products)
- *  - GET    api/products?search=&status=&page=   (Bearer auth)
- *           -> { data: { data:[...], current_page, last_page, total } }
+ *  - GET    api/products?search=   (Bearer auth)
  *  - DELETE api/products/{id}
  */
 function ProductList() {
@@ -43,15 +42,29 @@ function ProductList() {
     try {
       const qs = new URLSearchParams();
       if (query) qs.set("search", query);
-      if (status) qs.set("status", status);
-      qs.set("page", String(page));
       const r = await api.get(`api/products?${qs.toString()}`);
-      const pagerData = r?.data || {};
-      setRows(Array.isArray(pagerData.data) ? pagerData.data : []);
+      const productRows = Array.isArray(r)
+        ? r
+        : Array.isArray(r?.data)
+        ? r.data
+        : Array.isArray(r?.data?.data)
+        ? r.data.data
+        : [];
+      const pagerData = r?.data?.data ? r.data : r?.data || {};
+      const visibleRows = productRows.filter((product) => !status || product.status === status);
+      setRows(visibleRows.map((product) => ({
+        ...product,
+        images: Array.isArray(product.images) ? product.images : [],
+        colors: Array.isArray(product.colors) ? product.colors : [],
+        sizes: Array.isArray(product.sizes) ? product.sizes : [],
+        category: Array.isArray(product.category) ? product.category : [],
+        specifications: Array.isArray(product.specifications) ? product.specifications : [],
+        faqs: Array.isArray(product.faqs) ? product.faqs : [],
+      })));
       setPager({
         current_page: pagerData.current_page || 1,
         last_page: pagerData.last_page || 1,
-        total: pagerData.total || 0,
+        total: visibleRows.length,
       });
     } catch (e) {
       setError(e.message || "Failed to load products");
@@ -141,8 +154,9 @@ function ProductList() {
           >
             <option value="">All Status</option>
             <option value="in-stock">In Stock</option>
-            <option value="prebook">Prebook</option>
-            <option value="sold">Sold</option>
+            <option value="pre-order">Pre-order</option>
+            <option value="out-of-stock">Out of Stock</option>
+            <option value="discontinued">Discontinued</option>
           </select>
           <button className="btn btn-outline-secondary" onClick={clearFilters}>
             Clear Filters
@@ -265,13 +279,13 @@ function ProductList() {
                       </td>
                       <td style={{ maxWidth: 170 }}>
                         <small>
-                          {p.categories?.length
-                            ? p.categories
+                          {(p.category || p.categories)?.length
+                            ? (p.category || p.categories)
                                 .slice(0, 2)
                                 .map((c) => c.name)
                                 .join(", ") +
-                              (p.categories.length > 2
-                                ? ` +${p.categories.length - 2}`
+                              ((p.category || p.categories).length > 2
+                                ? ` +${(p.category || p.categories).length - 2}`
                                 : "")
                             : "No categories"}
                         </small>

@@ -11,16 +11,17 @@ import Loader from "@/components/Loader";
 /**
  * Homepage banners (/dashboard/banners)
  *  - GET    api/banners
- *  - POST   api/banners        (multipart: banners[i][image], banners[i][link],
- *                               image_links[{id}][link] to relink existing)
- *  - POST   api/banners/{id}   (+ _method=PUT)  — edit links / replace image
+ *  - POST   api/banners        (multipart: image, link, display_priority, is_active)
+ *  - PUT    api/banners/{id}   (multipart: image, link, display_priority, is_active)
  *  - DELETE api/banners/{id}
  */
 function BannersPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [drafts, setDrafts] = useState([{ image: null, link: "" }]); // new uploads
-  const [linkEdits, setLinkEdits] = useState({}); // existing id -> link
+  const [drafts, setDrafts] = useState([
+    { image: null, link: "", display_priority: "0", is_active: "true" },
+  ]);
+  const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const fileRefs = useRef({});
 
@@ -30,11 +31,15 @@ function BannersPage() {
       const r = await api.get("api/banners");
       const list = r?.data?.data || r?.data || (Array.isArray(r) ? r : []);
       setRows(Array.isArray(list) ? list : []);
-      const edits = {};
+      const nextEdits = {};
       (Array.isArray(list) ? list : []).forEach((b) => {
-        edits[b.id] = b.link || "";
+        nextEdits[b.id] = {
+          link: b.link || "",
+          display_priority: String(b.display_priority ?? 0),
+          is_active: String(Boolean(b.is_active)),
+        };
       });
-      setLinkEdits(edits);
+      setEdits(nextEdits);
     } catch (e) {
       notify.error(e.message || "Failed to load banners");
     } finally {
@@ -50,27 +55,32 @@ function BannersPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const fd = new FormData();
-      let i = 0;
+      const requests = [];
       drafts.forEach((d) => {
         if (d.image instanceof File) {
-          fd.append(`banners[${i}][image]`, d.image);
-          fd.append(`banners[${i}][link]`, d.link || "");
-          i++;
+          const fd = new FormData();
+          fd.append("image", d.image);
+          fd.append("link", d.link || "");
+          fd.append("display_priority", d.display_priority || "0");
+          fd.append("is_active", d.is_active || "true");
+          requests.push(api.upload("api/banners", fd));
         }
       });
-      Object.entries(linkEdits).forEach(([id, link]) => {
-        fd.append(`image_links[${id}][id]`, id);
-        fd.append(`image_links[${id}][link]`, link || "");
+      Object.entries(edits).forEach(([id, edit]) => {
+        const fd = new FormData();
+        fd.append("link", edit.link || "");
+        fd.append("display_priority", edit.display_priority || "0");
+        fd.append("is_active", edit.is_active || "false");
+        requests.push(api.upload(`api/banners/${id}`, fd, { method: "PUT" }));
       });
-      if (i === 0 && !Object.keys(linkEdits).length) {
+      if (!requests.length) {
         notify.warn("Nothing to save");
         setSaving(false);
         return;
       }
-      await api.upload("api/banners", fd);
+      await Promise.all(requests);
       notify.success("Banners saved successfully");
-      setDrafts([{ image: null, link: "" }]);
+      setDrafts([{ image: null, link: "", display_priority: "0", is_active: "true" }]);
       load();
     } catch (err) {
       notify.error(err.message || "Failed");
@@ -97,15 +107,17 @@ function BannersPage() {
     }
   };
 
-  /* replace an existing banner's image: POST api/banners/{id} + _method=PUT */
-  const replaceImage = async (id, file, link) => {
+  /* Replace an existing banner image using the backend's direct PUT contract. */
+  const replaceImage = async (id, file) => {
     if (!file) return;
     const fd = new FormData();
-    fd.append("banners[0][image]", file);
-    fd.append("banners[0][link]", link || "");
-    fd.append("_method", "PUT");
+    const edit = edits[id] || {};
+    fd.append("image", file);
+    fd.append("link", edit.link || "");
+    fd.append("display_priority", edit.display_priority || "0");
+    fd.append("is_active", edit.is_active || "false");
     try {
-      await api.upload(`api/banners/${id}`, fd);
+      await api.upload(`api/banners/${id}`, fd, { method: "PUT" });
       notify.success("Banner updated successfully");
       load();
     } catch (e) {
@@ -125,7 +137,7 @@ function BannersPage() {
           <div key={b.id} className="col-md-3">
             <div className="card border-0 shadow-sm h-100">
               <img
-                src={imgUrl(b.image)}
+                src={imgUrl(b.image || `/api/banners/${b.id}/image`)}
                 alt=""
                 style={{ height: 150, objectFit: "cover" }}
               />
@@ -135,14 +147,17 @@ function BannersPage() {
                   type="file"
                   accept="image/*"
                   className="form-control form-control-sm mb-2"
-                  onChange={(e) => replaceImage(b.id, e.target.files?.[0], linkEdits[b.id])}
+                  onChange={(e) => replaceImage(b.id, e.target.files?.[0])}
                 />
                 <div className="input-group input-group-sm">
                   <input
                     className="form-control"
-                    value={linkEdits[b.id] ?? ""}
+                    value={edits[b.id]?.link ?? ""}
                     onChange={(e) =>
-                      setLinkEdits((l) => ({ ...l, [b.id]: e.target.value }))
+                      setEdits((all) => ({
+                        ...all,
+                        [b.id]: { ...all[b.id], link: e.target.value },
+                      }))
                     }
                   />
                   <button
@@ -184,6 +199,19 @@ function BannersPage() {
                     }
                   />
                 </div>
+                <div className="col-md-2">
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Priority"
+                    value={d.display_priority}
+                    onChange={(e) =>
+                      setDrafts((list) => list.map((item, j) => j === i
+                        ? { ...item, display_priority: e.target.value }
+                        : item))
+                    }
+                  />
+                </div>
                 <div className="col-md-5">
                   <input
                     className="form-control"
@@ -214,7 +242,12 @@ function BannersPage() {
             <button
               type="button"
               className="btn btn-sm btn-outline-primary mb-3"
-              onClick={() => setDrafts((l) => [...l, { image: null, link: "" }])}
+              onClick={() => setDrafts((l) => [...l, {
+                image: null,
+                link: "",
+                display_priority: "0",
+                is_active: "true",
+              }])}
             >
               <FaPlus /> Add More
             </button>
