@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ProductCard from "@/components/ProductCard";
 import { api } from "@/lib/api";
 import notify from "@/components/notify";
@@ -8,38 +8,55 @@ import Loader from "@/components/Loader";
 
 /**
  * Shop page.
- *  - Filter options: GET api/shop/filters   (categories / sizes / price_range)
- *  - Products:       GET api/shop/products?page=&categories[]=&sizes[]=
- *                                      &min_price=&max_price=&search=
+ *  - Categories: GET api/categories
+ *  - Products:   GET api/products
  */
 export default function ShopPage() {
   const [options, setOptions] = useState(null);
+  const [allProducts, setAllProducts] = useState([]);
   const [products, setProducts] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [filters, setFilters] = useState(null);
   const [searchInput, setSearchInput] = useState("");
   const [priceInput, setPriceInput] = useState({ min: "", max: "" });
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const firstLoad = useRef(true);
+  const [loadingMore] = useState(false);
 
   /* ---------- load filter options once ---------- */
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.get("api/shop/filters");
-        const data = r?.data || {};
+        const [categoriesResponse, productsResponse] = await Promise.all([
+          api.get("api/categories"),
+          api.get("api/products"),
+        ]);
+        const categoryPayload = categoriesResponse?.data || {};
+        const categories = Array.isArray(categoryPayload?.categories)
+          ? categoryPayload.categories
+          : Array.isArray(categoryPayload)
+            ? categoryPayload
+            : [];
+        const loadedProducts = Array.isArray(productsResponse?.data)
+          ? productsResponse.data
+          : [];
+        setAllProducts(loadedProducts);
+        const sizes = [...new Map(
+          loadedProducts.flatMap((product) => product.sizes || [])
+            .map((size) => [String(size.size), { id: size.id, size: String(size.size) }])
+        ).values()];
+        const prices = loadedProducts.map((product) => Number(product.price)).filter(Number.isFinite);
+        const priceRange = {
+          min: prices.length ? Math.min(...prices) : 0,
+          max: prices.length ? Math.max(...prices) : 0,
+        };
+        const data = { categories, sizes, price_range: priceRange };
         setOptions(data);
         setFilters({
           categories: [],
           sizes: [],
-          min_price: data.price_range?.min ?? "",
-          max_price: data.price_range?.max ?? "",
+          min_price: priceRange.min,
+          max_price: priceRange.max,
           search: "",
-        });
-        setPriceInput({
-          min: data.price_range?.min ?? "",
-          max: data.price_range?.max ?? "",
         });
       } catch {
         setOptions({ categories: [], sizes: [], price_range: { min: 0, max: 0 } });
@@ -48,47 +65,25 @@ export default function ShopPage() {
     })();
   }, []);
 
-  /* ---------- fetch products whenever filters change ---------- */
-  const fetchProducts = useCallback(
-    async (page = 1, append = false) => {
-      if (!filters) return;
-      if (page === 1) setLoading(true);
-      else setLoadingMore(true);
-      try {
-        const qs = new URLSearchParams({ page: String(page) });
-        filters.categories.forEach((c) => qs.append("categories[]", c));
-        filters.sizes.forEach((s) => qs.append("sizes[]", s));
-        if (filters.min_price !== "" && filters.min_price != null)
-          qs.append("min_price", filters.min_price);
-        if (filters.max_price !== "" && filters.max_price != null)
-          qs.append("max_price", filters.max_price);
-        if (filters.search) qs.append("search", filters.search);
-        const r = await api.get(`api/shop/products?${qs.toString()}`);
-        const pageData = r?.data && !Array.isArray(r.data) ? r.data : r;
-        const list = Array.isArray(pageData?.data) ? pageData.data : [];
-        setProducts((prev) => (append ? [...(prev || []), ...list] : list));
-        setPagination(
-          pageData && typeof pageData === "object"
-            ? { ...pageData, has_more: pageData.current_page < pageData.last_page }
-            : null
-        );
-      } catch {
-        notify.error("Error loading products");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [filters]
-  );
-
   useEffect(() => {
     if (!filters) return;
-    if (firstLoad.current) {
-      firstLoad.current = false;
-    }
-    fetchProducts(1, false);
-  }, [filters, fetchProducts]);
+    const query = filters.search.trim().toLowerCase();
+    const min = filters.min_price === "" ? -Infinity : Number(filters.min_price);
+    const max = filters.max_price === "" ? Infinity : Number(filters.max_price);
+    const filtered = allProducts.filter((product) => {
+      const categoryIds = (product.category || []).map((category) => category.id);
+      const sizes = (product.sizes || []).map((size) => String(size.size));
+      const text = `${product.title || ""} ${product.sku || ""}`.toLowerCase();
+      return (!filters.categories.length || filters.categories.some((id) => categoryIds.includes(id)))
+        && (!filters.sizes.length || filters.sizes.some((size) => sizes.includes(size)))
+        && (!query || text.includes(query))
+        && Number(product.price) >= min
+        && Number(product.price) <= max;
+    });
+    setProducts(filtered);
+    setPagination({ current_page: 1, last_page: 1, total: filtered.length, has_more: false });
+    setLoading(false);
+  }, [allProducts, filters]);
 
   /* ---------- debounced inputs ---------- */
   useEffect(() => {

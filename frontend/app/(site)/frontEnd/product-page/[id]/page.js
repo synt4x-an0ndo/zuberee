@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { FaWhatsapp, FaMinus, FaPlus, FaVideo, FaRulerCombined } from "react-icons/fa6";
 import { MessengerIcon } from "@/components/Icons";
 import { api, imgUrl, formatTk, statusBadge, API_BASE } from "@/lib/api";
@@ -17,7 +17,7 @@ import "@/styles/css/5aead8e379fe8d39.css";
 /**
  * Product detail page (/frontEnd/product-page/[id])
  *  - Detail     : GET api/products/{id}
- *  - Related    : GET api/category-slug-products/{categorySlug}?page=N
+ *  - Related    : GET api/products?category={categorySlug}
  *  - Everything (price, stock, images, faqs, video) comes from the API.
  */
 export default function ProductPage({ params }) {
@@ -35,10 +35,7 @@ export default function ProductPage({ params }) {
 
   /* related products */
   const [related, setRelated] = useState([]);
-  const [relPage, setRelPage] = useState(1);
-  const [relHasMore, setRelHasMore] = useState(false);
   const [relLoading, setRelLoading] = useState(false);
-  const sentinel = useRef(null);
 
   const waNumber = (social?.whatsapp_number || "").replace(/[^0-9]/g, "");
 
@@ -74,47 +71,26 @@ export default function ProductPage({ params }) {
     ? flatCategories.find((c) => c.id === product.category[0].id)?.slug
     : null;
 
-  const fetchRelated = useCallback(
-    async (page = 1, append = false) => {
-      if (!categorySlug) return;
-      setRelLoading(true);
-      try {
-        const r = await api.get(
-          `api/category-slug-products/${categorySlug}?page=${page}`
-        );
-        const list = r?.data?.data ?? r?.data;
-        const relatedProducts = Array.isArray(list) ? list : [];
-        setRelated((prev) => (append ? [...prev, ...relatedProducts] : relatedProducts));
-        setRelPage(page);
-        setRelHasMore(relatedProducts.length >= 10);
-      } catch {
-        /* optional */
-      } finally {
-        setRelLoading(false);
-      }
-    },
-    [categorySlug]
-  );
-
   useEffect(() => {
-    if (categorySlug) fetchRelated(1, false);
-  }, [categorySlug, fetchRelated]);
-
-  /* infinite scroll */
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || !relHasMore) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !relLoading) {
-          fetchRelated(relPage + 1, true);
-        }
-      },
-      { rootMargin: "200px" }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [relHasMore, relLoading, relPage, fetchRelated]);
+    if (!categorySlug) return;
+    let alive = true;
+    setRelLoading(true);
+    api.get(`api/products?category=${encodeURIComponent(categorySlug)}`)
+      .then((r) => {
+        if (!alive) return;
+        const list = Array.isArray(r?.data) ? r.data : [];
+        setRelated(list.filter((item) => String(item.id) !== String(id)));
+      })
+      .catch(() => {
+        if (alive) setRelated([]);
+      })
+      .finally(() => {
+        if (alive) setRelLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [categorySlug, id]);
 
   if (loading) return <Loader />;
   if (!product)
@@ -537,7 +513,6 @@ export default function ProductPage({ params }) {
                 </div>
               ))}
             </div>
-            <div ref={sentinel} />
             {relLoading && (
               <div className="text-center py-3 small text-muted">
                 <span className="spinner-border spinner-border-sm me-2" />

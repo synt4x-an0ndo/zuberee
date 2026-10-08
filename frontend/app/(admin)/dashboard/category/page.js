@@ -29,9 +29,11 @@ function CategoryList() {
       const payload = r?.data ?? r;
       const items = Array.isArray(payload)
         ? payload
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+        : Array.isArray(payload?.data?.categories)
+          ? payload.data.categories
+          : Array.isArray(payload?.categories)
+            ? payload.categories
+            : [];
       setRows(items);
     } catch (e) {
       setError(e.message || "Failed to load categories");
@@ -162,20 +164,20 @@ function CategoryList() {
                           <span className="text-muted">Root</span>
                         )}
                       </td>
-                      <td>{c.size_guide_type ?? "N/A"}</td>
+                      <td>{c.sizeGuideType ?? c.size_guide_type ?? "N/A"}</td>
                       <td>
-                        {c.track_inventory ? (
+                        {(c.stockTracking ?? c.track_inventory) ? (
                           <span className="badge bg-success">Tracked</span>
                         ) : (
                           <span className="badge bg-light text-secondary border">Off</span>
                         )}
                       </td>
                       <td>
-                        <span className={`badge ${c.home_category ? "bg-info" : "bg-danger"}`}>
-                          {c.home_category ? "On" : "Off"}
+                        <span className={`badge ${(c.showOnHomepage ?? c.home_category) ? "bg-info" : "bg-danger"}`}>
+                          {(c.showOnHomepage ?? c.home_category) ? "On" : "Off"}
                         </span>
                       </td>
-                      <td>{c.priority}</td>
+                      <td>{c.displayPriority ?? c.priority ?? 0}</td>
                       <td>
                         <div className="d-flex gap-2">
                           <Link

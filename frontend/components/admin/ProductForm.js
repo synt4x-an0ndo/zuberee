@@ -11,9 +11,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 /**
  * Shared product create/edit form.
- * create: POST  api/products                 (multipart/form-data)
- * edit:   POST  api/products/{id}            (multipart + _method=PUT)
- * lists : GET   api/categories, api/sizes
+ * create: POST  api/products                 (JSON)
+ * edit:   PUT   api/products/{id}             (JSON)
+ * lists : GET   api/categories
  *
  * Array fields use Laravel conventions:
  *   colors[i][code|name|image], sizes[i][size_id|price|stock],
@@ -32,10 +32,13 @@ export default function ProductForm({ id, initial }) {
     sku: "",
     price: "",
     discount: "",
-    status: "in-stock",
+    status: "IN_STOCK",
     short_description: "",
     description: "",
     video_url: "",
+    stock: "",
+    isActive: true,
+    categoryId: "",
   };
 
   const [form, setForm] = useState({ ...empty, ...(initial || {}) });
@@ -55,13 +58,10 @@ export default function ProductForm({ id, initial }) {
     let alive = true;
     (async () => {
       try {
-        const [c, s] = await Promise.all([
-          api.get("api/categories").catch(() => ({ data: [] })),
-          api.get("api/sizes", { auth: false }).catch(() => ({ data: [] })),
-        ]);
+        const c = await api.get("api/categories").catch(() => ({ data: [] }));
         if (!alive) return;
-        setCatList(Array.isArray(c?.data) ? c.data : Array.isArray(c) ? c : []);
-        setSizeList(Array.isArray(s?.data) ? s.data : Array.isArray(s) ? s : []);
+        const categoryRows = c?.data?.categories || c?.data;
+        setCatList(Array.isArray(categoryRows) ? categoryRows : Array.isArray(c) ? c : []);
       } finally {
         if (alive) setLoading(false);
       }
@@ -81,12 +81,11 @@ export default function ProductForm({ id, initial }) {
       return next;
     });
 
-  const toggleCat = (catId) =>
-    setCategories((list) =>
-      list.some((c) => c.id === catId)
-        ? list.filter((c) => c.id !== catId)
-        : [...list, { id: catId }]
-    );
+  const toggleCat = (catId) => {
+    const selected = categories.some((c) => c.id === catId) ? [] : [{ id: catId }];
+    setCategories(selected);
+    set("categoryId", selected[0]?.id || "");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -97,56 +96,25 @@ export default function ProductForm({ id, initial }) {
     }
     setSaving(true);
     try {
-      const fd = new FormData();
-      fd.append("title", form.title);
-      fd.append("short_description", form.short_description || "");
-      fd.append("video_url", form.video_url || "");
-      fd.append("description", form.description || "");
-      fd.append("discount", form.discount ?? "");
-      fd.append("status", form.status || "in-stock");
-      if (form.price !== "" && form.price != null) fd.append("price", form.price);
-      if (form.sku != null && form.sku !== "") fd.append("sku", form.sku);
-
-      colors.forEach((c, i) => {
-        if (c.code) fd.append(`colors[${i}][code]`, c.code);
-        if (c.name) fd.append(`colors[${i}][name]`, c.name);
-        if (c.image) fd.append(`colors[${i}][image]`, c.image);
-      });
-
-      sizes
-        .filter((s) => s.size_id)
-        .forEach((s, i) => {
-          fd.append(`sizes[${i}][size_id]`, s.size_id);
-          if (s.price !== "" && s.price != null) fd.append(`sizes[${i}][price]`, s.price);
-          if (s.stock !== "" && s.stock != null) fd.append(`sizes[${i}][stock]`, s.stock);
-        });
-
-      categories.forEach((c, i) => fd.append(`categories[${i}][category_id]`, c.id));
-
-      images
-        .filter((im) => im)
-        .forEach((im) => fd.append("image[]", im));
-
-      faqs
-        .filter((f) => (f.question || "").trim())
-        .forEach((f, i) => {
-          fd.append(`faqs[${i}][question]`, f.question);
-          fd.append(`faqs[${i}][answer]`, f.answer || "");
-        });
-
-      specs
-        .filter((s) => (s.key || "").trim() && (s.value || "").trim())
-        .forEach((s, i) => {
-          fd.append(`specifications[${i}][key]`, s.key);
-          fd.append(`specifications[${i}][value]`, s.value);
-        });
+      const payload = {
+        name: form.title,
+        sku: form.sku || "",
+        price: Number(form.price) || 0,
+        discount: form.discount === "" || form.discount == null ? null : Number(form.discount),
+        status: form.status || "IN_STOCK",
+        shortDescription: form.short_description || "",
+        description: form.description || "",
+        videoUrl: form.video_url || null,
+        stock: Number(form.stock) || 0,
+        isActive: Boolean(form.isActive),
+        categoryId: Number(form.categoryId || categories[0]?.id) || null,
+      };
 
       if (id) {
-        fd.append("_method", "PUT");
-        await api.upload(`api/products/${id}`, fd);
+        await api.put(`api/products/${id}`, payload);
         notify.success("Product Updated Successfully");
       } else {
-        await api.upload("api/products", fd);
+        await api.post("api/products", payload);
         notify.success("Product Created Successfully");
       }
       window.location.href = "/dashboard/products";
@@ -206,9 +174,10 @@ export default function ProductForm({ id, initial }) {
                     value={form.status}
                     onChange={(e) => set("status", e.target.value)}
                   >
-                    <option value="in-stock">In Stock</option>
-                    <option value="prebook">Prebook</option>
-                    <option value="sold">Sold</option>
+                    <option value="IN_STOCK">In Stock</option>
+                    <option value="OUT_OF_STOCK">Out of Stock</option>
+                    <option value="PRE_ORDER">Pre-order</option>
+                    <option value="DISCONTINUED">Discontinued</option>
                   </select>
                 </div>
                 <div className="col-md-3">
@@ -239,6 +208,26 @@ export default function ProductForm({ id, initial }) {
                     value={form.video_url}
                     onChange={(e) => set("video_url", e.target.value)}
                   />
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label fw-semibold">Stock</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={form.stock}
+                    onChange={(e) => set("stock", e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3 d-flex align-items-end">
+                  <label className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={Boolean(form.isActive)}
+                      onChange={(e) => set("isActive", e.target.checked)}
+                    />
+                    <span className="form-check-label">Active</span>
+                  </label>
                 </div>
                 <div className="col-12">
                   <label className="form-label fw-semibold">Short Description</label>
