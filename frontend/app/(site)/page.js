@@ -29,10 +29,10 @@ export default function HomePage() {
         const list = Array.isArray(r)
           ? r
           : Array.isArray(r?.data)
-          ? r.data
-          : Array.isArray(r?.data?.data)
-          ? r.data.data
-          : [];
+            ? r.data
+            : Array.isArray(r?.data?.data)
+              ? r.data.data
+              : [];
         const images = list.filter((banner) => banner?.image);
         setBanners(images);
       } catch {

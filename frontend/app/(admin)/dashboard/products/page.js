@@ -46,10 +46,10 @@ function ProductList() {
       const productRows = Array.isArray(r)
         ? r
         : Array.isArray(r?.data)
-        ? r.data
-        : Array.isArray(r?.data?.data)
-        ? r.data.data
-        : [];
+          ? r.data
+          : Array.isArray(r?.data?.data)
+            ? r.data.data
+            : [];
       const pagerData = r?.data?.data ? r.data : r?.data || {};
       const visibleRows = productRows.filter((product) => !status || product.status === status);
       setRows(visibleRows.map((product) => ({
@@ -266,13 +266,12 @@ function ProductList() {
                       </td>
                       <td>
                         <span
-                          className={`badge ${
-                            p.status === "in-stock"
+                          className={`badge ${p.status === "in-stock"
                               ? "bg-success"
                               : p.status === "prebook"
-                              ? "bg-warning text-dark"
-                              : "bg-secondary"
-                          }`}
+                                ? "bg-warning text-dark"
+                                : "bg-secondary"
+                            }`}
                         >
                           {p.status}
                         </span>
@@ -281,12 +280,12 @@ function ProductList() {
                         <small>
                           {(p.category || p.categories)?.length
                             ? (p.category || p.categories)
-                                .slice(0, 2)
-                                .map((c) => c.name)
-                                .join(", ") +
-                              ((p.category || p.categories).length > 2
-                                ? ` +${(p.category || p.categories).length - 2}`
-                                : "")
+                              .slice(0, 2)
+                              .map((c) => c.name)
+                              .join(", ") +
+                            ((p.category || p.categories).length > 2
+                              ? ` +${(p.category || p.categories).length - 2}`
+                              : "")
                             : "No categories"}
                         </small>
                       </td>
