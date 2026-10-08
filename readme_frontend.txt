@@ -62,20 +62,14 @@ Create Category API
 
 Get All Categories API
 - API endpoint: GET /api/categories
-- Authentication: JWT required
-- Authorization header: Bearer JWT token
 - Token validation: Verify using authenticateRequest()
 - Retrieve all categories from the database
 - Categories are ordered by creation date
 - Success response: success, message, data
 - Success message: Categories retrieved successfully.
-- Invalid/missing token: Return 401 Unauthorized
 
 Get Category by ID API
 - API endpoint: GET /api/categories/:id
-- Authentication: JWT required
-- Authorization header: Bearer JWT token
-- Token validation: Verify using authenticateRequest()
 - Validate category ID
 - Retrieve category by ID
 - Category not found: Return 404 Not Found
@@ -89,7 +83,6 @@ Update Category API
 - Authorization: Admin only
 - Authorization header: Bearer JWT token
 - Token validation: Verify using authenticateRequest()
-- Request fields: name, slug, description
 - Validate category ID
 - Prevent duplicate category name or slug
 - Category not found: Return 404 Not Found
@@ -111,4 +104,82 @@ Delete Category API
 - Success response: success, message, data
 - Success message: Category deleted successfully.
 - Invalid/missing token: Return 401 Unauthorized
-- Non-admin user: Return 403 Forbidden 
+- Non-admin user: Return 403 Forbidden
+
+Product CRUD
+- Get all product: http://localhost:3001/api/products
+- Post product: http://localhost:3001/api/products
+body:
+{
+  "name": "Classic Black T-Shirt",
+  "sku": "TSHIRT-BLK-001",
+  "price": 1200,
+  "discount": 1000,
+  "status": "IN_STOCK",
+  "shortDescription": "Classic black cotton t-shirt",
+  "description": "<p>Premium quality cotton t-shirt.</p>",
+  "videoUrl": null,
+  "stock": 20,
+  "isActive": true,
+  "categoryId": 1
+}
+RESPONSE:
+{
+    "success": true,
+    "message": "Product created successfully.",
+    "data": {
+        "id": 2,
+        "title": "Classic Black T-Shirt",
+        "sku": "TSHIRT-BLK-002",
+        "price": 1200,
+        "discount": 1000,
+        "status": "in-stock",
+        "short_description": "Classic black cotton t-shirt",
+        "description": "<p>Premium quality cotton t-shirt.</p>",
+        "video_url": null,
+        "images": [],
+        "colors": [],
+        "sizes": [],
+        "category": [
+            {
+                "id": 1,
+                "name": "Consumer Electronics",
+                "slug": "consumer-electronics"
+            }
+        ],
+        "inventory": {
+            "track_inventory": false,
+            "combinations": []
+        },
+        "product_colors": [],
+        "specifications": [],
+        "faqs": []
+    }
+}
+- PUT, GET BY ID, DELETE: http://localhost:3001/api/products/{id}
+
+BANNER CRUD
+- GET & POST BANNER: http://localhost:3001/api/banners
+- body -> form data:
+image: file
+link: text
+display_priority: text
+is_active: text
+
+Response:
+{
+    "data": {
+        "id": 1,
+        "image": "/api/banners/1/image",
+        "link": "https://eyarafashion.com/",
+        "display_priority": 2,
+        "is_active": true,
+        "created_at": "2026-10-07T18:04:06.659Z",
+        "updated_at": "2026-10-07T18:09:31.241Z"
+    }
+}
+- GET BY ID, PUT, DELETE: http://localhost:3001/api/banners/{id}
+
+BANNER IMAGE API:
+API ENDPOINT: http://localhost:3001/api/banners/1/image
+
