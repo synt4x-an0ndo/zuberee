@@ -27,7 +27,7 @@
   max-width: 100%;
 }
 
-.dashboard_grid__uxJ2l > * {
+.dashboard_grid__uxJ2l>* {
   min-width: 0;
 }
 
@@ -48,7 +48,7 @@
     max-width: calc(100% - var(--sidebar-width));
   }
 
-  .sideBarDiv.sidebar-closed + .dashboard_content {
+  .sideBarDiv.sidebar-closed+.dashboard_content {
     width: calc(100% - var(--sidebar-closed-width));
     max-width: calc(100% - var(--sidebar-closed-width));
   }
