@@ -3,6 +3,20 @@
   box-sizing: border-box;
 }
 
+.sideBarDiv .sidebar-nav-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  min-width: 1.1rem;
+  flex: 0 0 1.1rem;
+}
+
+.sideBarDiv .sidebar-nav-icon-small {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  min-width: 0.8125rem;
+  flex-basis: 0.8125rem;
+}
+
 .dashboard_page__TZrNk,
 .dashboard_grid__uxJ2l,
 .dashboard_panel__OCvi8,

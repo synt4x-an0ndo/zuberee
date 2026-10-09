@@ -277,7 +277,7 @@ export default function AdminShell({ children }) {
                     style={{ textDecoration: "none" }}
                     onClick={() => setMobile(false)}
                   >
-                    <item.Icon className="text-white" />
+                    <item.Icon className="text-white sidebar-nav-icon" aria-hidden="true" />
                     {labelVisible && <span className="sidebar-label">{item.label}</span>}
                   </Link>
                 );
@@ -292,7 +292,7 @@ export default function AdminShell({ children }) {
                     onClick={() => setExpanded(isOpen ? null : item.label)}
                   >
                     <div className="d-flex align-items-center gap-2">
-                      <item.Icon className="text-white" />
+                      <item.Icon className="text-white sidebar-nav-icon" aria-hidden="true" />
                       {labelVisible && <span className="sidebar-label">{item.label}</span>}
                     </div>
                     {labelVisible && (
@@ -318,7 +318,7 @@ export default function AdminShell({ children }) {
                             style={{ textDecoration: "none" }}
                             onClick={() => setMobile(false)}
                           >
-                            <s.Icon className="text-white" size={13} />
+                            <s.Icon className="text-white sidebar-nav-icon sidebar-nav-icon-small" aria-hidden="true" />
                             <span className="sidebar-label">{s.label}</span>
                           </Link>
                         ))}
