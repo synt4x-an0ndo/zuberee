@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { FaPlus } from "react-icons/fa6";
+import Swal from "sweetalert2";
 import { api } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
@@ -91,7 +92,7 @@ function InventoryPage() {
 
   const toggleEnforcement = async () => {
     const next = !enforcement;
-    const res = await window.Swal.fire({
+    const res = await Swal.fire({
       title: next
         ? "Start blocking out-of-stock orders?"
         : "Stop enforcing stock limits?",
