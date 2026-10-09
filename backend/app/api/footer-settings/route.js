@@ -1,0 +1,16 @@
+import { readSetting } from "@/lib/settings-store.js";
+
+const defaults = {
+    id: 1,
+    company_description: "",
+    company_address: "",
+    company_email: "",
+    company_phone: "",
+    company_logo: null,
+    logo_path: null,
+};
+
+export async function GET() {
+    const data = await readSetting("footer-settings", defaults);
+    return Response.json({ data });
+}

@@ -24,7 +24,7 @@ import { FaWhatsapp } from "react-icons/fa";
 import { useSite } from "@/context/SiteContext";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { api, imgUrl, formatTk } from "@/lib/api";
+import { api, imgUrl, formatTk, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 
 const accountMenuItemStyle = {
@@ -39,7 +39,7 @@ const accountMenuItemStyle = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Live search dropdown (GET api/product-search?q=...)                 */
+/* Live search dropdown (GET api/products?search=...)                  */
 /* ------------------------------------------------------------------ */
 function SearchBox({ onNavigate, autoFocusInput, className }) {
   const [q, setQ] = useState("");
@@ -54,20 +54,26 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
       if (!q.trim()) setResults(null);
       return;
     }
+    const controller = new AbortController();
+    const query = q.trim();
     const t = setTimeout(async () => {
       setLoading(true);
       try {
         const r = await api.get(
-          `api/product-search?q=${encodeURIComponent(q.trim())}`
+          `api/products?search=${encodeURIComponent(query)}`,
+          { auth: false, signal: controller.signal }
         );
-        setResults(Array.isArray(r?.data) ? r.data : []);
-      } catch {
-        setResults([]);
+        setResults(unwrapList(r, ["products", "results"]));
+      } catch (error) {
+        if (error?.name !== "AbortError") setResults([]);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
   }, [q]);
 
   useEffect(() => {

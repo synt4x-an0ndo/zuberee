@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaArrowRight, FaBoxOpen, FaCheck, FaUser } from "react-icons/fa6";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatTk, imgUrl } from "@/lib/api";
+import { api, formatTk, imgUrl, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 
 function AccountFrame({ eyebrow, title, children }) {
@@ -109,7 +109,7 @@ function Orders({ orders }) {
     if (!orders.length) return <div className="account-empty"><FaBoxOpen /><h3>No orders yet</h3><p>Your next favorite piece belongs here.</p><Link href="/frontEnd/shop" className="account-link">Start shopping <FaArrowRight /></Link></div>;
     return <div className="orders-list">{orders.map((order) => <article className="order-item" key={order.id}>
         <div className="order-top"><div><span className="order-label">Order #{order.id}</span><time>{new Date(order.createdAt).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}</time></div><span className={`order-status ${String(order.status).toLowerCase()}`}>{order.status}</span></div>
-        <div className="order-products">{(order.items || []).map((item) => <div className="order-product" key={item.id}><img src={imgUrl(item.product?.images?.[0]?.imageUrl)} alt="" /><div><strong>{item.product?.name || "Product"}</strong><span>Qty {item.quantity}</span></div><b>{formatTk(Number(item.unitPrice) * item.quantity)} Tk</b></div>)}</div>
+        <div className="order-products">{(order.items || []).map((item) => <div className="order-product" key={item.id}><img src={imgUrl(item.product?.images?.[0])} alt="" /><div><strong>{item.product?.title || item.product?.name || "Product"}</strong><span>Qty {item.quantity}</span></div><b>{formatTk(Number(item.unitPrice) * item.quantity)} Tk</b></div>)}</div>
         <div className="order-total"><span>{order.shippingAddress || "Delivery address on file"}</span><strong>{formatTk(order.totalAmount)} Tk</strong></div>
     </article>)}</div>;
 }
@@ -126,7 +126,7 @@ export function AccountPage() {
     }, [authLoading, isAuthenticated, router]);
     useEffect(() => {
         if (!isAuthenticated) return;
-        api.get("api/account/orders").then((response) => setOrders(Array.isArray(response?.data) ? response.data : [])).catch(() => notify.error("Could not load your orders.")).finally(() => setOrdersLoading(false));
+        api.get("api/account/orders").then((response) => setOrders(unwrapList(response, ["orders"]))).catch(() => notify.error("Could not load your orders.")).finally(() => setOrdersLoading(false));
     }, [isAuthenticated]);
 
     if (authLoading || !isAuthenticated) return <AccountFrame eyebrow="Eyara account" title="Your account"><div className="account-loading">Loading your account...</div></AccountFrame>;

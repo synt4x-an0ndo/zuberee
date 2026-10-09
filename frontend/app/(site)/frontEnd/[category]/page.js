@@ -2,7 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import ProductCard from "@/components/ProductCard";
-import { api, imgUrl } from "@/lib/api";
+import { api, imgUrl, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import Loader from "@/components/Loader";
 import "@/styles/css/b2790d3f6ef2e460.css";
@@ -41,8 +41,8 @@ export default function CategoryPage({ params }) {
       if (page === 1) setLoading(true);
       else setLoadingMore(true);
       try {
-        const r = await api.get(`api/products?${buildQuery(page)}`);
-        const list = Array.isArray(r?.data) ? r.data : [];
+        const r = await api.get(`api/products?${buildQuery(page)}`, { auth: false });
+        const list = unwrapList(r, ["products"]);
         setAllProducts((prev) => (append ? [...prev, ...list] : list));
         setPagination({ total: list.length, current_page: 1, last_page: 1, has_more: false });
         if (list[0]?.category?.[0]) setMeta(list[0].category[0]);

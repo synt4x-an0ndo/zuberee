@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaPlus, FaTrash } from "react-icons/fa6";
-import { api, imgUrl } from "@/lib/api";
+import { api, imgUrl, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import Loader from "@/components/Loader";
-
-const clone = (v) => JSON.parse(JSON.stringify(v));
 
 /**
  * Shared product create/edit form.
@@ -15,15 +13,11 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
  * edit:   PUT   api/products/{id}             (JSON)
  * lists : GET   api/categories
  *
- * Array fields use Laravel conventions:
- *   colors[i][code|name|image], sizes[i][size_id|price|stock],
- *   categories[i][category_id], faqs[i][question|answer],
- *   specifications[i][key|value], image[] (files)
+ * Array fields follow the JSON contract implemented by the backend route.
  */
 export default function ProductForm({ id, initial }) {
   const fileRef = useRef(null);
   const [catList, setCatList] = useState([]);
-  const [sizeList, setSizeList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -38,6 +32,7 @@ export default function ProductForm({ id, initial }) {
     video_url: "",
     stock: "",
     isActive: true,
+    track_inventory: false,
     categoryId: "",
   };
 
@@ -48,6 +43,7 @@ export default function ProductForm({ id, initial }) {
   const [faqs, setFaqs] = useState(initial?.faqs || []);
   const [specs, setSpecs] = useState(initial?.specifications || []);
   const [images, setImages] = useState(initial?.images || []); // strings + Files
+  const [imageUrl, setImageUrl] = useState("");
 
   useEffect(() => {
     if (!initial) return;
@@ -60,8 +56,7 @@ export default function ProductForm({ id, initial }) {
       try {
         const c = await api.get("api/categories").catch(() => ({ data: [] }));
         if (!alive) return;
-        const categoryRows = c?.data?.categories || c?.data;
-        setCatList(Array.isArray(categoryRows) ? categoryRows : Array.isArray(c) ? c : []);
+        setCatList(unwrapList(c, ["categories"]));
       } finally {
         if (alive) setLoading(false);
       }
@@ -76,7 +71,7 @@ export default function ProductForm({ id, initial }) {
   /* row helpers */
   const rowSet = (setter) => (i, k, v) =>
     setter((list) => {
-      const next = clone(list);
+      const next = [...list];
       next[i] = { ...next[i], [k]: v };
       return next;
     });
@@ -87,6 +82,25 @@ export default function ProductForm({ id, initial }) {
     set("categoryId", selected[0]?.id || "");
   };
 
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      if (!(file instanceof File)) {
+        resolve(null);
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        reject(new Error("Only image files can be added"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Could not read the selected image"));
+      reader.readAsDataURL(file);
+    });
+
+  const imageValue = async (value) =>
+    typeof value === "string" ? value.trim() : await fileToDataUrl(value);
+
   const submit = async (e) => {
     e.preventDefault();
     if (saving) return;
@@ -94,32 +108,105 @@ export default function ProductForm({ id, initial }) {
       notify.error("Product title is required");
       return;
     }
+    const categoryId = Number(form.categoryId || categories[0]?.id);
+    const price = Number(form.price);
+    const discount = form.discount === "" || form.discount == null
+      ? null
+      : Number(form.discount);
+    const stock = form.stock === "" || form.stock == null
+      ? undefined
+      : Number(form.stock);
+    if (!Number.isInteger(categoryId) || categoryId <= 0) {
+      notify.error("A valid product category is required");
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      notify.error("A valid product price is required");
+      return;
+    }
+    if (discount !== null && (!Number.isFinite(discount) || discount < 0)) {
+      notify.error("Discount must be a valid non-negative number");
+      return;
+    }
+    if (stock !== undefined && (!Number.isInteger(stock) || stock < 0)) {
+      notify.error("Stock must be a non-negative whole number");
+      return;
+    }
     setSaving(true);
     try {
+      const uploadedImages = images.filter((image) => image instanceof File);
+      const savedImages = images
+        .filter((image) => typeof image === "string" && image.trim())
+        .map((image) => image.trim());
+      const savedColors = await Promise.all(
+        colors
+          .filter((color) => color.name?.trim() || color.code?.trim() || color.image)
+          .map(async (color) => ({
+            name: color.name?.trim() || "",
+            code: color.code?.trim() || "",
+            image: (await imageValue(color.image)) || null,
+          }))
+      );
       const payload = {
-        name: form.title,
-        sku: form.sku || "",
-        price: Number(form.price) || 0,
-        discount: form.discount === "" || form.discount == null ? null : Number(form.discount),
+        name: form.title.trim(),
+        sku: form.sku?.trim() || "",
+        price,
+        discount,
         status: form.status || "IN_STOCK",
         shortDescription: form.short_description || "",
         description: form.description || "",
         videoUrl: form.video_url || null,
-        stock: Number(form.stock) || 0,
-        isActive: Boolean(form.isActive),
-        categoryId: Number(form.categoryId || categories[0]?.id) || null,
+        ...(stock === undefined ? {} : { stock }),
+        ...(typeof form.isActive === "boolean" ? { isActive: form.isActive } : {}),
+        categoryId,
+        images: savedImages.map((image, index) => ({ image, isPrimary: index === 0 })),
+        colors: savedColors,
+        sizes: sizes
+          .filter((size) => (size.value || size.size || size.size_id)?.toString().trim())
+          .map((size) => ({
+            value: (size.value || size.size || size.size_id).toString().trim(),
+            price: size.price === "" || size.price == null ? null : Number(size.price),
+            stock: Number(size.stock) || 0,
+          })),
+        specifications: specs
+          .filter((specification) => specification.key?.trim() || specification.value?.trim())
+          .map((specification) => ({
+            key: specification.key?.trim() || "",
+            value: specification.value?.trim() || "",
+          })),
+        faqs: faqs
+          .filter((faq) => faq.question?.trim() || faq.answer?.trim())
+          .map((faq) => ({
+            question: faq.question?.trim() || "",
+            answer: faq.answer?.trim() || "",
+          })),
+        inventory: { track_inventory: Boolean(form.track_inventory) },
       };
 
+      let savedProduct;
       if (id) {
-        await api.put(`api/products/${id}`, payload);
-        notify.success("Product Updated Successfully");
+        savedProduct = await api.put(`api/products/${id}`, payload);
       } else {
-        await api.post("api/products", payload);
-        notify.success("Product Created Successfully");
+        savedProduct = await api.post("api/products", payload);
       }
+      const productId = id || savedProduct?.data?.id;
+      if (productId && uploadedImages.length > 0) {
+        await Promise.all(
+          uploadedImages.map((file) => {
+            const formData = new FormData();
+            formData.append("image", file);
+            return api.upload(`api/products/${productId}/images`, formData);
+          })
+        );
+      }
+      notify.success(id ? "Product Updated Successfully" : "Product Created Successfully");
       window.location.href = "/dashboard/products";
     } catch (err) {
-      notify.error(err.message || "Failed to save product");
+      const validationErrors = err.data?.errors;
+      const detail = validationErrors && typeof validationErrors === "object"
+        ? Object.values(validationErrors).flat().join(" ")
+        : "";
+      notify.error(detail || err.message || "Failed to save product");
     } finally {
       setSaving(false);
     }
@@ -127,12 +214,17 @@ export default function ProductForm({ id, initial }) {
 
   const colorImg = (i, file) =>
     setColors((list) => {
-      const next = clone(list);
+      const next = [...list];
       next[i] = { ...next[i], image: file };
       return next;
     });
 
-  const sizeOptions = useMemo(() => sizeList, [sizeList]);
+  const addImageUrl = () => {
+    const value = imageUrl.trim();
+    if (!value) return;
+    setImages((list) => [...list, value]);
+    setImageUrl("");
+  };
 
   if (loading) return <Loader />;
 
@@ -229,6 +321,17 @@ export default function ProductForm({ id, initial }) {
                     <span className="form-check-label">Active</span>
                   </label>
                 </div>
+                <div className="col-md-3 d-flex align-items-end">
+                  <label className="form-check">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={Boolean(form.track_inventory)}
+                      onChange={(e) => set("track_inventory", e.target.checked)}
+                    />
+                    <span className="form-check-label">Track inventory</span>
+                  </label>
+                </div>
                 <div className="col-12">
                   <label className="form-label fw-semibold">Short Description</label>
                   <input
@@ -322,6 +425,12 @@ export default function ProductForm({ id, initial }) {
                       className="form-control"
                       onChange={(e) => colorImg(i, e.target.files?.[0] || "")}
                     />
+                    <input
+                      className="form-control form-control-sm mt-1"
+                      placeholder="Existing image URL"
+                      value={typeof c.image === "string" ? c.image : ""}
+                      onChange={(e) => rowSet(setColors)(i, "image", e.target.value)}
+                    />
                   </div>
                   <div className="col-md-2">
                     <button
@@ -355,18 +464,12 @@ export default function ProductForm({ id, initial }) {
               {sizes.map((s, i) => (
                 <div key={i} className="row g-2 align-items-center mb-2">
                   <div className="col-md-4">
-                    <select
+                    <input
                       className="form-select"
-                      value={s.size_id || ""}
-                      onChange={(e) => rowSet(setSizes)(i, "size_id", e.target.value)}
-                    >
-                      <option value="">-- Select Size --</option>
-                      {sizeOptions.map((sz) => (
-                        <option key={sz.id} value={sz.id}>
-                          {sz.size}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Size (e.g. UK 6)"
+                      value={s.value || s.size || s.size_id || ""}
+                      onChange={(e) => rowSet(setSizes)(i, "value", e.target.value)}
+                    />
                   </div>
                   <div className="col-md-3">
                     <input
@@ -438,9 +541,28 @@ export default function ProductForm({ id, initial }) {
                     background: "transparent",
                   }}
                   onClick={() => fileRef.current?.click()}
+                  aria-label="Choose product photos"
                 >
-                  <FaPlus />
+                  <FaPlus className="d-block mx-auto mb-1" />
+                  <span className="small">Choose photos</span>
                 </button>
+                <div className="input-group" style={{ maxWidth: 360 }}>
+                  <input
+                    className="form-control form-control-sm"
+                    placeholder="Image URL from backend"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addImageUrl();
+                      }
+                    }}
+                  />
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={addImageUrl}>
+                    Add URL
+                  </button>
+                </div>
                 <input
                   ref={fileRef}
                   type="file"
@@ -449,13 +571,13 @@ export default function ProductForm({ id, initial }) {
                   hidden
                   onChange={(e) => {
                     const files = Array.from(e.target.files || []);
-                    if (files.length) setImages((l) => [...l, ...files]);
+                    if (files.length) setImages((list) => [...list, ...files]);
                     e.target.value = "";
                   }}
                 />
               </div>
               <small className="text-muted">
-                Click + to add product photos. First image is the cover.
+                Choose one or more photos, or add a saved image URL. Photos upload to product storage after saving; the first image is the cover.
               </small>
             </div>
           </div>

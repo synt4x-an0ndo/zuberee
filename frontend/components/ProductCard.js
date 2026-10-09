@@ -13,7 +13,7 @@ export default function ProductCard({ product }) {
   const [preview, setPreview] = useState(null);
   if (!product) return null;
 
-  const firstImage = product.images?.[0]?.image || product.image || null;
+  const firstImage = imgUrl(product.images?.[0]) || imgUrl(product.image);
   const main = preview || firstImage;
   const badge = statusBadge(product);
   const colors = Array.isArray(product.colors) ? product.colors : [];
@@ -28,7 +28,10 @@ export default function ProductCard({ product }) {
           <div className="position-relative overflow-hidden product-image-container">
             {main ? (
               <img
-                src={imgUrl(main)}
+                src={main}
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
                 className="product-image p-0 p-md-3"
                 alt={product.title || "Product"}
               />
@@ -47,19 +50,22 @@ export default function ProductCard({ product }) {
               {colors.slice(0, 3).map((c, i) => (
                 <div
                   key={c.id ?? i}
-                  className={preview && preview === imgUrl(c.image) ? "SelectedImageStyle" : "product_color_image_div"}
+                  className={preview && preview === imgUrl(c) ? "SelectedImageStyle" : "product_color_image_div"}
                   onClick={() =>
                     setPreview((p) =>
-                      p === imgUrl(c.image) ? null : imgUrl(c.image)
+                      p === imgUrl(c) ? null : imgUrl(c)
                     )
                   }
                 >
                   <img
                     width={30}
                     height={30}
-                    src={imgUrl(c.image)}
+                    src={imgUrl(c)}
                     alt={c.name || "Color variant"}
                     className="h-100 w-100"
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
                   />
                 </div>
               ))}

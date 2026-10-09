@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ProductCard from "@/components/ProductCard";
-import { api } from "@/lib/api";
+import { api, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import Loader from "@/components/Loader";
 
@@ -27,18 +27,11 @@ export default function ShopPage() {
     (async () => {
       try {
         const [categoriesResponse, productsResponse] = await Promise.all([
-          api.get("api/categories"),
-          api.get("api/products"),
+          api.get("api/categories", { auth: false }),
+          api.get("api/products", { auth: false }),
         ]);
-        const categoryPayload = categoriesResponse?.data || {};
-        const categories = Array.isArray(categoryPayload?.categories)
-          ? categoryPayload.categories
-          : Array.isArray(categoryPayload)
-            ? categoryPayload
-            : [];
-        const loadedProducts = Array.isArray(productsResponse?.data)
-          ? productsResponse.data
-          : [];
+        const categories = unwrapList(categoriesResponse, ["categories"]);
+        const loadedProducts = unwrapList(productsResponse, ["products"]);
         setAllProducts(loadedProducts);
         const sizes = [...new Map(
           loadedProducts.flatMap((product) => product.sizes || [])

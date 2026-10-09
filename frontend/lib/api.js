@@ -53,10 +53,35 @@ export function clearToken() {
 
 /** Build an absolute URL for backend-relative media paths (uploads/..., /storage/...) */
 export function imgUrl(path) {
-  if (!path) return null;
-  if (/^(https?:)?\/\//.test(path) || path.startsWith("data:") || path.startsWith("blob:"))
-    return path;
-  return `${API_BASE}/${String(path).replace(/^\/+/, "")}`;
+  const value = typeof path === "string" ? path.trim() : path?.image || path?.imageUrl;
+  if (!value || /^(javascript|vbscript):/i.test(value)) return null;
+  if (/^(https?:)?\/\//i.test(value) || /^(data|blob):/i.test(value)) return value;
+  return `${API_BASE}/${value.replace(/^\/+/, "")}`;
+}
+
+export function asBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+    if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  }
+  return fallback;
+}
+
+export function unwrapObject(response) {
+  const value = response?.data ?? response;
+  return value?.data && !Array.isArray(value.data) ? value.data : value;
+}
+
+export function unwrapList(response, keys = []) {
+  const candidates = [response, response?.data, response?.data?.data, ...keys.flatMap((key) => [
+    response?.[key],
+    response?.data?.[key],
+    response?.data?.data?.[key],
+  ])];
+  return candidates.find(Array.isArray) || [];
 }
 
 /* ------------------------------------------------------------------ */

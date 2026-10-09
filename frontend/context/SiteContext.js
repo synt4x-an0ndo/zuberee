@@ -1,16 +1,12 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api, API_BASE } from "@/lib/api";
+import { api, API_BASE, unwrapList, unwrapObject } from "@/lib/api";
 
 /* =====================================================================
  * SiteContext - global site information fetched from the API:
- *  - site settings (primary color, feature flags)  -> GET api/site-settings
- *  - footer / company info                        -> GET api/footer-settings
- *  - social links + whatsapp number               -> GET api/social-links-first
  *  - category tree (navigation + mega menu)        -> GET api/categories
- * Nothing here is hardcoded; the UI degrades gracefully when an endpoint
- * is unavailable.
+ *  - site settings, footer, and social links       -> public settings APIs
  * ===================================================================== */
 
 const SiteCtx = createContext(null);
@@ -34,26 +30,30 @@ export function SiteProvider({ children }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [s, f, so, c] = await Promise.allSettled([
-        api.get("api/site-settings"),
-        api.get("api/footer-settings"),
-        api.get("api/social-links-first"),
-        api.get("api/categories"),
-      ]);
+      const [settingsResult, footerResult, socialResult, categoriesResult] =
+        await Promise.allSettled([
+          api.get("api/site-settings", { auth: false }),
+          api.get("api/footer-settings", { auth: false }),
+          api.get("api/social-links-first", { auth: false }),
+          api.get("api/categories", { auth: false }),
+        ]);
       if (!alive) return;
-      if (s.status === "fulfilled") setSettings(s.value?.data ?? null);
-      if (f.status === "fulfilled") setFooter(f.value ?? null);
-      if (so.status === "fulfilled") setSocial(so.value ?? null);
-      if (c.status === "fulfilled") {
-        const categoryData =
-          c.value?.data?.data?.categories ??
-          c.value?.data?.categories ??
-          c.value?.data?.data ??
-          c.value?.data ??
-          c.value;
-        setCategories(Array.isArray(categoryData) ? categoryData : []);
+      if (settingsResult.status === "fulfilled") setSettings(unwrapObject(settingsResult.value));
+      if (footerResult.status === "fulfilled") {
+        const list = unwrapList(footerResult.value);
+        setFooter(list[0] || unwrapObject(footerResult.value));
       }
-      setBackendAvailable([s, f, so, c].some((result) => result.status === "fulfilled"));
+      if (socialResult.status === "fulfilled") {
+        setSocial(unwrapList(socialResult.value)[0] || unwrapObject(socialResult.value));
+      }
+      if (categoriesResult.status === "fulfilled") {
+        setCategories(unwrapList(categoriesResult.value, ["categories"]));
+      }
+      setBackendAvailable(
+        [settingsResult, footerResult, socialResult, categoriesResult].some(
+          (result) => result.status === "fulfilled"
+        )
+      );
       setLoading(false);
     })();
     return () => {
