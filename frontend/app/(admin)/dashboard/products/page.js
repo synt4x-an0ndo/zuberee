@@ -261,10 +261,10 @@ function ProductList() {
                       <td>
                         <span
                           className={`badge ${p.status === "in-stock"
-                              ? "bg-success"
-                              : p.status === "prebook"
-                                ? "bg-warning text-dark"
-                                : "bg-secondary"
+                            ? "bg-success"
+                            : p.status === "prebook"
+                              ? "bg-warning text-dark"
+                              : "bg-secondary"
                             }`}
                         >
                           {p.status}

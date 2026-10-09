@@ -1,9 +1,9 @@
 {
-  "id": 1,
-  "company_description": "",
-  "company_address": "",
-  "company_email": "",
-  "company_phone": "",
-  "company_logo": null,
-  "logo_path": null
+    "id": 1,
+    "company_description": "",
+    "company_address": "",
+    "company_email": "",
+    "company_phone": "",
+    "company_logo": null,
+    "logo_path": null
 }

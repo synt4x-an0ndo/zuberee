@@ -27,17 +27,17 @@ export default function HomePage() {
   const loadBanners = useCallback(async () => {
     if (bannerRequest.current) return bannerRequest.current;
     bannerRequest.current = (async () => {
-    try {
-      const r = await api.get("api/banners", { auth: false });
-      const list = unwrapList(r, ["banners"]);
-      const images = list.filter((banner) => banner?.image && asBoolean(banner.is_active, true));
-      setBanners(images);
-      setActiveBanner(0);
-    } catch {
-      setBanners([]);
-    } finally {
-      setBannersLoading(false);
-    }
+      try {
+        const r = await api.get("api/banners", { auth: false });
+        const list = unwrapList(r, ["banners"]);
+        const images = list.filter((banner) => banner?.image && asBoolean(banner.is_active, true));
+        setBanners(images);
+        setActiveBanner(0);
+      } catch {
+        setBanners([]);
+      } finally {
+        setBannersLoading(false);
+      }
     })();
     try {
       return await bannerRequest.current;
