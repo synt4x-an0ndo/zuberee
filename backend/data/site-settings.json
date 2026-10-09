@@ -1,6 +1,6 @@
 {
-    "id": 1,
-    "site_name": "",
-    "primary_color": "#ff641f",
-    "inventory_enforcement_enabled": false
+  "id": 1,
+  "site_name": "",
+  "primary_color": "#e99401",
+  "inventory_enforcement_enabled": false
 }
