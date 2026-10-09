@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FaTrash, FaPlus } from "react-icons/fa6";
 import Swal from "sweetalert2";
-import { api, imgUrl } from "@/lib/api";
+import { api, asBoolean, imgUrl, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
@@ -25,18 +25,22 @@ function BannersPage() {
   const [saving, setSaving] = useState(false);
   const fileRefs = useRef({});
 
-  const load = async () => {
+  const broadcastChange = () => {
+    window.localStorage.setItem("banner-sync", String(Date.now()));
+  };
+
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await api.get("api/banners");
-      const list = r?.data?.data || r?.data || (Array.isArray(r) ? r : []);
-      setRows(Array.isArray(list) ? list : []);
+      const list = unwrapList(r);
+      setRows(list);
       const nextEdits = {};
-      (Array.isArray(list) ? list : []).forEach((b) => {
+      list.forEach((b) => {
         nextEdits[b.id] = {
           link: b.link || "",
           display_priority: String(b.display_priority ?? 0),
-          is_active: String(Boolean(b.is_active)),
+          is_active: String(asBoolean(b.is_active, true)),
         };
       });
       setEdits(nextEdits);
@@ -45,11 +49,11 @@ function BannersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -81,7 +85,8 @@ function BannersPage() {
       await Promise.all(requests);
       notify.success("Banners saved successfully");
       setDrafts([{ image: null, link: "", display_priority: "0", is_active: "true" }]);
-      load();
+      await load();
+      broadcastChange();
     } catch (err) {
       notify.error(err.message || "Failed");
     } finally {
@@ -101,7 +106,13 @@ function BannersPage() {
     try {
       await api.delete(`api/banners/${id}`);
       setRows((rs) => rs.filter((b) => b.id !== id));
+      setEdits((all) => {
+        const next = { ...all };
+        delete next[id];
+        return next;
+      });
       notify.success("Banner deleted");
+      broadcastChange();
     } catch (e) {
       notify.error(e.message || "Failed to delete");
     }
@@ -119,7 +130,8 @@ function BannersPage() {
     try {
       await api.upload(`api/banners/${id}`, fd, { method: "PUT" });
       notify.success("Banner updated successfully");
-      load();
+      await load();
+      broadcastChange();
     } catch (e) {
       notify.error(e.message || "Failed to update banner");
     }
@@ -137,9 +149,12 @@ function BannersPage() {
           <div key={b.id} className="col-md-3">
             <div className="card border-0 shadow-sm h-100">
               <img
-                src={imgUrl(b.image || `/api/banners/${b.id}/image`)}
+                src={`${imgUrl(b.image || `/api/banners/${b.id}/image`)}?v=${encodeURIComponent(b.updated_at || b.id)}`}
                 alt=""
                 style={{ height: 150, objectFit: "cover" }}
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
               />
               <div className="card-body">
                 <label className="form-label small mb-1">Link</label>
@@ -167,6 +182,39 @@ function BannersPage() {
                   >
                     <FaTrash />
                   </button>
+                </div>
+                <div className="row g-2 mt-2">
+                  <div className="col-6">
+                    <label className="form-label small mb-1">Priority</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control form-control-sm"
+                      value={edits[b.id]?.display_priority ?? "0"}
+                      onChange={(e) =>
+                        setEdits((all) => ({
+                          ...all,
+                          [b.id]: { ...all[b.id], display_priority: e.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-6 d-flex align-items-end">
+                    <label className="form-check small">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={edits[b.id]?.is_active === "true"}
+                        onChange={(e) =>
+                          setEdits((all) => ({
+                            ...all,
+                            [b.id]: { ...all[b.id], is_active: String(e.target.checked) },
+                          }))
+                        }
+                      />
+                      Active
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

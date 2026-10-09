@@ -59,7 +59,7 @@ export default function CartDrawer() {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get("api/shipping-costs-latest");
+        const r = await api.get("api/shipping-costs-latest", { auth: false });
         const data = r?.data || r;
         if (!alive) return;
         const cost =

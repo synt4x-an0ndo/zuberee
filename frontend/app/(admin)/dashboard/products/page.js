@@ -12,7 +12,7 @@ import {
   FaCircleQuestion,
 } from "react-icons/fa6";
 import Swal from "sweetalert2";
-import { api, imgUrl, formatTk } from "@/lib/api";
+import { api, imgUrl, formatTk, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
@@ -43,13 +43,7 @@ function ProductList() {
       const qs = new URLSearchParams();
       if (query) qs.set("search", query);
       const r = await api.get(`api/products?${qs.toString()}`);
-      const productRows = Array.isArray(r)
-        ? r
-        : Array.isArray(r?.data)
-          ? r.data
-          : Array.isArray(r?.data?.data)
-            ? r.data.data
-            : [];
+      const productRows = unwrapList(r, ["products"]);
       const pagerData = r?.data?.data ? r.data : r?.data || {};
       const visibleRows = productRows.filter((product) => !status || product.status === status);
       setRows(visibleRows.map((product) => ({

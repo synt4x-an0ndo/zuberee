@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { FaWhatsapp, FaMinus, FaPlus, FaVideo, FaRulerCombined } from "react-icons/fa6";
 import { MessengerIcon } from "@/components/Icons";
-import { api, imgUrl, formatTk, statusBadge, API_BASE } from "@/lib/api";
+import { api, imgUrl, formatTk, statusBadge, unwrapList, unwrapObject, API_BASE } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import { useSite } from "@/context/SiteContext";
@@ -28,6 +28,7 @@ export default function ProductPage({ params }) {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(null);
+  const [imageUnavailable, setImageUnavailable] = useState(false);
   const [activeColor, setActiveColor] = useState(null);
   const [activeSize, setActiveSize] = useState(null);
   const [qty, setQty] = useState(1);
@@ -45,12 +46,13 @@ export default function ProductPage({ params }) {
     (async () => {
       setLoading(true);
       try {
-        const r = await api.get(`api/products/${id}`);
+        const r = await api.get(`api/products/${id}`, { auth: false });
         if (!alive) return;
-        const p = r?.data || null;
+        const p = unwrapObject(r);
         setProduct(p);
         if (p) {
-          setActiveImage(imgUrl(p.images?.[0]?.image || p.image));
+          setActiveImage(imgUrl(p.images?.[0]) || imgUrl(p.image));
+          setImageUnavailable(false);
           setActiveColor(p.colors?.[0] || null);
           setActiveSize(null);
           setQty(1);
@@ -75,10 +77,10 @@ export default function ProductPage({ params }) {
     if (!categorySlug) return;
     let alive = true;
     setRelLoading(true);
-    api.get(`api/products?category=${encodeURIComponent(categorySlug)}`)
+    api.get(`api/products?category=${encodeURIComponent(categorySlug)}`, { auth: false })
       .then((r) => {
         if (!alive) return;
-        const list = Array.isArray(r?.data) ? r.data : [];
+        const list = unwrapList(r, ["products"]);
         setRelated(list.filter((item) => String(item.id) !== String(id)));
       })
       .catch(() => {
@@ -104,11 +106,11 @@ export default function ProductPage({ params }) {
   const specifications = Array.isArray(product.specifications) ? product.specifications : [];
   const faqs = Array.isArray(product.faqs) ? product.faqs : [];
   const gallery = [
-    ...images.map((im) => imgUrl(im.image)),
+    ...images.map((im) => imgUrl(im)),
     ...colors
-      .filter((c) => c.image)
-      .map((c) => imgUrl(c.image)),
-  ].filter((v, i, a) => a.indexOf(v) === i);
+      .map((c) => imgUrl(c)),
+  ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+  const primaryImage = activeImage || gallery[0] || null;
 
   const combination = (product.inventory?.combinations || []).find(
     (c) =>
@@ -191,12 +193,19 @@ export default function ProductPage({ params }) {
         {/* ============ GALLERY ============ */}
         <div className="col-lg-6 mb-4">
           <div className="border rounded overflow-hidden bg-white text-center">
-            <img
-              src={activeImage || gallery[0]}
-              alt={product.title}
-              className="img-fluid"
-              style={{ maxHeight: 520, width: "100%", objectFit: "contain" }}
-            />
+            {primaryImage && !imageUnavailable ? (
+              <img
+                src={primaryImage}
+                alt={product.title}
+                className="img-fluid"
+                onError={() => setImageUnavailable(true)}
+                style={{ maxHeight: 520, width: "100%", objectFit: "contain" }}
+              />
+            ) : (
+              <div className="d-flex align-items-center justify-content-center text-muted" style={{ minHeight: 240 }}>
+                No image available
+              </div>
+            )}
           </div>
           <div className="d-flex gap-2 mt-2 flex-wrap">
             {gallery.slice(0, 10).map((g, i) => (
@@ -277,7 +286,7 @@ export default function ProductPage({ params }) {
                     title={c.name}
                     onClick={() => {
                       setActiveColor(c);
-                      if (c.image) setActiveImage(imgUrl(c.image));
+                      if (imgUrl(c)) setActiveImage(imgUrl(c));
                     }}
                     className="border rounded p-1 bg-white"
                     style={{
@@ -290,7 +299,7 @@ export default function ProductPage({ params }) {
                     }}
                   >
                     <img
-                      src={imgUrl(c.image)}
+                      src={imgUrl(c)}
                       alt={c.name}
                       width={40}
                       height={40}
@@ -516,11 +525,6 @@ export default function ProductPage({ params }) {
               <div className="text-center py-3 small text-muted">
                 <span className="spinner-border spinner-border-sm me-2" />
                 Loading more products...
-              </div>
-            )}
-            {!relLoading && relHasMore && (
-              <div className="text-center small text-muted">
-                Scroll to see more products — more products will load automatically
               </div>
             )}
           </>

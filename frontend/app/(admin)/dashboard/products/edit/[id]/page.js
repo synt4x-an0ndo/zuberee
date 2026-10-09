@@ -27,8 +27,9 @@ function EditForm({ id }) {
           short_description: p.short_description || "",
           description: p.description || "",
           video_url: p.video_url || "",
-          stock: p.stock ?? p.inventory?.stock ?? "",
-          isActive: p.isActive ?? p.is_active ?? true,
+          stock: p.stock ?? "",
+          isActive: p.isActive ?? p.is_active,
+          track_inventory: p.inventory?.track_inventory ?? false,
           categoryId: p.category?.[0]?.id ?? p.categoryId ?? "",
           categories: (p.category || p.categories || []).map((c) => ({ id: c.id })),
           colors: (p.colors || []).map((c) => ({
@@ -37,7 +38,7 @@ function EditForm({ id }) {
             image: c.image || "", // keep existing swatch URL
           })),
           sizes: (p.sizes || []).map((s) => ({
-            size_id: s.id ?? s.size_id,
+            value: s.value || s.size || s.size_id || "",
             price: s.pivot?.price ?? "",
             stock: s.pivot?.stock ?? "",
           })),

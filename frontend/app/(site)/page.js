@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ProductCard from "@/components/ProductCard";
-import { api, imgUrl } from "@/lib/api";
+import { api, asBoolean, imgUrl, unwrapList } from "@/lib/api";
 import notify from "@/components/notify";
 import Loader from "@/components/Loader";
 
@@ -20,44 +20,64 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [banners, setBanners] = useState([]);
   const [bannersLoading, setBannersLoading] = useState(true);
+  const [activeBanner, setActiveBanner] = useState(0);
+  const bannerRequest = useRef(null);
 
   /* ---- hero banners (API-driven) ---- */
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await api.get("api/banners");
-        const list = Array.isArray(r)
-          ? r
-          : Array.isArray(r?.data)
-            ? r.data
-            : Array.isArray(r?.data?.data)
-              ? r.data.data
-              : [];
-        const images = list.filter((banner) => banner?.image);
-        setBanners(images);
-      } catch {
-        setBanners([]);
-      } finally {
-        setBannersLoading(false);
-      }
+  const loadBanners = useCallback(async () => {
+    if (bannerRequest.current) return bannerRequest.current;
+    bannerRequest.current = (async () => {
+    try {
+      const r = await api.get("api/banners", { auth: false });
+      const list = unwrapList(r, ["banners"]);
+      const images = list.filter((banner) => banner?.image && asBoolean(banner.is_active, true));
+      setBanners(images);
+      setActiveBanner(0);
+    } catch {
+      setBanners([]);
+    } finally {
+      setBannersLoading(false);
+    }
     })();
+    try {
+      return await bannerRequest.current;
+    } finally {
+      bannerRequest.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    loadBanners();
+  }, [loadBanners]);
+
+  useEffect(() => {
+    const refreshFromAdmin = (event) => {
+      if (event.key === "banner-sync") loadBanners();
+    };
+    window.addEventListener("storage", refreshFromAdmin);
+    return () => window.removeEventListener("storage", refreshFromAdmin);
+  }, [loadBanners]);
+
+  useEffect(() => {
+    if (banners.length < 2) return undefined;
+
+    const timer = window.setInterval(() => {
+      setActiveBanner((index) => (index + 1) % banners.length);
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [banners.length]);
 
   /* ---- home slots ---- */
   const loadSlots = useCallback(async () => {
     setLoading(true);
     try {
       const [categoriesResponse, productsResponse] = await Promise.all([
-        api.get("api/categories"),
-        api.get("api/products"),
+        api.get("api/categories", { auth: false }),
+        api.get("api/products", { auth: false }),
       ]);
-      const categoriesPayload = categoriesResponse?.data || {};
-      const categories = Array.isArray(categoriesPayload?.categories)
-        ? categoriesPayload.categories
-        : [];
-      const products = Array.isArray(productsResponse?.data)
-        ? productsResponse.data
-        : [];
+      const categories = unwrapList(categoriesResponse, ["categories"]);
+      const products = unwrapList(productsResponse, ["products"]);
       const grouped = categories
         .map((category) => ({
           id: category.id,
@@ -90,31 +110,38 @@ export default function HomePage() {
         <Loader />
       ) : banners.length > 0 ? (
         <section className="container hero_banner" aria-label="Site banner">
-          <div id="heroSlider" className="carousel slide" data-bs-ride="carousel">
+          <div id="heroSlider" className="carousel slide">
             <div className="carousel-inner">
               {banners.map((b, i) => (
                 <div
                   key={b.id ?? i}
-                  className={`carousel-item ${i === 0 ? "active" : ""}`}
+                  className={`carousel-item ${i === activeBanner ? "active" : ""}`}
                 >
-                  <a href={b.link || "#"} target="_blank" rel="noopener noreferrer">
-                    <img
-                      className="hero_banner_img d-block w-100"
-                      src={imgUrl(b.image)}
-                      alt={b.title || ""}
-                      fetchPriority={i === 0 ? "high" : "auto"}
-                    />
-                  </a>
+                  <BannerSlide
+                    banner={b}
+                    priority={i === 0}
+                    onMissing={loadBanners}
+                  />
                 </div>
               ))}
             </div>
             {banners.length > 1 && (
               <>
-                <button className="carousel-control-prev" type="button" data-bs-target="#heroSlider" data-bs-slide="prev">
+                <button
+                  className="carousel-control-prev"
+                  type="button"
+                  aria-label="Previous banner"
+                  onClick={() => setActiveBanner((activeBanner - 1 + banners.length) % banners.length)}
+                >
                   <span className="carousel-control-prev-icon" aria-hidden="true" />
                   <span className="visually-hidden">Previous</span>
                 </button>
-                <button className="carousel-control-next" type="button" data-bs-target="#heroSlider" data-bs-slide="next">
+                <button
+                  className="carousel-control-next"
+                  type="button"
+                  aria-label="Next banner"
+                  onClick={() => setActiveBanner((activeBanner + 1) % banners.length)}
+                >
                   <span className="carousel-control-next-icon" aria-hidden="true" />
                   <span className="visually-hidden">Next</span>
                 </button>
@@ -133,7 +160,7 @@ export default function HomePage() {
             {visible.map((slot) => {
               const products = slot.products || [];
               return (
-                <div key={slot.id} style={{ display: "contents" }}>
+                <div key={slot.id} className="col-12">
                   <div className="col-12 d-flex justify-content-between align-items-center position-relative home_page_card_header mb-2">
                     <div className="slot-name">
                       <small className="featured-heading">{slot.name}</small>
@@ -186,5 +213,27 @@ export default function HomePage() {
         <div className="text-center my-5">No categories found</div>
       )}
     </>
+  );
+}
+
+function BannerSlide({ banner, priority, onMissing }) {
+  const imageUrl = imgUrl(banner.image);
+  const cacheKey = banner.updated_at || banner.created_at || banner.id;
+  const image = (
+    <img
+      className="hero_banner_img d-block w-100"
+      src={imageUrl ? `${imageUrl}?v=${encodeURIComponent(cacheKey)}` : undefined}
+      alt={banner.title || ""}
+      fetchPriority={priority ? "high" : "auto"}
+      onError={onMissing}
+    />
+  );
+
+  return banner.link ? (
+    <a href={banner.link} target="_blank" rel="noopener noreferrer">
+      {image}
+    </a>
+  ) : (
+    image
   );
 }
