@@ -47,8 +47,7 @@ function InventoryPage() {
     setLoading(true);
     try {
       const r = await api.get(
-        `api/inventory/variants?page=${page}&per_page=25${
-          query ? `&search=${encodeURIComponent(query)}` : ""
+        `api/inventory/variants?page=${page}&per_page=25${query ? `&search=${encodeURIComponent(query)}` : ""
         }${trackedOnly ? "&tracked=1" : ""}`
       );
       const d = r?.data?.data || r?.data || [];
@@ -86,7 +85,7 @@ function InventoryPage() {
       try {
         const r = await api.get("api/site-settings", { auth: false });
         setEnforcement(!!r?.data?.inventory_enforcement_enabled);
-      } catch {}
+      } catch { }
     })();
   }, []);
 
