@@ -97,7 +97,7 @@ function EditOrder({ id }) {
         ...o,
         [productId]: { sizes: p.sizes || [], colors: p.colors || [] },
       }));
-    } catch {}
+    } catch { }
   };
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -291,8 +291,8 @@ function EditOrder({ id }) {
                               {!it.product_id
                                 ? "Select product first"
                                 : opts?.sizes?.length
-                                ? "Select Size"
-                                : "No sizes available"}
+                                  ? "Select Size"
+                                  : "No sizes available"}
                             </option>
                             {(opts?.sizes || []).map((s) => (
                               <option key={s.id} value={s.id}>
@@ -312,8 +312,8 @@ function EditOrder({ id }) {
                               {!it.product_id
                                 ? "Select product first"
                                 : opts?.colors?.length
-                                ? "Select Color"
-                                : "No colors available"}
+                                  ? "Select Color"
+                                  : "No colors available"}
                             </option>
                             {(opts?.colors || []).map((c) => (
                               <option key={c.id} value={c.name}>
