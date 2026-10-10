@@ -1,6 +1,11 @@
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
 import prisma from "../../../../directory/prisma/prisma.js";
+import { cookies } from "next/headers";
+import {
+    mergeGuestCart,
+    CART_COOKIE_NAME,
+} from "@/lib/cart.js";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
@@ -10,7 +15,6 @@ export async function POST(request) {
 
         const { email, password } = body;
 
-        // Validate required fields
         if (!email || !password) {
             return Response.json(
                 {
@@ -24,7 +28,6 @@ export async function POST(request) {
 
         const normalizedEmail = email.trim().toLowerCase();
 
-        // Find user
         const user = await prisma.user.findUnique({
             where: {
                 email: normalizedEmail,
@@ -42,7 +45,6 @@ export async function POST(request) {
             );
         }
 
-        // Verify password
         const isPasswordValid = await bcrypt.compare(
             password,
             user.passwordHash
@@ -59,7 +61,6 @@ export async function POST(request) {
             );
         }
 
-        // Generate JWT
         const token = await new SignJWT({
             userId: user.id,
             email: user.email,
@@ -69,6 +70,14 @@ export async function POST(request) {
             .setIssuedAt()
             .setExpirationTime("7d")
             .sign(secret);
+
+        const cookieStore = await cookies();
+        const sessionId = cookieStore.get(CART_COOKIE_NAME)?.value;
+
+        if (sessionId) {
+            await mergeGuestCart(sessionId, user.id);
+            cookieStore.delete(CART_COOKIE_NAME);
+        }
 
         return Response.json(
             {
