@@ -45,14 +45,14 @@ export default function CategoryForm({ initial, id }) {
             };
             if (id) {
                 await api.put(`api/categories/${id}`, payload);
-                notify.success("Category updated successfully");
+                notify.success("Category updated successfully", "Category Saved");
             } else {
                 await api.post("api/categories", payload);
-                notify.success("Category created successfully");
+                notify.success("Category created successfully", "Category Saved");
             }
-            window.location.href = "/dashboard/category";
+            window.location.href = "/admin/category";
         } catch (error) {
-            notify.error(error?.message || "Failed to save category");
+            notify.error(error?.message || "Failed to save category", "Could not save category");
         } finally {
             setSaving(false);
         }
@@ -63,7 +63,7 @@ export default function CategoryForm({ initial, id }) {
             <div className="col-lg-8">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                     <h4 className="mb-0 fw-bold">{id ? "Edit Category" : "Add Category"}</h4>
-                    <Link href="/dashboard/category" className="btn btn-sm btn-outline-secondary">
+                    <Link href="/admin/category" className="btn btn-sm btn-outline-secondary">
                         Back to Categories
                     </Link>
                 </div>
@@ -108,7 +108,7 @@ export default function CategoryForm({ initial, id }) {
                                 <button className="btn btn-grad px-4 fw-semibold" disabled={saving}>
                                     {saving ? "Saving..." : id ? "Update Category" : "Create Category"}
                                 </button>
-                                <Link href="/dashboard/category" className="btn btn-outline-secondary px-4">
+                                <Link href="/admin/category" className="btn btn-outline-secondary px-4">
                                     Cancel
                                 </Link>
                             </div>

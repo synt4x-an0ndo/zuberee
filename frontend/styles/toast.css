@@ -1,0 +1,47 @@
+/* ------------------------------------------------------------------
+ * Global toast styling - top-left notifications (react-toastify).
+ * Additive refinements only; react-toastify provides the base look,
+ * entrance/exit animations and the coloured theme.
+ * ------------------------------------------------------------------ */
+
+.Toastify__toast {
+  border-radius: 10px;
+  min-height: 56px;
+  padding: 10px 12px 10px 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  margin-bottom: 10px;
+  font-family: inherit;
+  cursor: default;
+}
+
+.Toastify__toast-body {
+  flex: 1 1 auto;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.Toastify__toast-icon {
+  width: 1.35em;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.Toastify__close-button {
+  opacity: 0.85;
+  align-self: flex-start;
+  padding: 2px 0 0 6px;
+}
+.Toastify__close-button:hover {
+  opacity: 1;
+}
+
+.Toastify__progress-bar {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+@media (max-width: 480px) {
+  .Toastify__toast-container {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+}

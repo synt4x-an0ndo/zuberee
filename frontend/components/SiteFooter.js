@@ -37,18 +37,18 @@ export default function SiteFooter() {
       id: "shop",
       title: "shop",
       links: [
-        { label: "All Products", href: "/frontEnd/shop" },
-        { label: "New Arrivals", href: "/frontEnd/shop" },
-        { label: "Best Sellers", href: "/frontEnd/shop" },
-        { label: "My Account", href: "/account" },
+        { label: "All Products", href: "/shop" },
+        { label: "New Arrivals", href: "/shop" },
+        { label: "Best Sellers", href: "/shop" },
+        { label: "My Account", href: "/user" },
       ],
     },
     {
       id: "support",
       title: "support",
       links: [
-        { label: "Privacy Policy", href: "/frontEnd/privacy_policy" },
-        { label: "Returns & Exchanges", href: "/frontEnd/return_policy" },
+        { label: "Privacy Policy", href: "/privacy_policy" },
+        { label: "Returns & Exchanges", href: "/return_policy" },
         { label: "Size Guide", href: "/size-guide" },
       ],
     },
@@ -56,9 +56,9 @@ export default function SiteFooter() {
       id: "company",
       title: "company",
       links: [
-        { label: "About Us", href: "/frontEnd/about_us" },
-        { label: "Our Story", href: "/frontEnd/about_us" },
-        { label: "Careers", href: "/frontEnd/about_us" },
+        { label: "About Us", href: "/about_us" },
+        { label: "Our Story", href: "/about_us" },
+        { label: "Careers", href: "/about_us" },
       ],
     },
   ];

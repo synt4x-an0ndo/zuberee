@@ -22,7 +22,7 @@ export default function ProductCard({ product }) {
     <div className="my-2 my-md-5 position-relative">
       <div className="card product-div p-1 p-md-2 bg-white h-100 product-card position-relative d-flex flex-column">
         <Link
-          href={`/frontEnd/product-page/${product.id}`}
+          href={`/product-page/${product.id}`}
           style={{ textDecoration: "none", order: 0 }}
         >
           <div className="position-relative overflow-hidden product-image-container">
@@ -77,7 +77,7 @@ export default function ProductCard({ product }) {
         )}
 
         <Link
-          href={`/frontEnd/product-page/${product.id}`}
+          href={`/product-page/${product.id}`}
           style={{ textDecoration: "none", order: 1 }}
         >
           <div className="px-2 px-md-3 pt-2 pt-md-3 pb-0">

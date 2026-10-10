@@ -89,7 +89,7 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
     setQ("");
     setResults(null);
     onNavigate?.();
-    router.push(`/frontEnd/product-page/${id}`);
+    router.push(`/product-page/${id}`);
   };
 
   return (
@@ -199,7 +199,7 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
           onMouseLeave={() => setHover(null)}
         >
           <Link
-            href={`/frontEnd/${c.slug}`}
+            href={`/${c.slug}`}
             onClick={onNavigate}
             style={
               isMobile
@@ -237,7 +237,7 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
               {c.all_children.map((s) => (
                 <li key={s.id} style={{ position: "relative" }}>
                   <Link
-                    href={`/frontEnd/${s.slug}`}
+                    href={`/${s.slug}`}
                     onClick={onNavigate}
                     style={{
                       display: "block",
@@ -384,14 +384,14 @@ export default function SiteHeader() {
                     </Link>
                   </li>
                   <li className="mx-3">
-                    <Link className={`desktop-nav-link ${isActive("/frontEnd/shop")}`} href="/frontEnd/shop">
+                    <Link className={`desktop-nav-link ${isActive("/shop")}`} href="/shop">
                       Shop
                     </Link>
                   </li>
                   <li className="mx-3">
                     <Link
-                      className={`desktop-nav-link ${isActive("/frontEnd/about_us")}`}
-                      href="/frontEnd/about_us"
+                      className={`desktop-nav-link ${isActive("/about_us")}`}
+                      href="/about_us"
                     >
                       About Us
                     </Link>
@@ -453,7 +453,7 @@ export default function SiteHeader() {
                       ) : (
                         <>
                           <Link
-                            href="/account"
+                            href="/user"
                             role="menuitem"
                             onClick={() => setAccountOpen(false)}
                             style={accountMenuItemStyle}
@@ -537,7 +537,7 @@ export default function SiteHeader() {
                     )}
                     {categories.map((c) => (
                       <li key={c.id} style={{ listStyle: "none" }}>
-                        <Link href={`/frontEnd/${c.slug}`}>{c.name}</Link>
+                        <Link href={`/${c.slug}`}>{c.name}</Link>
                       </li>
                     ))}
                   </ul>
@@ -645,9 +645,9 @@ export default function SiteHeader() {
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                     {[
                       { href: "/", label: "Home" },
-                      { href: "/frontEnd/shop", label: "Shop" },
-                      { href: "/frontEnd/about_us", label: "About Us" },
-                      { href: isAuthenticated ? "/account" : "/login", label: isAuthenticated ? "My Account" : "Sign In" },
+                      { href: "/shop", label: "Shop" },
+                      { href: "/about_us", label: "About Us" },
+                      { href: isAuthenticated ? "/user" : "/login", label: isAuthenticated ? "My Account" : "Sign In" },
                     ].map((m) => (
                       <li key={m.href}>
                         <Link

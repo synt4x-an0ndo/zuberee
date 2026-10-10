@@ -49,7 +49,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
     const token = getToken();
     if (!token) {
       window.location.href =
-        "/frontEnd/admin?redirect=" +
+        "/login/admin?redirect=" +
         encodeURIComponent(window.location.pathname);
       return;
     }
@@ -87,7 +87,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
       } catch (e) {
         if (e.status === 401) {
           clearToken();
-          window.location.href = "/frontEnd/admin";
+          window.location.href = "/login/admin";
         } else if (!silent) {
           console.error(e);
         }
@@ -118,8 +118,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
       ["user_id", "roles", "permissions"].forEach(
         (k) => (document.cookie = `${k}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`)
       );
-      notify.success("Logged out successfully");
-      window.location.href = "/frontEnd/admin";
+      window.location.href = "/login/admin";
     }
   }, []);
 

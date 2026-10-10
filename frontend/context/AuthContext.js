@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api, clearToken, getToken, setToken } from "@/lib/api";
+import notify from "@/components/notify";
 
 const AuthCtx = createContext(null);
 
@@ -50,6 +51,7 @@ export function AuthProvider({ children }) {
             clearToken();
             setUser(null);
             window.dispatchEvent(new Event("auth-changed"));
+            notify.success("You have been signed out.", "Logged Out");
         }
     };
 

@@ -145,7 +145,7 @@ export default function CartDrawer() {
     e.preventDefault();
     if (placing) return;
     if (items.length === 0) {
-      notify.error("Your cart is empty. Please add items before checking out.");
+      notify.error("Your cart is empty. Please add items before checking out.", "Empty Cart");
       return;
     }
     setPlacing(true);
@@ -175,7 +175,7 @@ export default function CartDrawer() {
       }
       await api.post("api/orders", body);
       await refreshCart();
-      notify.success("Order Placed! Thank you for your purchase.");
+      notify.success("Thank you for your purchase.", "Order Placed!");
       setForm({
         name: "",
         phone: "",
@@ -190,9 +190,9 @@ export default function CartDrawer() {
     } catch (err) {
       const shortfalls = err?.data?.shortfalls;
       if (Array.isArray(shortfalls) && shortfalls.length) {
-        notify.error(shortfalls.map((s) => s.message || s).join("\n"));
+        notify.error(shortfalls.map((s) => s.message || s).join("\n"), "Order Failed");
       } else {
-        notify.error(err.message || "Failed to place order");
+        notify.error(err.message || "Failed to place order", "Order Failed");
       }
     } finally {
       setPlacing(false);

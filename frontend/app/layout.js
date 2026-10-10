@@ -1,4 +1,6 @@
 import "react-toastify/dist/ReactToastify.css";
+import "@/styles/toast.css";
+import ToastHost from "@/components/ToastHost";
 import { SiteProvider } from "@/context/SiteContext";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -43,6 +45,8 @@ export default function RootLayout({ children }) {
             </CartProvider>
           </AuthProvider>
         </SiteProvider>
+        {/* Global top-left toast notifications (persists across route changes) */}
+        <ToastHost />
       </body>
     </html>
   );

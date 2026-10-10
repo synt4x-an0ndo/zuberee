@@ -44,7 +44,7 @@ function useMenuDef(auth) {
 
   P.push({
     type: "single",
-    href: "/dashboard",
+    href: "/admin",
     Icon: FaGauge,
     label: "Dashboard Summary",
     show: can("view dashboard summary") || can("view dashboard"),
@@ -56,16 +56,16 @@ function useMenuDef(auth) {
     Icon: FaBox,
     show: all(["view categories", "view products", "manage inventory"]),
     submenus: [
-      { href: "/dashboard/category", label: "Category", Icon: FaTags, show: can("view categories") },
-      { href: "/dashboard/products", label: "Products", Icon: FaBox, show: can("view products") },
-      { href: "/dashboard/inventory", label: "Inventory", Icon: FaWarehouse, show: can("manage inventory") },
+      { href: "/admin/category", label: "Category", Icon: FaTags, show: can("view categories") },
+      { href: "/admin/products", label: "Products", Icon: FaBox, show: can("view products") },
+      { href: "/admin/inventory", label: "Inventory", Icon: FaWarehouse, show: can("manage inventory") },
     ],
   };
   P.push(productsMenu);
 
   P.push({
     type: "single",
-    href: "/dashboard/sizes",
+    href: "/admin/sizes",
     Icon: FaRuler,
     label: "Sizes",
     show: can("view sizes"),
@@ -77,15 +77,15 @@ function useMenuDef(auth) {
     Icon: FaReceipt,
     show: can("view orders"),
     submenus: [
-      { href: "/dashboard/orders", label: "All Orders", Icon: FaReceipt, show: can("view orders") },
-      { href: "/dashboard/sales-report", label: "Sales Report", Icon: FaChartLine, show: can("view orders") },
-      { href: "/dashboard/incomplete_orders", label: "Incomplete Orders", Icon: FaClockRotateLeft, show: can("incomplete_order") || can("view orders") },
+      { href: "/admin/orders", label: "All Orders", Icon: FaReceipt, show: can("view orders") },
+      { href: "/admin/sales-report", label: "Sales Report", Icon: FaChartLine, show: can("view orders") },
+      { href: "/admin/incomplete_orders", label: "Incomplete Orders", Icon: FaClockRotateLeft, show: can("incomplete_order") || can("view orders") },
     ],
   });
 
   P.push({
     type: "single",
-    href: "/dashboard/customers",
+    href: "/admin/customers",
     Icon: FaUsers,
     label: "Customers",
     show: can("view customers") || can("view customer details") || can("view leaderboard"),
@@ -93,7 +93,7 @@ function useMenuDef(auth) {
 
   P.push({
     type: "single",
-    href: "/dashboard/customer_leaderboard",
+    href: "/admin/customer_leaderboard",
     Icon: FaTrophy,
     label: "Customer Leaderboard",
     show: can("view leaderboard"),
@@ -101,7 +101,7 @@ function useMenuDef(auth) {
 
   P.push({
     type: "single",
-    href: "/dashboard/shipping",
+    href: "/admin/shipping",
     Icon: FaTruck,
     label: "Shipping Cost",
     show: can("view settings"),
@@ -109,7 +109,7 @@ function useMenuDef(auth) {
 
   P.push({
     type: "single",
-    href: "/dashboard/banners",
+    href: "/admin/banners",
     Icon: FaImages,
     label: "Banners",
     show: can("view banners"),
@@ -121,8 +121,8 @@ function useMenuDef(auth) {
     Icon: FaTruck,
     show: can("view settings"),
     submenus: [
-      { href: "/dashboard/fraud-checker", label: "Courier Checker", Icon: FaShieldHalved, show: can("view settings") },
-      { href: "/dashboard/fraud-checker/plan", label: "Courier Plan & Usage", Icon: FaChartLine, show: can("view settings") },
+      { href: "/admin/fraud-checker", label: "Courier Checker", Icon: FaShieldHalved, show: can("view settings") },
+      { href: "/admin/fraud-checker/plan", label: "Courier Plan & Usage", Icon: FaChartLine, show: can("view settings") },
     ],
   });
 
@@ -132,11 +132,11 @@ function useMenuDef(auth) {
     Icon: FaGear,
     show: can("view settings"),
     submenus: [
-      { href: "/dashboard/about_us", label: "About Us", Icon: FaFileLines, show: can("view settings") },
-      { href: "/dashboard/footerSettings", label: "Web Settings", Icon: FaGear, show: can("view settings") },
-      { href: "/dashboard/theme-settings", label: "Website Color", Icon: FaPalette, show: can("view settings") },
-      { href: "/dashboard/socialLinks", label: "Social Links", Icon: FaShareNodes, show: can("view settings") },
-      { href: "/dashboard/facebook_conversion_api", label: "Facebook Api Settings", Icon: FaFacebook, show: can("view settings") },
+      { href: "/admin/about_us", label: "About Us", Icon: FaFileLines, show: can("view settings") },
+      { href: "/admin/footerSettings", label: "Web Settings", Icon: FaGear, show: can("view settings") },
+      { href: "/admin/theme-settings", label: "Website Color", Icon: FaPalette, show: can("view settings") },
+      { href: "/admin/socialLinks", label: "Social Links", Icon: FaShareNodes, show: can("view settings") },
+      { href: "/admin/facebook_conversion_api", label: "Facebook Api Settings", Icon: FaFacebook, show: can("view settings") },
     ],
   });
 
@@ -147,8 +147,8 @@ function useMenuDef(auth) {
     roleOnly: true,
     show: hasRole("super-admin"),
     submenus: [
-      { href: "/dashboard/users", label: "Users", Icon: FaUserGroup, show: hasRole("super-admin") },
-      { href: "/dashboard/roles", label: "Roles & Permissions", Icon: FaUserShield, show: hasRole("super-admin") },
+      { href: "/admin/users", label: "Users", Icon: FaUserGroup, show: hasRole("super-admin") },
+      { href: "/admin/roles", label: "Roles & Permissions", Icon: FaUserShield, show: hasRole("super-admin") },
     ],
   });
 
@@ -211,7 +211,7 @@ export default function AdminShell({ children }) {
       <div className="text-center py-5">
         <h5>Access denied</h5>
         <p className="text-muted">You don&apos;t have permission to view this page.</p>
-        <Link href="/dashboard" className="btn btn-grad px-4">
+        <Link href="/admin" className="btn btn-grad px-4">
           Back to Dashboard
         </Link>
       </div>
@@ -243,7 +243,7 @@ export default function AdminShell({ children }) {
       >
         <div className="d-flex justify-content-between align-items-center sideBar_icon_siteName">
           <div style={{ display: open || mobile ? "block" : "none", minWidth: 0 }}>
-            <Link href="/dashboard">
+            <Link href="/admin">
               <span className="sidebar-brand-logo" aria-hidden="true" />
             </Link>
           </div>
