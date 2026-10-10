@@ -22,7 +22,7 @@ export default function PageGate({ permission, role, children }) {
       <div className="text-center py-5">
         <h5>Access denied</h5>
         <p className="text-muted">You don&apos;t have permission to view this page.</p>
-        <Link href="/dashboard" className="btn btn-grad px-4">
+        <Link href="/admin" className="btn btn-grad px-4">
           Back to Dashboard
         </Link>
       </div>

@@ -26,7 +26,7 @@ export default function SizeForm({ id, initial }) {
         await api.post("api/sizes", { size: name.trim() });
         notify.success("Size created");
       }
-      window.location.href = "/dashboard/sizes";
+      window.location.href = "/admin/sizes";
     } catch (err) {
       notify.error(err.message || "Failed to save size");
     } finally {
@@ -39,7 +39,7 @@ export default function SizeForm({ id, initial }) {
       <div className="col-md-6 col-lg-5">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h4 className="mb-0 fw-bold">{id ? "Edit Size" : "Add Size"}</h4>
-          <Link href="/dashboard/sizes" className="btn btn-sm btn-outline-secondary">
+          <Link href="/admin/sizes" className="btn btn-sm btn-outline-secondary">
             ← Back
           </Link>
         </div>

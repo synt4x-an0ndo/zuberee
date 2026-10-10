@@ -166,7 +166,7 @@ export default function HomePage() {
                       <small className="featured-heading">{slot.name}</small>
                     </div>
                     <Link
-                      href={`/frontEnd/${slot.slug || slot.id}`}
+                      href={`/${slot.slug || slot.id}`}
                       className="btn btn-outline-dark btn-sm fw-semibold"
                     >
                       View All

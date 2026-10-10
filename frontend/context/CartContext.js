@@ -73,8 +73,9 @@ export function CartProvider({ children }) {
           quantity: Number(item.qty) || 1,
         });
         await refreshCart();
+        notify.success("Added to your cart.", "Added to Cart");
       } catch (cause) {
-        notify.error(cause.message || "Could not add this item to your cart.");
+        notify.error(cause.message || "Could not add this item to your cart.", "Could not add item");
         throw cause;
       }
     },
@@ -87,7 +88,7 @@ export function CartProvider({ children }) {
         await api.put(`api/cart/${lineId}`, { quantity: Number(qty) });
         await refreshCart();
       } catch (cause) {
-        notify.error(cause.message || "Could not update your cart.");
+        notify.error(cause.message || "Could not update your cart.", "Could not update cart");
       }
     },
     [refreshCart]
@@ -114,8 +115,9 @@ export function CartProvider({ children }) {
       try {
         await api.delete(`api/cart/${lineId}`);
         await refreshCart();
+        notify.success("Item removed from your cart.", "Removed");
       } catch (cause) {
-        notify.error(cause.message || "Could not remove this item.");
+        notify.error(cause.message || "Could not remove this item.", "Could not remove item");
       }
     },
     [refreshCart]
@@ -125,8 +127,9 @@ export function CartProvider({ children }) {
     try {
       await api.delete("api/cart");
       setItems([]);
+      notify.success("Your cart has been cleared.", "Cart Cleared");
     } catch (cause) {
-      notify.error(cause.message || "Could not clear your cart.");
+      notify.error(cause.message || "Could not clear your cart.", "Could not clear cart");
     }
   }, []);
 

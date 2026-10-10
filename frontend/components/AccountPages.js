@@ -34,17 +34,22 @@ function AuthPanel({ register = false }) {
         event.preventDefault();
         setLoading(true);
         try {
-            const response = register
-                ? await createAccount(form)
-                : await login({ email: form.email, password: form.password });
-            notify.success(
-                register
-                    ? response?.message || "Your account is ready."
-                    : "Welcome back."
-            );
-            router.push(register ? "/login" : "/");
+            if (register) {
+                const response = await createAccount(form);
+                notify.success(response?.message || "Your account is ready.", "Registration Complete!");
+                // Documented behaviour: after register, redirect to the Login page.
+                router.push("/login");
+            } else {
+                // login() resolves with the authenticated user ({ id, name, email, role }).
+                const user = await login({ email: form.email, password: form.password });
+                notify.success("Welcome back!", "Login Successful!");
+                // Route by the real role returned by the documented login API:
+                // verified admins -> Admin Panel, everyone else -> User Dashboard.
+                const isAdmin = String(user?.role || "").toUpperCase() === "ADMIN";
+                router.push(isAdmin ? "/admin" : "/user");
+            }
         } catch (error) {
-            notify.error(error?.message || "Please check your details and try again.");
+            notify.error(error?.message || "Please check your details and try again.", register ? "Registration Failed" : "Login Failed");
         } finally {
             setLoading(false);
         }
@@ -106,7 +111,7 @@ function ProfileForm({ user, onSaved }) {
 }
 
 function Orders({ orders }) {
-    if (!orders.length) return <div className="account-empty"><FaBoxOpen /><h3>No orders yet</h3><p>Your next favorite piece belongs here.</p><Link href="/frontEnd/shop" className="account-link">Start shopping <FaArrowRight /></Link></div>;
+    if (!orders.length) return <div className="account-empty"><FaBoxOpen /><h3>No orders yet</h3><p>Your next favorite piece belongs here.</p><Link href="/shop" className="account-link">Start shopping <FaArrowRight /></Link></div>;
     return <div className="orders-list">{orders.map((order) => <article className="order-item" key={order.id}>
         <div className="order-top"><div><span className="order-label">Order #{order.id}</span><time>{new Date(order.createdAt).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}</time></div><span className={`order-status ${String(order.status).toLowerCase()}`}>{order.status}</span></div>
         <div className="order-products">{(order.items || []).map((item) => <div className="order-product" key={item.id}><img src={imgUrl(item.product?.images?.[0])} alt="" /><div><strong>{item.product?.title || item.product?.name || "Product"}</strong><span>Qty {item.quantity}</span></div><b>{formatTk(Number(item.unitPrice) * item.quantity)} Tk</b></div>)}</div>
@@ -122,7 +127,7 @@ export function AccountPage() {
     const [message, setMessage] = useState("");
 
     useEffect(() => {
-        if (!authLoading && !isAuthenticated) router.replace("/login?redirect=/account");
+        if (!authLoading && !isAuthenticated) router.replace("/login?redirect=/user");
     }, [authLoading, isAuthenticated, router]);
     useEffect(() => {
         if (!isAuthenticated) return;
@@ -135,4 +140,38 @@ export function AccountPage() {
         {message && <div className="account-success">{message}</div>}
         <div className="account-sections"><section className="account-section"><div className="section-kicker">Personal details</div><h2>Edit your profile</h2><ProfileForm user={user} onSaved={setMessage} /></section><section className="account-section"><div className="section-kicker">Your purchases</div><h2>Order history</h2>{ordersLoading ? <div className="account-loading">Loading orders...</div> : <Orders orders={orders} />}</section></div>
     </AccountFrame>;
+}
+
+// Reusable, auth-guarded panels used by the dedicated /user/profile and /user/orders pages.
+// They reuse the same AccountFrame / ProfileForm / Orders markup as AccountPage so the UI stays identical.
+function AccountGuard({ children }) {
+    const router = useRouter();
+    const { loading, isAuthenticated } = useAuth();
+    useEffect(() => { if (!loading && !isAuthenticated) router.replace("/login?redirect=/user"); }, [loading, isAuthenticated, router]);
+    if (loading || !isAuthenticated) return <AccountFrame eyebrow="Eyara account" title="Your account"><div className="account-loading">Loading your account...</div></AccountFrame>;
+    return children;
+}
+
+export function AccountProfilePanel() {
+    const { user, logout } = useAuth();
+    const router = useRouter();
+    const [message, setMessage] = useState("");
+    return <AccountGuard>
+        <div className="account-toolbar"><div><FaUser /><span>{user?.email}</span></div><button onClick={async () => { await logout(); router.push("/"); }}>Sign out</button></div>
+        {message && <div className="account-success"><FaCheck /> {message}</div>}
+        <section className="account-section"><div className="section-kicker">Personal details</div><h2>Edit your profile</h2><ProfileForm user={user} onSaved={setMessage} /></section>
+    </AccountGuard>;
+}
+
+export function AccountOrdersPanel() {
+    const { isAuthenticated } = useAuth();
+    const [orders, setOrders] = useState([]);
+    const [ordersLoading, setOrdersLoading] = useState(true);
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        api.get("api/account/orders").then((response) => setOrders(unwrapList(response, ["orders"]))).catch(() => notify.error("Could not load your orders.")).finally(() => setOrdersLoading(false));
+    }, [isAuthenticated]);
+    return <AccountGuard>
+        <section className="account-section"><div className="section-kicker">Your purchases</div><h2>Order history</h2>{ordersLoading ? <div className="account-loading">Loading orders...</div> : <Orders orders={orders} />}</section>
+    </AccountGuard>;
 }

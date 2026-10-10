@@ -199,14 +199,14 @@ export default function ProductForm({ id, initial }) {
           })
         );
       }
-      notify.success(id ? "Product Updated Successfully" : "Product Created Successfully");
-      window.location.href = "/dashboard/products";
+      notify.success(id ? "Product Updated Successfully" : "Product Created Successfully", "Product Saved");
+      window.location.href = "/admin/products";
     } catch (err) {
       const validationErrors = err.data?.errors;
       const detail = validationErrors && typeof validationErrors === "object"
         ? Object.values(validationErrors).flat().join(" ")
         : "";
-      notify.error(detail || err.message || "Failed to save product");
+      notify.error(detail || err.message || "Failed to save product", "Could not save product");
     } finally {
       setSaving(false);
     }
@@ -233,7 +233,7 @@ export default function ProductForm({ id, initial }) {
       <div className="col-lg-10">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h4 className="mb-0 fw-bold">{id ? "Edit Product" : "Add Product"}</h4>
-          <Link href="/dashboard/products" className="btn btn-sm btn-outline-secondary">
+          <Link href="/admin/products" className="btn btn-sm btn-outline-secondary">
             ← Back to Products
           </Link>
         </div>
@@ -682,7 +682,7 @@ export default function ProductForm({ id, initial }) {
                 "Create Product"
               )}
             </button>
-            <Link href="/dashboard/products" className="btn btn-outline-secondary px-4">
+            <Link href="/admin/products" className="btn btn-outline-secondary px-4">
               Cancel
             </Link>
           </div>
