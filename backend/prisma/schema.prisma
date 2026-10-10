@@ -47,6 +47,7 @@ model User {
 
   addresses    Address[]
   orders       Order[]
+  cart         Cart?
 
   @@map("users")
 }
@@ -119,6 +120,7 @@ model Product {
   faqs             ProductFaq[]
   inventory        ProductInventory?
   orderItems       OrderItem[]
+  cartItem         CartItem[]
 
   @@index([categoryId])
   @@index([status])
@@ -218,7 +220,10 @@ model ProductImage {
 
 model Order {
   id              Int           @id @default(autoincrement())
-  userId          Int
+  userId          Int?
+  guestName       String?
+  guestPhone      String?
+
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
   totalAmount     Decimal       @db.Decimal(10, 2)
@@ -227,8 +232,8 @@ model Order {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  user            User          @relation(fields: [userId], references: [id])
-  items            OrderItem[]
+  user            User?         @relation(fields: [userId], references: [id])
+  items           OrderItem[]
 
   @@index([userId])
   @@index([status])
@@ -264,4 +269,35 @@ model Banner {
   @@index([displayPriority])
   @@index([isActive])
   @@map("banners")
+}
+
+model Cart {
+  id         Int        @id @default(autoincrement())
+  userId     Int?       @unique
+  sessionId  String?    @unique
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items      CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id         Int      @id @default(autoincrement())
+  cartId     Int
+  productId  Int
+  variantId  Int?
+  colorId    Int?
+  quantity   Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId, variantId, colorId])
+  @@index([cartId])
+  @@map("cart_items")
 }
