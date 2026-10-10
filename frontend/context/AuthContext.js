@@ -35,6 +35,7 @@ export function AuthProvider({ children }) {
         const data = authData(response);
         setToken(data.token);
         setUser(data.user);
+        window.dispatchEvent(new Event("auth-changed"));
         return data.user;
     };
 
@@ -48,6 +49,7 @@ export function AuthProvider({ children }) {
         } finally {
             clearToken();
             setUser(null);
+            window.dispatchEvent(new Event("auth-changed"));
         }
     };
 

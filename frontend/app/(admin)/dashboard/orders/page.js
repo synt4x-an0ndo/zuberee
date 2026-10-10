@@ -7,13 +7,15 @@ import { api, formatTk, imgUrl } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import { ORDER_STATUSES } from "@/lib/orderStatuses";
+import { normalizeOrders } from "@/lib/order";
 import "@/styles/css/187416aab916025b.css";
 
 
 /**
  * Orders (/dashboard/orders)
  *  - GET    api/orders?page=&status=&from=&to=&search=   -> {data:{data:[],current_page,last_page}}
- *  - POST   api/order_status/{id}     {status, userPhone}
+ *  - PATCH  api/orders/{id}           {status, paymentStatus}
+ *  - DELETE api/orders/{id}
  *  - POST   api/orders/{id}/courier-check  {} | {force_refresh:true}
  *  - POST   api/pathao/orders/{id}/create  {}
  *  - POST   api/customer-profiles/assign-badge {phone,name,badge_title}
@@ -44,7 +46,7 @@ function OrdersPage() {
     try {
       const r = await api.get(`api/orders?${qs()}`);
       const d = r?.data?.data || r?.data || [];
-      setRows(Array.isArray(d) ? d : []);
+      setRows(normalizeOrders(Array.isArray(d) ? d : []));
       setPager({
         current_page: r?.data?.current_page || 1,
         last_page: r?.data?.last_page || 1,
@@ -63,14 +65,22 @@ function OrdersPage() {
   const updateStatus = async (order, value) => {
     if (!value) return;
     try {
-      await api.post(`api/order_status/${order.id}`, {
-        status: value,
-        userPhone: order.phone || order.customer_phone || "",
-      });
-      notify.success("Successfully Updated!");
+      await api.patch(`api/orders/${order.id}`, { status: value });
+      notify.success("Order updated successfully.");
       load();
     } catch (e) {
       notify.error(e.message || "Failed to update status");
+    }
+  };
+
+  const deleteOrder = async (order) => {
+    if (!window.confirm(`Delete order #${order.id}?`)) return;
+    try {
+      await api.delete(`api/orders/${order.id}`);
+      notify.success("Order deleted.");
+      load();
+    } catch (e) {
+      notify.error(e.message || "Failed to delete order");
     }
   };
 
@@ -257,7 +267,7 @@ function OrdersPage() {
                         <td>
                           <select
                             className="form-select form-select-sm"
-                            value={o.status || "Pending"}
+                            value={String(o.status || "PENDING").toUpperCase().replace(/-/g, "_")}
                             onChange={(e) => updateStatus(o, e.target.value)}
                           >
                             {ORDER_STATUSES.map((s) => (
@@ -307,6 +317,13 @@ function OrdersPage() {
                             >
                               <FaPen />
                             </Link>
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              title="Delete order"
+                              onClick={() => deleteOrder(o)}
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>

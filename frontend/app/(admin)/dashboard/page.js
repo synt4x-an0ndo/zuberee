@@ -165,12 +165,12 @@ function Summary() {
               {r === "custom"
                 ? "Custom"
                 : r === "today"
-                ? "Today"
-                : r === "week"
-                ? "This week"
-                : r === "month"
-                ? "This month"
-                : "This year"}
+                  ? "Today"
+                  : r === "week"
+                    ? "This week"
+                    : r === "month"
+                      ? "This month"
+                      : "This year"}
             </button>
           ))}
         </div>

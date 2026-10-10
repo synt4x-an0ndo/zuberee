@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FaMinus, FaPlus, FaTrash, FaXmark as FaTimes, FaArrowLeft, FaBagShopping as FaShoppingBag } from "react-icons/fa6";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { api, formatTk, imgUrl, API_BASE } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 import notify from "@/components/notify";
@@ -25,9 +26,12 @@ export default function CartDrawer() {
     inc,
     dec,
     removeItem,
-    clearCart,
     checkoutSignal,
+    loading: cartLoading,
+    error: cartError,
+    refreshCart,
   } = useCart();
+  const { isAuthenticated } = useAuth();
 
   const [tab, setTab] = useState("cart");
   const [form, setForm] = useState({
@@ -149,15 +153,14 @@ export default function CartDrawer() {
       (document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`)) || [])[1] || null;
 
     const body = {
-      ...form,
-      cart: items,
-      user_id: localStorage.getItem("user_id") || null,
-      shipping_cost: shipping,
-      total_amount: grand,
-      checkout_session_id: sessionId(),
-      fbp: cookieVal("_fbp") ? decodeURIComponent(cookieVal("_fbp")) : null,
-      fbc: cookieVal("_fbc") ? decodeURIComponent(cookieVal("_fbc")) : null,
-      event_source_url: window.location.href,
+      shippingFee: Number(shipping) || 0,
+      ...(isAuthenticated
+        ? { shippingAddress: [form.address, form.district].filter(Boolean).join(", ") }
+        : {
+          guestName: form.name,
+          guestPhone: form.phone,
+          guestAddress: [form.address, form.district].filter(Boolean).join(", "),
+        }),
     };
     try {
       if (form.phone) {
@@ -170,9 +173,9 @@ export default function CartDrawer() {
           /* non-critical */
         }
       }
-      await api.post("api/orders", body, { auth: false });
+      await api.post("api/orders", body);
+      await refreshCart();
       notify.success("Order Placed! Thank you for your purchase.");
-      clearCart();
       setForm({
         name: "",
         phone: "",
@@ -234,7 +237,19 @@ export default function CartDrawer() {
         {/* body */}
         <div className="cart-drawer-content flex-fill overflow-auto">
           {tab === "cart" ? (
-            items.length === 0 ? (
+            cartLoading ? (
+              <div className="text-center py-5 text-muted">
+                <span className="spinner-border spinner-border-sm me-2" />
+                Loading your cart...
+              </div>
+            ) : cartError ? (
+              <div className="text-center py-5 px-3">
+                <p className="text-danger small">{cartError}</p>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => refreshCart().catch(() => {})}>
+                  Try again
+                </button>
+              </div>
+            ) : items.length === 0 ? (
               <div className="text-center py-5 px-3">
                 <FaShoppingBag size={44} className="text-muted mb-3" />
                 <h6 className="fw-bold">Your cart is empty</h6>
@@ -304,7 +319,7 @@ export default function CartDrawer() {
                 <label className="form-label small fw-semibold">👤 Full Name</label>
                 <input
                   className="form-control"
-                  required
+                  required={!isAuthenticated}
                   value={form.name}
                   onChange={(e) => setField("name", e.target.value)}
                   placeholder="Your full name"
@@ -314,7 +329,7 @@ export default function CartDrawer() {
                 <label className="form-label small fw-semibold">📞 Phone Number</label>
                 <input
                   className="form-control"
-                  required
+                  required={!isAuthenticated}
                   value={form.phone}
                   onChange={(e) => setField("phone", e.target.value)}
                   placeholder="01XXXXXXXXX"
@@ -338,11 +353,12 @@ export default function CartDrawer() {
               </div>
               <div className="mb-3">
                 <label className="form-label small fw-semibold">
-                  🏠 Full Address <span className="text-muted">(Optional)</span>
+                  🏠 Full Address <span className="text-muted">(Required)</span>
                 </label>
                 <textarea
                   className="form-control"
                   rows={2}
+                  required
                   value={form.address}
                   onChange={(e) => setField("address", e.target.value)}
                   placeholder="House, road, area..."

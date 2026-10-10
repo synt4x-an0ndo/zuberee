@@ -147,7 +147,7 @@ export default function ProductPage({ params }) {
   const waText = `Hello! I'm interested in this product: ${product.title || "Product"
     }. Can you provide more information?`;
 
-  const handleAdd = (mode) => {
+  const handleAdd = async (mode) => {
     if (sizes.length > 1 && !activeSize && !sizeObj) {
       notify.warn("Please Select A Size");
       return;
@@ -156,17 +156,17 @@ export default function ProductPage({ params }) {
       notify.warn("Sold out in this combination");
       return;
     }
-    addToCart({
+    await addToCart({
       id: product.id,
       title: product.title,
       size: sizeObj?.id ?? "",
       size_label: sizeObj?.size ?? null,
       unitPrice: unitPrice,
-      image: imgUrl(product.images?.[0]?.image) || "",
-      colorImage: activeColor?.image ? imgUrl(activeColor.image) : "",
+      image: imgUrl(product.images?.[0]) || imgUrl(product.image) || "",
+      colorImage: imgUrl(activeColor) || "",
       color_name: activeColor?.name || null,
       color_id: activeColor?.id ?? null,
-      variant_id: combination?.variant_id ?? null,
+      variant_id: combination?.variant_id ?? sizeObj?.id ?? null,
       product_color_id: combination?.product_color_id ?? activeColor?.id ?? null,
       qty,
       max_qty: maxQty && maxQty > 0 ? maxQty : null,
