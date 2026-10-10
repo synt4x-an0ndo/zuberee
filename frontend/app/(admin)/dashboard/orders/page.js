@@ -259,8 +259,8 @@ function OrdersPage() {
                           <small>
                             {o.created_at
                               ? new Date(o.created_at).toLocaleDateString("en-GB", {
-                                  timeZone: "Asia/Dhaka",
-                                })
+                                timeZone: "Asia/Dhaka",
+                              })
                               : "—"}
                           </small>
                         </td>

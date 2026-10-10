@@ -57,8 +57,8 @@ export function CartProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    refreshCart().catch(() => {});
-    const onAuthChanged = () => refreshCart().catch(() => {});
+    refreshCart().catch(() => { });
+    const onAuthChanged = () => refreshCart().catch(() => { });
     window.addEventListener("auth-changed", onAuthChanged);
     return () => window.removeEventListener("auth-changed", onAuthChanged);
   }, [refreshCart]);

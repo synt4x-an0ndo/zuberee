@@ -245,7 +245,7 @@ export default function CartDrawer() {
             ) : cartError ? (
               <div className="text-center py-5 px-3">
                 <p className="text-danger small">{cartError}</p>
-                <button className="btn btn-outline-secondary btn-sm" onClick={() => refreshCart().catch(() => {})}>
+                <button className="btn btn-outline-secondary btn-sm" onClick={() => refreshCart().catch(() => { })}>
                   Try again
                 </button>
               </div>
