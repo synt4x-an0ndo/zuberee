@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api, formatTk, imgUrl } from "@/lib/api";
+import { normalizeOrder } from "@/lib/order";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
 
@@ -26,7 +27,7 @@ function Invoice({ id }) {
           api.get("api/footer-settings/1", { auth: false }).catch(() => null),
         ]);
         if (!alive) return;
-        setOrder(o?.data?.data || o?.data || o);
+        setOrder(normalizeOrder(o?.data?.data || o?.data || o));
         setFooter(f?.data || f);
       } catch {
         if (alive) setMissing(true);

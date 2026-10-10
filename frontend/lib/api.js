@@ -106,6 +106,7 @@ export async function request(path, opts = {}) {
     auth = true,
     formData = false,
     signal,
+    credentials = "include",
     headers: extraHeaders = {},
   } = opts;
 
@@ -124,6 +125,7 @@ export async function request(path, opts = {}) {
     headers,
     body: payload,
     signal,
+    credentials,
     cache: "no-store",
   });
 

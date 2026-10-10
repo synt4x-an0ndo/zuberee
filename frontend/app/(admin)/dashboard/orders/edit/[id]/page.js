@@ -9,14 +9,13 @@ import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
 import { ORDER_STATUSES } from "@/lib/orderStatuses";
+import { normalizeOrder } from "@/lib/order";
 
 /**
  * Edit order (/dashboard/orders/edit/{id})
  *  - GET  api/orders/{id}
  *  - GET  api/order-product-options      (product picker)
- *  - PUT  api/orders/{id}  { ...form, shipping_cost, advance_payment,
- *          items:[{id?,product_id,title,size_id,color,unitPrice,qty,totalPrice}],
- *          deleted_items:[order_item_id] }
+ *  - PATCH api/orders/{id}  { status, paymentStatus }
  */
 function EditOrder({ id }) {
   const router = useRouter();
@@ -38,6 +37,7 @@ function EditOrder({ id }) {
     shipping_cost: 0,
     advance_payment: 0,
     status: "Pending",
+    payment_status: "PENDING",
   });
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function EditOrder({ id }) {
           api.get("api/order-product-options").catch(() => ({ data: [] })),
         ]);
         if (!alive) return;
-        const ord = o?.data?.data || o?.data || o;
+        const ord = normalizeOrder(o?.data?.data || o?.data || o);
         setOrder(ord);
         setForm({
           name: ord.name || "",
@@ -61,7 +61,8 @@ function EditOrder({ id }) {
           payment_method: ord.payment_method || "cash",
           shipping_cost: ord.shipping_cost ?? 0,
           advance_payment: ord.advance_payment ?? 0,
-          status: ord.status || "Pending",
+          status: String(ord.status || "PENDING").toUpperCase().replace(/-/g, "_"),
+          payment_status: String(ord.payment_status || ord.paymentStatus || "PENDING").toUpperCase(),
         });
         setItems(
           (ord.items || ord.order_items || ord.cart_items || []).map((it) => ({
@@ -140,23 +141,10 @@ function EditOrder({ id }) {
     }
     setSaving(true);
     try {
-      const body = {
-        ...form,
-        shipping_cost: Number(form.shipping_cost) || 0,
-        advance_payment: Number(form.advance_payment) || 0,
-        items: items.map((e2) => ({
-          ...(e2.id ? { id: e2.id } : {}),
-          product_id: Number(e2.product_id),
-          title: e2.title,
-          size_id: e2.size_id ? Number(e2.size_id) : null,
-          color: e2.color,
-          unitPrice: Number(e2.unitPrice) || 0,
-          qty: Number(e2.qty) || 1,
-          totalPrice: Number(e2.totalPrice) || 0,
-        })),
-        deleted_items: deleted,
-      };
-      await api.put(`api/orders/${id}`, body);
+      await api.patch(`api/orders/${id}`, {
+        status: form.status,
+        paymentStatus: form.payment_status,
+      });
       notify.success("Order updated successfully!");
       router.push("/dashboard/orders");
     } catch (err) {
@@ -416,6 +404,18 @@ function EditOrder({ id }) {
                         <option key={s} value={s}>
                           {s}
                         </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-md-6 mb-2">
+                    <label className="form-label">Payment Status *</label>
+                    <select
+                      className="form-select"
+                      value={form.payment_status}
+                      onChange={(e) => setF("payment_status", e.target.value)}
+                    >
+                      {['PENDING', 'PAID', 'FAILED', 'REFUNDED'].map((status) => (
+                        <option key={status} value={status}>{status}</option>
                       ))}
                     </select>
                   </div>

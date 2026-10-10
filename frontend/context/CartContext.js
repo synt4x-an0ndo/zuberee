@@ -1,144 +1,137 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api, imgUrl, unwrapObject } from "@/lib/api";
+import notify from "@/components/notify";
 
 /* =====================================================================
- * CartContext - cart is stored in localStorage (same behaviour as the
- * original site). No order data lives in the frontend; checkout posts
- * the cart to the backend (POST api/orders).
+ * CartContext - the backend is the source of truth for guest and logged-in carts.
  * ===================================================================== */
 
 const CartCtx = createContext(null);
-const STORAGE_KEY = "cart";
-
-function lineIdOf(item) {
-  if (item.lineId) return item.lineId;
-  if (item.variant_id) return `${item.id}::v${item.variant_id}`;
-  return `${item.id}::${item.size ?? ""}::${item.color_name || item.colorImage || ""}`;
-}
-
-function loadInitial() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw).map((e) => ({ ...e, lineId: e.lineId || lineIdOf(e) }));
-  } catch {
-    return [];
-  }
+function normalizeCartItem(item) {
+  const variant = item.variant || null;
+  const color = item.color || null;
+  return {
+    ...item,
+    lineId: String(item.id),
+    id: item.product_id ?? item.productId ?? item.id,
+    cartItemId: item.id,
+    variant_id: variant?.id ?? item.variant_id ?? item.variantId ?? null,
+    product_color_id: color?.id ?? item.color_id ?? item.colorId ?? null,
+    title: item.title || item.product?.title || item.product?.name || "Product",
+    image: imgUrl(item.image || item.product?.images?.[0] || item.product?.image),
+    colorImage: imgUrl(color),
+    size_label: variant?.value || variant?.name || item.size_label || null,
+    color_name: color?.name || item.color_name || null,
+    unitPrice: Number(item.unit_price ?? item.unitPrice ?? 0),
+    qty: Number(item.quantity ?? item.qty ?? 1),
+    totalPrice: Number(item.subtotal ?? item.totalPrice ?? 0),
+    max_qty: variant?.stock ?? item.max_qty ?? null,
+  };
 }
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [checkoutSignal, setCheckoutSignal] = useState(0);
 
-  useEffect(() => {
-    setItems(loadInitial());
-    setHydrated(true);
-  }, []);
-
-  const persist = useCallback((next) => {
+  const refreshCart = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      /* quota */
+      const response = await api.get("api/cart");
+      const cart = unwrapObject(response) || {};
+      setItems(Array.isArray(cart.items) ? cart.items.map(normalizeCartItem) : []);
+      return cart;
+    } catch (cause) {
+      setError(cause.message || "Could not load your cart.");
+      throw cause;
+    } finally {
+      setLoading(false);
+      setHydrated(true);
     }
   }, []);
 
+  useEffect(() => {
+    refreshCart().catch(() => {});
+    const onAuthChanged = () => refreshCart().catch(() => {});
+    window.addEventListener("auth-changed", onAuthChanged);
+    return () => window.removeEventListener("auth-changed", onAuthChanged);
+  }, [refreshCart]);
+
   const addToCart = useCallback(
-    (item) => {
-      setItems((prev) => {
-        const id = lineIdOf(item);
-        const existing = prev.find((e) => e.lineId === id);
-        let next;
-        if (existing) {
-          const qty = (existing.qty || 1) + (item.qty || 1);
-          const capped = item.max_qty ? Math.min(qty, item.max_qty) : qty;
-          next = prev.map((e) =>
-            e.lineId === id
-              ? { ...e, qty: capped, totalPrice: e.unitPrice * capped }
-              : e
-          );
-        } else {
-          const qty = item.qty || 1;
-          next = [
-            ...prev,
-            {
-              ...item,
-              lineId: id,
-              qty,
-              totalPrice: (item.unitPrice ?? 0) * qty,
-            },
-          ];
-        }
-        persist(next);
-        return next;
-      });
+    async (item) => {
+      try {
+        await api.post("api/cart", {
+          productId: Number(item.id),
+          ...(item.variant_id ? { variantId: Number(item.variant_id) } : {}),
+          ...(item.product_color_id || item.color_id ? { colorId: Number(item.product_color_id || item.color_id) } : {}),
+          quantity: Number(item.qty) || 1,
+        });
+        await refreshCart();
+      } catch (cause) {
+        notify.error(cause.message || "Could not add this item to your cart.");
+        throw cause;
+      }
     },
-    [persist]
+    [refreshCart]
   );
 
   const setQty = useCallback(
-    (lineId, qty) => {
-      setItems((prev) => {
-        const next = prev.map((e) => {
-          if (e.lineId !== lineId) return e;
-          const q = e.max_qty ? Math.min(qty, e.max_qty) : qty;
-          return { ...e, qty: q, totalPrice: e.unitPrice * q };
-        });
-        persist(next);
-        return next;
-      });
+    async (lineId, qty) => {
+      try {
+        await api.put(`api/cart/${lineId}`, { quantity: Number(qty) });
+        await refreshCart();
+      } catch (cause) {
+        notify.error(cause.message || "Could not update your cart.");
+      }
     },
-    [persist]
+    [refreshCart]
   );
 
   const inc = useCallback(
-    (lineId) =>
-      setItems((prev) => {
-        const next = prev.map((e) =>
-          e.lineId === lineId && (!e.max_qty || e.qty < e.max_qty)
-            ? { ...e, qty: e.qty + 1, totalPrice: e.unitPrice * (e.qty + 1) }
-            : e
-        );
-        persist(next);
-        return next;
-      }),
-    [persist]
+    (lineId) => {
+      const item = items.find((entry) => entry.lineId === lineId);
+      if (item) return setQty(lineId, item.qty + 1);
+    },
+    [items, setQty]
   );
 
   const dec = useCallback(
-    (lineId) =>
-      setItems((prev) => {
-        const next = prev.map((e) =>
-          e.lineId === lineId && e.qty > 1
-            ? { ...e, qty: e.qty - 1, totalPrice: e.unitPrice * (e.qty - 1) }
-            : e
-        );
-        persist(next);
-        return next;
-      }),
-    [persist]
+    (lineId) => {
+      const item = items.find((entry) => entry.lineId === lineId);
+      if (item && item.qty > 1) return setQty(lineId, item.qty - 1);
+    },
+    [items, setQty]
   );
 
   const removeItem = useCallback(
-    (lineId) =>
-      setItems((prev) => {
-        const next = prev.filter((e) => e.lineId !== lineId);
-        persist(next);
-        return next;
-      }),
-    [persist]
+    async (lineId) => {
+      try {
+        await api.delete(`api/cart/${lineId}`);
+        await refreshCart();
+      } catch (cause) {
+        notify.error(cause.message || "Could not remove this item.");
+      }
+    },
+    [refreshCart]
   );
 
-  const clearCart = useCallback(() => {
-    setItems([]);
-    persist([]);
-  }, [persist]);
+  const clearCart = useCallback(async () => {
+    try {
+      await api.delete("api/cart");
+      setItems([]);
+    } catch (cause) {
+      notify.error(cause.message || "Could not clear your cart.");
+    }
+  }, []);
 
   const total = useMemo(
-    () => items.reduce((s, e) => s + (e.totalPrice ?? e.unitPrice * e.qty ?? 0), 0),
+    () => items.reduce((sum, item) => sum + (Number(item.totalPrice) || Number(item.unitPrice) * item.qty || 0), 0),
     [items]
   );
 
@@ -149,6 +142,8 @@ export function CartProvider({ children }) {
       total,
       open,
       hydrated,
+      loading,
+      error,
       checkoutSignal,
       setOpen,
       openCart: () => setOpen(true),
@@ -159,13 +154,14 @@ export function CartProvider({ children }) {
         setOpen(true);
       },
       addToCart,
+      refreshCart,
       setQty,
       inc,
       dec,
       removeItem,
       clearCart,
     }),
-    [items, total, open, hydrated, checkoutSignal, addToCart, setQty, inc, dec, removeItem, clearCart]
+    [items, total, open, hydrated, loading, error, checkoutSignal, addToCart, refreshCart, setQty, inc, dec, removeItem, clearCart]
   );
 
   return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>;
