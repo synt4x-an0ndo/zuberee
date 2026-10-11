@@ -14,9 +14,11 @@
  * =========================================================================
  */
 
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3001"
-).replace(/\/+$/, "");
+const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "";
+
+/** Empty means deliberately unconfigured: never silently call localhost. */
+export const API_BASE = configuredApiBase.replace(/\/+$/, "");
+export const API_CONFIGURED = Boolean(API_BASE);
 
 /* ------------------------------------------------------------------ */
 /* Token helpers                                                       */
@@ -24,39 +26,54 @@ export const API_BASE = (
 export function getToken() {
   if (typeof window === "undefined") return null;
   try {
-    return (
-      window.localStorage.getItem("token") ||
-      decodeURIComponent(
-        (document.cookie.match(/(?:^|;\s*)token=([^;]*)/) || [])[1] || ""
-      ) ||
-      null
-    );
+    const stored = window.localStorage.getItem("token");
+    if (stored) return stored;
+  } catch {
+    // Continue to the cookie fallback if local storage is disabled.
+  }
+  try {
+    const cookie = (document.cookie.match(/(?:^|;\s*)token=([^;]*)/) || [])[1];
+    return cookie ? decodeURIComponent(cookie) : null;
   } catch {
     return null;
   }
 }
 
 export function setToken(token) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem("token", token);
+  if (typeof window === "undefined" || !token) return;
+  try {
+    window.localStorage.setItem("token", token);
+  } catch {
+    // The Authorization header remains the source of truth if storage is blocked.
+  }
   const exp = new Date(Date.now() + 864e5 * 7).toUTCString();
-  document.cookie = `token=${encodeURIComponent(
-    token
-  )}; expires=${exp}; path=/; SameSite=Lax; Secure`;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `token=${encodeURIComponent(token)}; expires=${exp}; path=/; SameSite=Lax${secure}`;
 }
 
 export function clearToken() {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem("token");
-  document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  try {
+    window.localStorage.removeItem("token");
+  } catch {
+    // Ignore storage restrictions while still expiring the cookie.
+  }
+  document.cookie = "token=; Max-Age=0; path=/; SameSite=Lax";
 }
 
-/** Build an absolute URL for backend-relative media paths (uploads/..., /storage/...) */
+/** Build an absolute URL for backend-relative media paths (uploads/..., /storage/...). */
 export function imgUrl(path) {
-  const value = typeof path === "string" ? path.trim() : path?.image || path?.imageUrl;
+  const raw = typeof path === "string" ? path : path?.image || path?.imageUrl;
+  const value = typeof raw === "string" ? raw.trim() : "";
   if (!value || /^(javascript|vbscript):/i.test(value)) return null;
   if (/^(https?:)?\/\//i.test(value) || /^(data|blob):/i.test(value)) return value;
+  if (!API_BASE) return null;
   return `${API_BASE}/${value.replace(/^\/+/, "")}`;
+}
+
+export function productColors(product) {
+  if (!Array.isArray(product?.colors)) return [];
+  return product.colors.filter((color) => color && typeof color === "object");
 }
 
 export function asBoolean(value, fallback = false) {
@@ -95,6 +112,20 @@ export class ApiError extends Error {
   }
 }
 
+const documentedApiPatterns = [
+  /^api\/auth\/(register|login|me|logout)$/,
+  /^api\/categories(?:\/\d+)?$/,
+  /^api\/products(?:\/\d+)?$/,
+  /^api\/banners(?:\/\d+|\/\d+\/image)?$/,
+  /^api\/cart(?:\/\d+)?$/,
+  /^api\/orders(?:\/\d+)?$/,
+];
+
+function isDocumentedApiPath(path) {
+  const normalized = String(path).replace(/^\/+/, "").split("?")[0];
+  return documentedApiPatterns.some((pattern) => pattern.test(normalized));
+}
+
 /**
  * @param {string} path  e.g. "api/products?page=1"
  * @param {object} opts  { method, body, auth, formData, signal, headers }
@@ -114,8 +145,25 @@ export async function request(path, opts = {}) {
   const token = getToken();
   if (auth && token) headers.Authorization = `Bearer ${token}`;
 
+  if (!isDocumentedApiPath(path)) {
+    throw new ApiError(
+      `This frontend API is not documented: ${String(path).split("?")[0]}`,
+      0,
+      { code: "UNDOCUMENTED_API" }
+    );
+  }
+
+  if (!API_BASE) {
+    throw new ApiError(
+      "The storefront API is not configured. Set NEXT_PUBLIC_API_BASE_URL to connect the backend.",
+      0,
+      { code: "API_NOT_CONFIGURED" }
+    );
+  }
+
   let payload = body;
-  if (body && !(body instanceof FormData) && !formData) {
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body != null && !isFormData && !formData) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
@@ -134,8 +182,12 @@ export async function request(path, opts = {}) {
   const data = isJson ? await res.json().catch(() => null) : await res.text();
 
   if (!res.ok) {
+    const validationMessage = data?.errors && typeof data.errors === "object"
+      ? Object.values(data.errors).flat().filter(Boolean).join(" ")
+      : "";
     const msg =
       (data && (data.message || data.error)) ||
+      validationMessage ||
       (typeof data === "string" && data.slice(0, 160)) ||
       `Request failed (${res.status})`;
     throw new ApiError(msg, res.status, data);
@@ -165,22 +217,37 @@ export function salePrice(p) {
   return Number.isFinite(d) && p.discount !== null && p.discount !== "" ? d : Number(p.price) || 0;
 }
 
-/** Stock / prebook status badge key: 'prebook' | 'in-stock' | null */
-export function statusBadge(p) {
-  if (!p) return null;
-  if (p.status === "prebook") return "prebook";
-  const summary = p.inventory_summary || p.inventory;
-  const tracked =
-    summary && typeof summary.track_inventory === "boolean"
-      ? summary.track_inventory
-      : !!p.track_inventory;
-  const inStock = summary
-    ? !!summary.in_stock
-    : typeof summary?.total_available === "number"
+export function normalizedProductStatus(product) {
+  return String(product?.status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, "-");
+}
+
+export function isPreorderStatus(productOrStatus) {
+  const status = typeof productOrStatus === "string"
+    ? productOrStatus.trim().toLowerCase().replace(/[_\s]+/g, "-")
+    : normalizedProductStatus(productOrStatus);
+  return ["prebook", "pre-book", "pre-order", "preorder"].includes(status);
+}
+
+/** Stock badge key: 'prebook' | 'in-stock' | 'sold-out' | null. */
+export function statusBadge(product) {
+  if (!product) return null;
+  const status = normalizedProductStatus(product);
+  if (isPreorderStatus(status)) return "prebook";
+  if (["out-of-stock", "sold-out", "discontinued"].includes(status)) return "sold-out";
+
+  const summary = product.inventory_summary || product.inventory || {};
+  const tracked = asBoolean(summary.track_inventory ?? product.track_inventory, false);
+  const inStock = typeof summary.in_stock === "boolean"
+    ? summary.in_stock
+    : typeof summary.total_available === "number"
       ? summary.total_available > 0
-      : p.status === "in-stock";
-  if (p.status === "in-stock") return "in-stock";
-  if (tracked && inStock) return "in-stock";
+      : status === "in-stock" || status === "available";
+  if (status === "in-stock" || status === "available" || (tracked && inStock)) {
+    return "in-stock";
+  }
   return null;
 }
 

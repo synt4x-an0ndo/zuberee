@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, formatTk } from "@/lib/api";
 import PageGate from "@/components/admin/PageGate";
@@ -177,8 +178,8 @@ function CustomerDetail({ phone }) {
   );
 }
 
-export default function CustomerDetailPage({ params }) {
-  const { phone } = use(params);
+export default function CustomerDetailPage() {
+  const { phone } = useParams();
   return (
     <PageGate permission="view leaderboard">
       <CustomerDetail phone={decodeURIComponent(phone)} />

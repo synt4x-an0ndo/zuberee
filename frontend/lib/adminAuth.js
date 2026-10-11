@@ -72,8 +72,9 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   const refreshUserData = useCallback(
     async ({ silent = false } = {}) => {
       try {
-        const r = await api.get("api/auth/me");
-        const user = r?.data?.user || r?.data?.data?.user || r?.data?.data || r?.user;
+        const response = await api.get("api/auth/me");
+        const payload = response?.data ?? response;
+        const user = payload?.data?.user || payload?.user || payload?.data || payload;
         if (user) {
           const access = adminAccess(user);
           localStorage.setItem("roles", JSON.stringify(access.roles));

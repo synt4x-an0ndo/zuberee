@@ -1,77 +1,109 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api, clearToken, getToken, setToken } from "@/lib/api";
 import notify from "@/components/notify";
 
 const AuthCtx = createContext(null);
 
 function userFromResponse(response) {
-    return response?.data?.user || response?.data?.data?.user || response?.data?.data || response?.data || null;
+  const payload = response?.data ?? response;
+  if (payload?.data?.user) return payload.data.user;
+  if (payload?.user) return payload.user;
+  if (payload?.data && typeof payload.data === "object") return payload.data;
+  return payload || null;
 }
 
 function authData(response) {
-    return response?.data?.data || response?.data || {};
+  const payload = response?.data ?? response;
+  return payload?.data && typeof payload.data === "object" ? payload.data : payload || {};
+}
+
+function dispatchAuthChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("auth-changed"));
 }
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        if (!getToken()) {
-            setLoading(false);
-            return;
-        }
-        api.get("api/auth/me")
-            .then((response) => setUser(userFromResponse(response)))
-            .catch((error) => {
-                if (error.status === 401 || error.status === 403) clearToken();
-            })
-            .finally(() => setLoading(false));
-    }, []);
-
-    const login = async (credentials) => {
-        const response = await api.post("api/auth/login", credentials, { auth: false });
-        const data = authData(response);
-        setToken(data.token);
-        setUser(data.user);
-        window.dispatchEvent(new Event("auth-changed"));
-        return data.user;
-    };
-
-    const register = async (details) => {
-        return api.post("api/auth/register", details, { auth: false });
-    };
-
-    const logout = async () => {
+  useEffect(() => {
+    let alive = true;
+    const loadSession = async () => {
+      if (!getToken()) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const sessionResponse = await api.get("api/auth/me");
+        let currentUser = userFromResponse(sessionResponse);
+        // /auth/me verifies the token; the profile endpoint supplies the name,
+        // phone, and address fields needed by the account and checkout screens.
         try {
-            await api.post("api/auth/logout", null);
-        } finally {
-            clearToken();
-            setUser(null);
-            window.dispatchEvent(new Event("auth-changed"));
-            notify.success("You have been signed out.", "Logged Out");
+          const profileResponse = await api.get("api/account/profile");
+          const profile = userFromResponse(profileResponse);
+          if (profile) currentUser = { ...currentUser, ...profile };
+        } catch {
+          // Some API deployments expose only /auth/me. Keep the valid session.
         }
+        if (alive) setUser(currentUser);
+      } catch (error) {
+        if (error.status === 401 || error.status === 403) clearToken();
+      } finally {
+        if (alive) setLoading(false);
+      }
     };
-
-    const updateProfile = async (details) => {
-        const response = await api.patch("api/account/profile", details);
-        const nextUser = userFromResponse(response);
-        setUser(nextUser);
-        return nextUser;
+    loadSession();
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    const value = useMemo(
-        () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile }),
-        [user, loading]
-    );
+  const login = useCallback(async (credentials) => {
+    const response = await api.post("api/auth/login", credentials, { auth: false });
+    const data = authData(response);
+    if (!data.token) throw new Error("The login response did not include an access token.");
+    setToken(data.token);
+    setUser(data.user || null);
+    dispatchAuthChanged();
+    return data.user || null;
+  }, []);
 
-    return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
+  const register = useCallback(
+    (details) => api.post("api/auth/register", details, { auth: false }),
+    []
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      if (getToken()) await api.post("api/auth/logout", null);
+    } catch {
+      // Always clear the local session, even when the server cannot be reached.
+    } finally {
+      clearToken();
+      setUser(null);
+      dispatchAuthChanged();
+      notify.success("You have been signed out.", "Logged out");
+    }
+  }, []);
+
+  const updateProfile = useCallback(async (details) => {
+    const response = await api.patch("api/account/profile", details);
+    const updatedUser = userFromResponse(response);
+    setUser((current) => ({ ...current, ...(updatedUser || {}) }));
+    return updatedUser;
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile }),
+    [user, loading, login, register, logout, updateProfile]
+  );
+
+  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
 export function useAuth() {
-    const context = useContext(AuthCtx);
-    if (!context) throw new Error("useAuth must be used inside <AuthProvider>");
-    return context;
+  const context = useContext(AuthCtx);
+  if (!context) throw new Error("useAuth must be used inside <AuthProvider>");
+  return context;
 }

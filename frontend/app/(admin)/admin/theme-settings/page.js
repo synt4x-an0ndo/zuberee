@@ -35,8 +35,13 @@ function ThemeSettings() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.put("api/site-settings", { primary_color: color });
-      document.documentElement.style.setProperty("--primary", color);
+      const normalizedColor = color.trim().startsWith("#") ? color.trim() : `#${color.trim()}`;
+      if (!/^#[\da-f]{6}$/i.test(normalizedColor)) {
+        notify.error("Enter a valid six-digit hex color.", "Invalid color");
+        return;
+      }
+      await api.put("api/site-settings", { primary_color: normalizedColor });
+      document.documentElement.style.setProperty("--primary-color", normalizedColor);
       notify.success("Website color saved");
     } catch (err) {
       notify.error(err.message || "Failed to save color");

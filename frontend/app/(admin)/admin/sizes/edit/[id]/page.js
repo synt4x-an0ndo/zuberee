@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import SizeForm from "@/components/admin/SizeForm";
 import PageGate from "@/components/admin/PageGate";
 import { api } from "@/lib/api";
@@ -27,8 +28,8 @@ function EditSize({ id }) {
   return <SizeForm id={id} initial={initial} />;
 }
 
-export default function SizesEditPage({ params }) {
-  const { id } = use(params);
+export default function SizesEditPage() {
+  const { id } = useParams();
   return (
     <PageGate permission="edit sizes">
       <EditSize id={id} />

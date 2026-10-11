@@ -1,308 +1,336 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
-import { api, unwrapList } from "@/lib/api";
-import notify from "@/components/notify";
+import { api, salePrice, unwrapList } from "@/lib/api";
 import Loader from "@/components/Loader";
 
-/**
- * Shop page.
- *  - Categories: GET api/categories
- *  - Products:   GET api/products
- */
+const PAGE_SIZE = 24;
+
 export default function ShopPage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <ShopContent />
+    </Suspense>
+  );
+}
+
+function ShopContent() {
+  const searchParams = useSearchParams();
+  const querySearch = searchParams.get("search")?.trim() || "";
   const [options, setOptions] = useState(null);
   const [allProducts, setAllProducts] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [pagination, setPagination] = useState(null);
   const [filters, setFilters] = useState(null);
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(querySearch);
   const [priceInput, setPriceInput] = useState({ min: "", max: "" });
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
-  const [loadingMore] = useState(false);
+  const [error, setError] = useState("");
 
-  /* ---------- load filter options once ---------- */
   useEffect(() => {
+    let alive = true;
     (async () => {
+      setLoading(true);
+      setError("");
       try {
         const [categoriesResponse, productsResponse] = await Promise.all([
           api.get("api/categories", { auth: false }),
           api.get("api/products", { auth: false }),
         ]);
-        const categories = unwrapList(categoriesResponse, ["categories"]);
+        if (!alive) return;
+
+        const categories = flattenCategories(unwrapList(categoriesResponse, ["categories"]));
         const loadedProducts = unwrapList(productsResponse, ["products"]);
-        setAllProducts(loadedProducts);
-        const sizes = [...new Map(
-          loadedProducts.flatMap((product) => product.sizes || [])
-            .map((size) => [String(size.size), { id: size.id, size: String(size.size) }])
-        ).values()];
-        const prices = loadedProducts.map((product) => Number(product.price)).filter(Number.isFinite);
+        const sizes = [...new Set(
+          loadedProducts.flatMap((product) => (product.sizes || []).map((size) => String(size.size || "")))
+            .filter(Boolean)
+        )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const prices = loadedProducts
+          .map((product) => salePrice(product))
+          .filter((price) => Number.isFinite(price));
         const priceRange = {
           min: prices.length ? Math.min(...prices) : 0,
           max: prices.length ? Math.max(...prices) : 0,
         };
-        const data = { categories, sizes, price_range: priceRange };
-        setOptions(data);
+
+        setAllProducts(loadedProducts);
+        setOptions({ categories, sizes, price_range: priceRange });
+        setPriceInput({ min: String(priceRange.min), max: String(priceRange.max) });
         setFilters({
           categories: [],
           sizes: [],
-          min_price: priceRange.min,
-          max_price: priceRange.max,
-          search: "",
+          min_price: String(priceRange.min),
+          max_price: String(priceRange.max),
+          search: querySearch,
         });
-      } catch {
+      } catch (cause) {
+        if (!alive) return;
+        setError(cause?.message || "The shop could not be loaded.");
+        setAllProducts([]);
         setOptions({ categories: [], sizes: [], price_range: { min: 0, max: 0 } });
-        setFilters({ categories: [], sizes: [], min_price: "", max_price: "", search: "" });
+        setFilters({ categories: [], sizes: [], min_price: "", max_price: "", search: querySearch });
+      } finally {
+        if (alive) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      alive = false;
+    };
+  }, [querySearch]);
 
   useEffect(() => {
-    if (!filters) return;
-    const query = filters.search.trim().toLowerCase();
-    const min = filters.min_price === "" ? -Infinity : Number(filters.min_price);
-    const max = filters.max_price === "" ? Infinity : Number(filters.max_price);
-    const filtered = allProducts.filter((product) => {
-      const categoryIds = (product.category || []).map((category) => category.id);
-      const sizes = (product.sizes || []).map((size) => String(size.size));
-      const text = `${product.title || ""} ${product.sku || ""}`.toLowerCase();
-      return (!filters.categories.length || filters.categories.some((id) => categoryIds.includes(id)))
-        && (!filters.sizes.length || filters.sizes.some((size) => sizes.includes(size)))
-        && (!query || text.includes(query))
-        && Number(product.price) >= min
-        && Number(product.price) <= max;
-    });
-    setProducts(filtered);
-    setPagination({ current_page: 1, last_page: 1, total: filtered.length, has_more: false });
-    setLoading(false);
-  }, [allProducts, filters]);
+    setSearchInput(querySearch);
+    setFilters((current) => current ? { ...current, search: querySearch } : current);
+  }, [querySearch]);
 
-  /* ---------- debounced inputs ---------- */
   useEffect(() => {
-    if (!filters) return;
-    const t = setTimeout(() => {
-      if (searchInput.length >= 3 || searchInput.length === 0) {
-        setFilters((f) => (f.search === searchInput ? f : { ...f, search: searchInput }));
-      }
-    }, 800);
-    return () => clearTimeout(t);
+    if (!filters) return undefined;
+    const timer = window.setTimeout(() => {
+      const query = searchInput.trim();
+      setFilters((current) => current && current.search !== query
+        ? { ...current, search: query }
+        : current
+      );
+    }, 300);
+    return () => window.clearTimeout(timer);
   }, [searchInput, filters]);
 
   useEffect(() => {
-    if (!filters) return;
-    const t = setTimeout(() => {
-      setFilters((f) =>
-        f.min_price === priceInput.min && f.max_price === priceInput.max
-          ? f
-          : { ...f, min_price: priceInput.min, max_price: priceInput.max }
-      );
-    }, 400);
-    return () => clearTimeout(t);
+    if (!filters) return undefined;
+    const timer = window.setTimeout(() => {
+      setFilters((current) => current && (
+        current.min_price !== priceInput.min || current.max_price !== priceInput.max
+      ) ? { ...current, min_price: priceInput.min, max_price: priceInput.max } : current);
+    }, 350);
+    return () => window.clearTimeout(timer);
   }, [priceInput, filters]);
 
-  const toggle = (key, value) =>
-    setFilters((f) => ({
-      ...f,
-      [key]: f[key].includes(value)
-        ? f[key].filter((v) => v !== value)
-        : [...f[key], value],
-    }));
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filters]);
 
-  if (!filters || !options) return <Loader />;
+  const products = useMemo(() => {
+    if (!filters) return [];
+    const query = filters.search.trim().toLowerCase();
+    const min = filters.min_price === "" ? -Infinity : Number(filters.min_price);
+    const max = filters.max_price === "" ? Infinity : Number(filters.max_price);
+    return allProducts.filter((product) => {
+      const categoryEntries = Array.isArray(product.category)
+        ? product.category
+        : product.category ? [product.category] : [];
+      const categoryIds = categoryEntries.map((category) => String(category?.id ?? category));
+      const productSizes = (product.sizes || []).map((size) => String(size.size));
+      const text = `${product.title || ""} ${product.sku || ""}`.toLowerCase();
+      const price = salePrice(product);
+      return (!filters.categories.length || filters.categories.some((id) => categoryIds.includes(String(id))))
+        && (!filters.sizes.length || filters.sizes.some((size) => productSizes.includes(size)))
+        && (!query || text.includes(query))
+        && price >= min
+        && price <= max;
+    });
+  }, [allProducts, filters]);
 
-  const activeCount = filters.categories.length + filters.sizes.length;
+  const toggle = (key, value) => {
+    setFilters((current) => {
+      if (!current) return current;
+      const selected = current[key] || [];
+      return {
+        ...current,
+        [key]: selected.includes(value)
+          ? selected.filter((item) => item !== value)
+          : [...selected, value],
+      };
+    });
+  };
+
+  const clearFilters = () => {
+    const priceRange = options?.price_range || { min: 0, max: 0 };
+    setSearchInput("");
+    setPriceInput({ min: String(priceRange.min), max: String(priceRange.max) });
+    setFilters({
+      categories: [],
+      sizes: [],
+      min_price: String(priceRange.min),
+      max_price: String(priceRange.max),
+      search: "",
+    });
+  };
+
+  const activeCount = (filters?.categories.length || 0)
+    + (filters?.sizes.length || 0)
+    + (filters?.search ? 1 : 0)
+    + (priceInput.min !== String(options?.price_range?.min ?? 0) || priceInput.max !== String(options?.price_range?.max ?? 0) ? 1 : 0);
 
   return (
-    <div className="container py-4">
-      <h4 className="fw-bold mb-4" style={{ color: "var(--primary-color)" }}>
-        Shop
-      </h4>
+    <section className="shop-page container py-4 py-lg-5">
+      <div className="shop-heading d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
+        <div>
+          <p className="shop-eyebrow mb-1">Curated for your everyday</p>
+          <h1 className="h2 fw-bold mb-0">Shop all</h1>
+        </div>
+        {!loading && <span className="shop-result-count">{products.length} products</span>}
+      </div>
 
-      <div className="row">
-        {/* ============ FILTERS SIDEBAR ============ */}
-        <div className="col-lg-3 mb-4">
-          <div className="border rounded p-3 bg-white">
-            {/* search */}
-            <div className="mb-4">
-              <div className="fw-semibold mb-2" style={{ fontSize: 14 }}>
-                Search
-              </div>
-              <input
-                className="form-control form-control-sm"
-                placeholder="Search products..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
-              {searchInput.length > 0 && searchInput.length < 3 && (
-                <p className="spf-hint small text-muted mt-1 mb-0">
-                  Type at least 3 characters
-                </p>
-              )}
-            </div>
-
-            {/* categories */}
-            <FilterSection
-              title="Category"
-              count={filters.categories.length}
-              defaultOpen
-            >
-              <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                {options.categories.map((c) => (
-                  <label key={c.id} className="d-flex align-items-center gap-2 py-1" style={{ fontSize: 13, cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={filters.categories.includes(c.id)}
-                      onChange={() => toggle("categories", c.id)}
-                    />
-                    <span>{c.name}</span>
-                  </label>
-                ))}
-                {options.categories.length === 0 && (
-                  <span className="text-muted small">No categories</span>
+      {loading || !options || !filters ? (
+        <Loader />
+      ) : error && allProducts.length === 0 ? (
+        <div className="empty-state text-center py-5">
+          <h2 className="h5">Shop is temporarily unavailable</h2>
+          <p className="text-muted mb-0">{error}</p>
+        </div>
+      ) : (
+        <div className="row g-4">
+          <aside className="col-lg-3">
+            <div className="shop-filter-panel">
+              <div className="shop-filter-heading d-flex justify-content-between align-items-center mb-3">
+                <h2 className="h6 fw-bold mb-0">Filters</h2>
+                {activeCount > 0 && (
+                  <button type="button" className="shop-clear-button" onClick={clearFilters}>
+                    Clear all
+                  </button>
                 )}
               </div>
-            </FilterSection>
 
-            {/* sizes */}
-            <FilterSection title="Size" count={filters.sizes.length}>
-              <div className="d-flex flex-wrap gap-1">
-                {options.sizes.map((s) => (
-                  <button
-                    key={s.id ?? s.size}
-                    type="button"
-                    className="btn btn-sm border"
-                    style={{
-                      fontSize: 12,
-                      background: filters.sizes.includes(String(s.id ?? s.size))
-                        ? "var(--primary-color)"
-                        : "#fff",
-                      color: filters.sizes.includes(String(s.id ?? s.size))
-                        ? "#fff"
-                        : "#333",
-                    }}
-                    onClick={() => toggle("sizes", String(s.id ?? s.size))}
-                  >
-                    {s.size}
-                  </button>
-                ))}
-              </div>
-            </FilterSection>
+              <label className="shop-field-label" htmlFor="shop-search">Search</label>
+              <input
+                id="shop-search"
+                className="form-control shop-search-input mb-3"
+                type="search"
+                placeholder="Product name or SKU"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
 
-            {/* price */}
-            <FilterSection title="Price">
-              <div className="d-flex gap-2 align-items-center">
-                <input
-                  type="number"
-                  className="form-control form-control-sm"
-                  placeholder={String(options.price_range?.min ?? 0)}
-                  value={priceInput.min}
-                  onChange={(e) =>
-                    setPriceInput((p) => ({ ...p, min: e.target.value }))
-                  }
-                />
-                <span>-</span>
-                <input
-                  type="number"
-                  className="form-control form-control-sm"
-                  placeholder={String(options.price_range?.max ?? 0)}
-                  value={priceInput.max}
-                  onChange={(e) =>
-                    setPriceInput((p) => ({ ...p, max: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="text-muted small mt-1">
-                Range: {options.price_range?.min}৳ - {options.price_range?.max}৳
-              </div>
-            </FilterSection>
+              <FilterSection title="Category" count={filters.categories.length} defaultOpen>
+                <div className="shop-category-options">
+                  {options.categories.map((category) => (
+                    <label key={category.id} className="shop-checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={filters.categories.includes(String(category.id))}
+                        onChange={() => toggle("categories", String(category.id))}
+                      />
+                      <span>{category.name}</span>
+                    </label>
+                  ))}
+                  {options.categories.length === 0 && <span className="text-muted small">No categories</span>}
+                </div>
+              </FilterSection>
 
-            {activeCount > 0 && (
-              <button
-                className="btn btn-outline-secondary btn-sm w-100 mt-3"
-                onClick={() =>
-                  setFilters((f) => ({
-                    ...f,
-                    categories: [],
-                    sizes: [],
-                    min_price: options.price_range?.min ?? "",
-                    max_price: options.price_range?.max ?? "",
-                    search: "",
-                  }))
-                }
-              >
-                Clear filters ({activeCount})
-              </button>
+              <FilterSection title="Size" count={filters.sizes.length}>
+                <div className="d-flex flex-wrap gap-2">
+                  {options.sizes.map((size) => {
+                    const selected = filters.sizes.includes(size);
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        className={`shop-size-option ${selected ? "is-selected" : ""}`}
+                        aria-pressed={selected}
+                        onClick={() => toggle("sizes", size)}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                  {options.sizes.length === 0 && <span className="text-muted small">No sizes</span>}
+                </div>
+              </FilterSection>
+
+              <FilterSection title="Price">
+                <div className="shop-price-fields">
+                  <label>
+                    <span>Min</span>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      className="form-control form-control-sm"
+                      aria-label="Minimum price"
+                      value={priceInput.min}
+                      onChange={(event) => setPriceInput((current) => ({ ...current, min: event.target.value }))}
+                    />
+                  </label>
+                  <span className="shop-price-separator" aria-hidden="true">to</span>
+                  <label>
+                    <span>Max</span>
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      className="form-control form-control-sm"
+                      aria-label="Maximum price"
+                      value={priceInput.max}
+                      onChange={(event) => setPriceInput((current) => ({ ...current, max: event.target.value }))}
+                    />
+                  </label>
+                </div>
+                <small className="text-muted d-block mt-2">
+                  {options.price_range.min}৳ – {options.price_range.max}৳
+                </small>
+              </FilterSection>
+            </div>
+          </aside>
+
+          <div className="col-lg-9">
+            {products.length === 0 ? (
+              <div className="empty-state text-center py-5">
+                <h2 className="h5">No products match those filters</h2>
+                <p className="text-muted mb-3">Try a different search or clear your filters.</p>
+                <button type="button" className="btn btn-outline-secondary" onClick={clearFilters}>Clear filters</button>
+              </div>
+            ) : (
+              <>
+                <div className="row mx-0 shop-product-grid">
+                  {products.slice(0, visibleCount).map((product) => (
+                    <div key={product.id} className="col-6 col-md-4 px-1 px-md-2 mb-3">
+                      <ProductCard product={product} />
+                    </div>
+                  ))}
+                </div>
+                {visibleCount < products.length && (
+                  <div className="text-center mt-3">
+                    <button type="button" className="slot-loadmore-btn" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
+                      Load more products
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
-
-        {/* ============ PRODUCT GRID ============ */}
-        <div className="col-lg-9">
-          {loading ? (
-            <Loader />
-          ) : products.length === 0 ? (
-            <div className="text-center py-5 text-muted">No products found</div>
-          ) : (
-            <>
-              <div className="row mx-0">
-                {products.map((p, i) => (
-                  <div key={`${p.id}-${i}`} className="col-6 col-md-4 px-1 px-md-2 mb-3">
-                    <ProductCard product={p} />
-                  </div>
-                ))}
-              </div>
-
-              {pagination?.has_more && (
-                <div className="text-center my-4">
-                  <button
-                    className="slot-loadmore-btn"
-                    disabled={loadingMore}
-                    onClick={() => fetchProducts((pagination.current_page || 1) + 1, true)}
-                  >
-                    {loadingMore ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" />
-                        Loading...
-                      </>
-                    ) : (
-                      "Load More"
-                    )}
-                  </button>
-                  <div className="text-muted small mt-2">
-                    Page {pagination.current_page} of {pagination.last_page} •{" "}
-                    {pagination.total} products
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 }
 
-/* Collapsible filter section (same behaviour as original) */
 function FilterSection({ title, count = 0, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="mb-4 border-bottom pb-3">
+    <section className="shop-filter-section">
       <button
         type="button"
-        className="d-flex align-items-center justify-content-between w-100 border-0 bg-transparent p-0 fw-semibold"
-        style={{ fontSize: 14 }}
-        onClick={() => setOpen((v) => !v)}
+        className="shop-filter-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
       >
-        <span>
-          {title}
-          {count > 0 && <span className="text-muted fw-normal"> ({count})</span>}
-        </span>
-        <span style={{ transform: open ? "rotate(180deg)" : "none", transition: ".2s" }}>
-          ▾
-        </span>
+        <span>{title}{count > 0 && <small> ({count})</small>}</span>
+        <span className={`shop-filter-chevron ${open ? "is-open" : ""}`} aria-hidden="true">⌄</span>
       </button>
-      {open && <div className="mt-2">{children}</div>}
-    </div>
+      {open && <div className="shop-filter-content">{children}</div>}
+    </section>
   );
+}
+
+function flattenCategories(categories) {
+  const flat = [];
+  const visit = (items, level = 0) => {
+    for (const item of items || []) {
+      flat.push({ ...item, level });
+      visit(item.all_children || item.children, level + 1);
+    }
+  };
+  visit(categories);
+  return flat;
 }
