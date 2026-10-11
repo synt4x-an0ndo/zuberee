@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, unwrapObject } from "@/lib/api";
 import Loader from "@/components/Loader";
+import SafeHtml from "@/components/SafeHtml";
 
 /**
  * Generic CMS content page.
@@ -20,8 +21,9 @@ export default function ContentPage({ endpoint, headingFallback }) {
       try {
         const r = await api.get(endpoint, { auth: false });
         if (!alive) return;
-        if (r && (r.content || r.title || r.data)) {
-          setData(r.data && typeof r.data === "object" && "content" in r.data ? r.data : r);
+        const content = unwrapObject(r);
+        if (content && (content.content || content.title)) {
+          setData(content);
           setState("ok");
         } else {
           setState("missing");
@@ -47,9 +49,9 @@ export default function ContentPage({ endpoint, headingFallback }) {
               <h3 className="fw-bold mb-4" style={{ color: "var(--primary-color)" }}>
                 {data?.title || headingFallback}
               </h3>
-              <div
-                className="content-card bg-white border rounded p-4"
-                dangerouslySetInnerHTML={{ __html: data?.content || "" }}
+              <SafeHtml
+                className="content-card bg-white border rounded p-4 cms-content"
+                html={data?.content || ""}
               />
             </>
           ) : (

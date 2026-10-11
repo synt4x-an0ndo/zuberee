@@ -56,14 +56,15 @@ function LoginForm() {
       localStorage.setItem("roles", JSON.stringify(roles));
       localStorage.setItem("permissions", JSON.stringify(data.user.permissions || []));
       const exp = new Date(Date.now() + 864e5 * 7).toUTCString();
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
       const cookie = (k, v) =>
-        (document.cookie = `${k}=${encodeURIComponent(v)}; expires=${exp}; path=/; SameSite=Lax; Secure`);
+        (document.cookie = `${k}=${encodeURIComponent(v)}; expires=${exp}; path=/; SameSite=Lax${secure}`);
       cookie("user_id", String(data.user.id));
       cookie("roles", JSON.stringify(roles));
       cookie("permissions", JSON.stringify(data.user.permissions || []));
 
       notify.success("Successfully logged in", "Login Successful!");
-      window.location.href = redirectTarget(data.user?.role);
+      router.replace(redirectTarget(data.user?.role));
     } catch (err) {
       notify.error(err?.message || "An error occurred.", "Login Failed");
     } finally {
