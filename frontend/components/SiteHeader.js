@@ -5,13 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   FaBars,
-  FaEnvelope,
-  FaFacebookF,
-  FaInstagram,
-  FaYoutube,
-  FaXTwitter,
-  FaPinterestP,
-  FaTiktok,
   FaPhone as FaPhoneAlt,
   FaCartShopping as FaShoppingCart,
   FaChevronDown,
@@ -38,6 +31,13 @@ const accountMenuItemStyle = {
   cursor: "pointer",
 };
 
+function normalizeWhatsapp(value) {
+  const digits = String(value || "").replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("880")) return digits;
+  return digits.startsWith("0") ? `88${digits}` : `880${digits}`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Live search dropdown (GET api/products?search=...)                  */
 /* ------------------------------------------------------------------ */
@@ -51,7 +51,8 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
 
   useEffect(() => {
     if (q.trim().length < 3) {
-      if (!q.trim()) setResults(null);
+      setLoading(false);
+      setResults(q.trim() ? [] : null);
       return;
     }
     const controller = new AbortController();
@@ -92,16 +93,27 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
     router.push(`/product-page/${id}`);
   };
 
+  const submitSearch = (event) => {
+    event.preventDefault();
+    const query = q.trim();
+    setOpen(false);
+    onNavigate?.();
+    router.push(query ? `/shop?search=${encodeURIComponent(query)}` : "/shop");
+  };
+
   return (
     <div className={className} ref={wrapRef} style={{ position: "relative" }}>
-      <div className="d-flex">
+      <form className="d-flex search-form" role="search" onSubmit={submitSearch}>
         <input
           type="search"
           className="form-control"
-          placeholder="What do you need?"
+          placeholder="Search products"
           aria-label="Search products"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open && (Boolean(results) || loading)}
+          aria-controls="product-search-results"
           autoComplete="off"
-          style={{ height: "3rem" }}
           value={q}
           autoFocus={autoFocusInput}
           onChange={(e) => {
@@ -110,14 +122,17 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
           }}
           onFocus={() => setOpen(true)}
         />
-        <button type="button" className="site-btn">
-          SEARCH
+        <button type="submit" className="site-btn" aria-label="Search">
+          Search
         </button>
-      </div>
+      </form>
 
       {open && (loading || results || q.trim().length >= 3 || (q.trim().length > 0 && q.trim().length < 3)) && (
         <div
-          className="bg-white shadow rounded border"
+          id="product-search-results"
+          role="listbox"
+          aria-label="Product search results"
+          className="bg-white shadow rounded border search-results"
           style={{
             position: "absolute",
             top: "100%",
@@ -142,18 +157,22 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
           )}
           {!loading &&
             results?.map((p) => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected="false"
+                aria-label={`View ${p.title || "product"}`}
                 key={p.id}
-                className="d-flex align-items-center gap-2 p-2 border-bottom"
-                style={{ cursor: "pointer" }}
+                className="d-flex align-items-center gap-2 p-2 border-bottom w-100 text-start search-result-option"
                 onClick={() => go(p.id)}
               >
                 <img
-                  src={imgUrl(p.images?.[0]?.image || p.image)}
+                  src={imgUrl(p.images?.[0]?.image || p.image) || undefined}
                   alt=""
                   width={44}
                   height={44}
-                  style={{ objectFit: "cover", borderRadius: 4, background: "#f5f5f5" }}
+                  loading="lazy"
+                  style={{ objectFit: "cover", borderRadius: 6, background: "#f5f5f5", flex: "0 0 auto" }}
                 />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div
@@ -165,18 +184,14 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
                   </div>
                   {Array.isArray(p.sizes) && p.sizes.length > 0 && (
                     <div className="text-muted" style={{ fontSize: 11 }}>
-                      Sizes:{" "}
-                      {p.sizes
-                        .slice(0, 6)
-                        .map((s) => s.size)
-                        .join(", ")}
+                      Sizes: {p.sizes.slice(0, 6).map((size) => size.size).join(", ")}
                     </div>
                   )}
                 </div>
                 <div className="fw-bold small" style={{ color: "var(--primary-color)" }}>
-                  {p.discount || p.price}৳
+                  {formatTk(p.discount ?? p.price)}৳
                 </div>
-              </div>
+              </button>
             ))}
         </div>
       )}
@@ -187,73 +202,37 @@ function SearchBox({ onNavigate, autoFocusInput, className }) {
 /* ------------------------------------------------------------------ */
 /* Category tree (shared by desktop dropdown + mobile drawer)          */
 /* ------------------------------------------------------------------ */
-function CategoryTree({ categories, onNavigate, isMobile }) {
-  const [hover, setHover] = useState(null);
+function CategoryTree({ categories = [], onNavigate, isMobile = false }) {
+  const [expanded, setExpanded] = useState(null);
   return (
-    <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-      {categories.map((c) => (
-        <li
-          key={c.id}
-          style={{ position: "relative" }}
-          onMouseEnter={() => setHover(c.id)}
-          onMouseLeave={() => setHover(null)}
-        >
-          <Link
-            href={`/${c.slug}`}
-            onClick={onNavigate}
-            style={
-              isMobile
-                ? {
-                  display: "block",
-                  padding: "9px 16px",
-                  fontSize: 14,
-                  color: "#1c1c1c",
-                  borderBottom: "1px solid #eee",
-                }
-                : undefined
-            }
-          >
-            {c.name}
-          </Link>
-          {c.all_children?.length > 0 && hover === c.id && (
-            <ul
-              style={
-                isMobile
-                  ? { listStyle: "none", margin: 0, padding: 0 }
-                  : {
-                    position: "absolute",
-                    top: 0,
-                    left: "100%",
-                    background: "#fff",
-                    border: "1px solid #ebebeb",
-                    minWidth: 220,
-                    zIndex: 40,
-                    padding: "6px 0",
-                    margin: 0,
-                    listStyle: "none",
-                  }
-              }
-            >
-              {c.all_children.map((s) => (
-                <li key={s.id} style={{ position: "relative" }}>
-                  <Link
-                    href={`/${s.slug}`}
-                    onClick={onNavigate}
-                    style={{
-                      display: "block",
-                      padding: "8px 14px",
-                      fontSize: 14,
-                      color: "#1c1c1c",
-                    }}
-                  >
-                    {s.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </li>
-      ))}
+    <ul className={`category-tree ${isMobile ? "category-tree--mobile" : ""}`}>
+      {categories.map((category) => {
+        const children = category.all_children || category.children || [];
+        const isExpanded = String(expanded) === String(category.id);
+        return (
+          <li className="category-tree-item" key={category.id}>
+            <div className="category-tree-row">
+              <Link href={`/${category.slug || category.id}`} onClick={onNavigate}>
+                {category.name}
+              </Link>
+              {children.length > 0 && (
+                <button
+                  type="button"
+                  className="category-tree-toggle"
+                  aria-label={`${isExpanded ? "Collapse" : "Expand"} ${category.name}`}
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpanded(isExpanded ? null : category.id)}
+                >
+                  <FaChevronDown className={isExpanded ? "is-expanded" : ""} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            {children.length > 0 && isExpanded && (
+              <CategoryTree categories={children} onNavigate={onNavigate} isMobile={isMobile} />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -262,8 +241,8 @@ function CategoryTree({ categories, onNavigate, isMobile }) {
 /* Header                                                              */
 /* ------------------------------------------------------------------ */
 export default function SiteHeader() {
-  const { company, social, categories } = useSite();
-  const { count, total, setOpen, openCart } = useCart();
+  const { company, footer, social, categories, loading: siteLoading } = useSite();
+  const { count, total, openCart } = useCart();
   const { isAuthenticated, logout } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -273,6 +252,7 @@ export default function SiteHeader() {
   const [drawerTab, setDrawerTab] = useState("category");
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef(null);
+  const drawerCloseRef = useRef(null);
 
   useEffect(() => {
     setCatOpen(false);
@@ -290,23 +270,34 @@ export default function SiteHeader() {
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
+  useEffect(() => {
+    if (!drawerOpen) {
+      document.body.style.removeProperty("overflow");
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    drawerCloseRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [drawerOpen]);
+
   const handleLogout = async () => {
     setAccountOpen(false);
     await logout();
     router.push("/");
   };
 
-  const waNumber = (social?.whatsapp_number || company.phone || "")
-    .replace(/[^0-9]/g, "");
-  const waHref = waNumber ? `https://wa.me/${waNumber.startsWith("880") ? waNumber : "88" + waNumber}` : "#";
-
-  const socials = [
-    social?.facebook ? { href: social.facebook, icon: <FaFacebookF /> } : null,
-    social?.twitter ? { href: social.twitter, icon: <FaXTwitter /> } : null,
-    social?.instagram ? { href: social.instagram, icon: <FaInstagram /> } : null,
-    social?.youtube ? { href: social.youtube, icon: <FaYoutube /> } : null,
-    social?.pinterest ? { href: social.pinterest, icon: <FaPinterestP /> } : null,
-  ].filter(Boolean);
+  const waNumber = normalizeWhatsapp(social?.whatsapp_number || company.phone);
+  const waHref = waNumber ? `https://wa.me/${waNumber}` : null;
+  const logoSrc = imgUrl(footer?.logo_path || footer?.company_logo || company.logo);
 
   const isActive = (href) => (pathname === href ? "activated-nav" : "");
 
@@ -314,47 +305,17 @@ export default function SiteHeader() {
     <>
       {/* ================= HEADER ================= */}
       <header className="header">
-        {/* -------- top bar -------- */}
-        <div className="header__top">
-          <div className="container">
-            <div className="row align-items-center">
-              <div className="col-lg-6 col-md-6 d-none d-xl-block">
-                <div className="header__top__left">
-                  <ul className="mb-0">
-                    <li>
-                      <FaEnvelope className="me-2" />
-                      {company.email ? (
-                        <a href={`mailto:${company.email}`}>{company.email}</a>
-                      ) : (
-                        <span>{company.email}</span>
-                      )}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div className="col-lg-6 col-md-6 d-none d-xl-block">
-                <div className="header__top__right d-flex justify-content-end align-items-center">
-                  <div className="header__top__right__social me-4">
-                    {socials.map((s, i) => (
-                      <a key={i} className="me-3" href={s.href} target="_blank" rel="noopener noreferrer">
-                        {s.icon}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* -------- middle: logo / nav / cart -------- */}
         <div className="container">
           <div className="row align-items-center">
             {/* mobile hamburger */}
             <div className="col-2 d-xl-none">
               <button
+                type="button"
                 className="border-0 bg-transparent p-0"
                 aria-label="Open menu"
+                aria-expanded={drawerOpen}
+                aria-controls="mobile-navigation-drawer"
                 onClick={() => setDrawerOpen(true)}
               >
                 <FaBars size={22} />
@@ -362,15 +323,17 @@ export default function SiteHeader() {
             </div>
 
             <div className="col-8 col-xl-3 text-center text-xl-start header__logo">
-              <Link href="/">
-                {company.logo ? (
+              <Link href="/" aria-label={company.name ? `${company.name} home` : "Home"}>
+                {logoSrc ? (
                   <img
-                    src={imgUrl(company.logo)}
-                    alt={company.name || ""}
+                    src={logoSrc}
+                    alt={company.name || "Site logo"}
                     width={200}
                     height={70}
-                    style={{ width: 200, height: "auto", objectFit: "contain" }}
+                    className="site-logo"
                   />
+                ) : company.name ? (
+                  <span className="site-brand-text">{company.name}</span>
                 ) : null}
               </Link>
             </div>
@@ -506,16 +469,21 @@ export default function SiteHeader() {
                 onMouseEnter={() => setCatOpen(true)}
                 onMouseLeave={() => setCatOpen(false)}
               >
-                <div
+                <button
+                  type="button"
                   className="hero__categories__all"
-                  style={{ cursor: "pointer", userSelect: "none" }}
-                  onClick={() => setCatOpen((v) => !v)}
+                  aria-expanded={catOpen}
+                  aria-controls="desktop-category-menu"
+                  onClick={() => setCatOpen((value) => !value)}
                 >
-                  <FaBars className="hero_category_icon" />
-                  <span>All Categories</span>
-                </div>
+                  <FaBars className="hero_category_icon" aria-hidden="true" />
+                  <span>All categories</span>
+                  <FaChevronDown className={`category-dropdown-icon ${catOpen ? "is-open" : ""}`} aria-hidden="true" />
+                </button>
                 {catOpen && (
                   <ul
+                    id="desktop-category-menu"
+                    role="menu"
                     style={{
                       display: "block",
                       position: "absolute",
@@ -531,13 +499,22 @@ export default function SiteHeader() {
                     }}
                   >
                     {categories.length === 0 && (
-                      <li style={{ listStyle: "none" }}>
-                        <a style={{ pointerEvents: "none" }}>Loading categories...</a>
+                      <li className="category-menu-empty">
+                        {siteLoading ? "Loading categories…" : "No categories available yet."}
                       </li>
                     )}
-                    {categories.map((c) => (
-                      <li key={c.id} style={{ listStyle: "none" }}>
-                        <Link href={`/${c.slug}`}>{c.name}</Link>
+                    {categories.map((category) => (
+                      <li key={category.id} style={{ listStyle: "none" }}>
+                        <Link href={`/${category.slug || category.id}`}>{category.name}</Link>
+                        {category.all_children?.length > 0 && (
+                          <ul className="desktop-category-submenu">
+                            {category.all_children.map((child) => (
+                              <li key={child.id}>
+                                <Link href={`/${child.slug || child.id}`}>{child.name}</Link>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -573,27 +550,34 @@ export default function SiteHeader() {
       {drawerOpen && (
         <>
           <div
+            aria-hidden="true"
             style={{ background: "rgba(0, 0, 0, 0.5)", zIndex: 10000 }}
             onClick={() => setDrawerOpen(false)}
             className="position-fixed top-0 start-0 w-100 h-100 d-xl-none"
           />
           <div
+            id="mobile-navigation-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Store navigation"
             style={{
-              width: "80vw",
-              maxWidth: 350,
+              width: "min(84vw, 360px)",
               boxShadow: "2px 0 10px rgba(0,0,0,0.1)",
               overflowY: "auto",
               zIndex: 10001,
               animation: "slideInLeft 0.3s ease",
             }}
-            className="position-fixed top-0 start-0 h-100 bg-white d-xl-none"
+            className="position-fixed top-0 start-0 h-100 bg-white d-xl-none mobile-navigation-drawer"
           >
-            <div
-              style={{ top: 10, right: "1.5rem", zIndex: 10, cursor: "pointer", position: "absolute" }}
+            <button
+              ref={drawerCloseRef}
+              type="button"
+              className="mobile-drawer-close"
+              aria-label="Close navigation menu"
               onClick={() => setDrawerOpen(false)}
             >
-              <FaTimes size={22} style={{ color: "red" }} />
-            </div>
+              <FaTimes size={20} />
+            </button>
 
             <div style={{ paddingTop: "4rem" }}>
               <div
@@ -607,38 +591,30 @@ export default function SiteHeader() {
                 }}
               >
                 {["category", "menu"].map((tab) => (
-                  <div
+                  <button
                     key={tab}
-                    style={{ width: "50%", fontWeight: 600, cursor: "pointer", position: "relative" }}
+                    type="button"
+                    className={`mobile-navigation-tab ${drawerTab === tab ? "is-active" : ""}`}
+                    aria-pressed={drawerTab === tab}
                     onClick={() => setDrawerTab(tab)}
                   >
-                    <span style={{ textTransform: "capitalize" }}>
-                      {tab}
-                      {drawerTab === tab && (
-                        <span
-                          style={{
-                            position: "absolute",
-                            width: "50%",
-                            height: 2,
-                            background: "var(--primary-color)",
-                            bottom: -6,
-                            left: 0,
-                          }}
-                        />
-                      )}
-                    </span>
-                  </div>
+                    {tab === "category" ? "Categories" : "Menu"}
+                  </button>
                 ))}
               </div>
 
               <div style={{ marginTop: "1rem" }}>
                 {drawerTab === "category" && (
                   <div>
-                    <CategoryTree
-                      categories={categories}
-                      isMobile
-                      onNavigate={() => setDrawerOpen(false)}
-                    />
+                    {categories.length > 0 ? (
+                      <CategoryTree
+                        categories={categories}
+                        isMobile
+                        onNavigate={() => setDrawerOpen(false)}
+                      />
+                    ) : (
+                      <p className="mobile-navigation-empty">Categories will appear here when the store is connected.</p>
+                    )}
                   </div>
                 )}
                 {drawerTab === "menu" && (
@@ -666,24 +642,18 @@ export default function SiteHeader() {
                         </Link>
                       </li>
                     ))}
-                    <li>
-                      <a
-                        href={waHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "11px 16px",
-                          fontSize: 15,
-                          fontWeight: 600,
-                          color: "#25D366",
-                        }}
-                      >
-                        <FaWhatsapp /> WhatsApp
-                      </a>
-                    </li>
+                    {waHref && (
+                      <li>
+                        <a
+                          href={waHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mobile-navigation-contact"
+                        >
+                          <FaWhatsapp /> WhatsApp
+                        </a>
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>
@@ -692,67 +662,6 @@ export default function SiteHeader() {
         </>
       )}
 
-      {/* ================= MOBILE BOTTOM NAV ================= */}
-      <div
-        className="d-xl-none position-fixed bottom-0 start-0 w-100 bg-white border-top"
-        style={{ zIndex: 9999 }}
-      >
-        <div className="row g-0 text-center py-1" style={{ margin: 0 }}>
-          <div className="col px-1">
-            <button
-              onClick={() => setDrawerOpen(true)}
-              type="button"
-              className="border-0 bg-transparent w-100 p-0"
-            >
-              <div className="d-flex flex-column align-items-center justify-content-center">
-                <FaBars size={20} className="text-dark" />
-                <small style={{ fontSize: 10, whiteSpace: "nowrap" }} className="text-dark mt-1">
-                  Category
-                </small>
-              </div>
-            </button>
-          </div>
-          <div className="col px-1">
-            <a
-              href={waHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-decoration-none d-block"
-            >
-              <div className="d-flex flex-column align-items-center justify-content-center">
-                <FaWhatsapp size={22} className="text-success" />
-                <small style={{ fontSize: 10, whiteSpace: "nowrap" }} className="text-success mt-1">
-                  WhatsApp
-                </small>
-              </div>
-            </a>
-          </div>
-          <div className="col px-1">
-            <button
-              type="button"
-              onClick={openCart}
-              className="border-0 bg-transparent w-100 p-0 position-relative"
-            >
-              <div className="d-flex flex-column align-items-center justify-content-center">
-                <div className="position-relative">
-                  <FaShoppingCart size={22} className="text-dark" />
-                  {count > 0 && (
-                    <span
-                      style={{ background: "var(--primary-color)", fontSize: 9 }}
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                    >
-                      {count}
-                    </span>
-                  )}
-                </div>
-                <small style={{ fontSize: 10, whiteSpace: "nowrap" }} className="text-dark mt-1">
-                  Cart
-                </small>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
     </>
   );
 }

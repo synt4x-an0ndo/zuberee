@@ -12,7 +12,22 @@ import {
   FaChevronRight,
 } from "react-icons/fa6";
 import { useSite } from "@/context/SiteContext";
-import { imgUrl } from "@/lib/api";
+
+function safeExternalUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeWhatsapp(value) {
+  const digits = String(value || "").replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("880")) return digits;
+  return digits.startsWith("0") ? `88${digits}` : `880${digits}`;
+}
 
 /**
  * Footer - all company information comes from the API:
@@ -20,27 +35,23 @@ import { imgUrl } from "@/lib/api";
  *  - social urls / whatsapp                -> GET api/social-links-first
  */
 export default function SiteFooter() {
-  const { company, social, footer } = useSite();
+  const { company, social } = useSite();
 
+  const whatsapp = normalizeWhatsapp(social?.whatsapp_number);
   const socials = [
-    social?.facebook && { href: social.facebook, icon: <FaFacebookF /> },
-    social?.instagram && { href: social.instagram, icon: <FaInstagram /> },
-    social?.youtube && { href: social.youtube, icon: <FaYoutube /> },
-    social?.whatsapp_number && {
-      href: `https://wa.me/${String(social.whatsapp_number).replace(/[^0-9]/g, "")}`,
-      icon: <FaWhatsapp />,
-    },
-  ].filter(Boolean);
-
+    { href: safeExternalUrl(social?.facebook), icon: <FaFacebookF /> },
+    { href: safeExternalUrl(social?.instagram), icon: <FaInstagram /> },
+    { href: safeExternalUrl(social?.youtube), icon: <FaYoutube /> },
+    whatsapp ? { href: `https://wa.me/${whatsapp}`, icon: <FaWhatsapp /> } : null,
+  ].filter((item) => item?.href);
   const columns = [
     {
       id: "shop",
       title: "shop",
       links: [
-        { label: "All Products", href: "/shop" },
-        { label: "New Arrivals", href: "/shop" },
-        { label: "Best Sellers", href: "/shop" },
-        { label: "My Account", href: "/user" },
+        { label: "Shop all", href: "/shop" },
+        { label: "Size guide", href: "/size-guide" },
+        { label: "My account", href: "/user" },
       ],
     },
     {
@@ -56,9 +67,7 @@ export default function SiteFooter() {
       id: "company",
       title: "company",
       links: [
-        { label: "About Us", href: "/about_us" },
-        { label: "Our Story", href: "/about_us" },
-        { label: "Careers", href: "/about_us" },
+        { label: "About us", href: "/about_us" },
       ],
     },
   ];
@@ -69,18 +78,6 @@ export default function SiteFooter() {
         <div className="row g-4">
           <div className="col-lg-4 col-md-6">
             <div className="footer-box rounded-4 p-4 h-100">
-              <div className="mb-3">
-                {footer?.logo_path ? (
-                  <Link href="/">
-                    <img
-                      alt={company.name || "Site logo"}
-                      className="footer-brand-logo"
-                      style={{ width: 180, height: "auto" }}
-                      src={imgUrl(footer.logo_path)}
-                    />
-                  </Link>
-                ) : null}
-              </div>
               {company.description ? (
                 <p className="text-white mb-4 small">{company.description}</p>
               ) : null}
@@ -163,7 +160,8 @@ export default function SiteFooter() {
 
         <div className="text-center mt-4 pt-3 border-top border-white border-opacity-25">
           <p className="mb-0 small text-white">
-            © <span className="fw-semibold">{company.name}</span>. All rights reserved.
+            {company.name ? <>© <span className="fw-semibold">{company.name}</span>. </> : null}
+            All rights reserved.
           </p>
         </div>
       </div>

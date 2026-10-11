@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import ProductForm from "@/components/admin/ProductForm";
 import PageGate from "@/components/admin/PageGate";
 import { api } from "@/lib/api";
@@ -66,8 +67,8 @@ function EditForm({ id }) {
   return <ProductForm id={id} initial={initial} />;
 }
 
-export default function ProductEditPage({ params }) {
-  const { id } = use(params);
+export default function ProductEditPage() {
+  const { id } = useParams();
   return (
     <PageGate permission="edit products">
       <EditForm id={id} />

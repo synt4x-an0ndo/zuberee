@@ -137,11 +137,21 @@ export function CartProvider({ children }) {
     () => items.reduce((sum, item) => sum + (Number(item.totalPrice) || Number(item.unitPrice) * item.qty || 0), 0),
     [items]
   );
+  const count = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
+    [items]
+  );
+  const openCart = useCallback(() => setOpen(true), []);
+  const closeCart = useCallback(() => setOpen(false), []);
+  const openCheckout = useCallback(() => {
+    setCheckoutSignal((number) => number + 1);
+    setOpen(true);
+  }, []);
 
   const value = useMemo(
     () => ({
       items,
-      count: items.length,
+      count,
       total,
       open,
       hydrated,
@@ -149,13 +159,10 @@ export function CartProvider({ children }) {
       error,
       checkoutSignal,
       setOpen,
-      openCart: () => setOpen(true),
-      closeCart: () => setOpen(false),
+      openCart,
+      closeCart,
       /** Open the drawer straight on the checkout tab (used by "Buy Now"). */
-      openCheckout: () => {
-        setCheckoutSignal((n) => n + 1);
-        setOpen(true);
-      },
+      openCheckout,
       addToCart,
       refreshCart,
       setQty,
@@ -164,7 +171,7 @@ export function CartProvider({ children }) {
       removeItem,
       clearCart,
     }),
-    [items, total, open, hydrated, loading, error, checkoutSignal, addToCart, refreshCart, setQty, inc, dec, removeItem, clearCart]
+    [items, count, total, open, hydrated, loading, error, checkoutSignal, openCart, closeCart, openCheckout, addToCart, refreshCart, setQty, inc, dec, removeItem, clearCart]
   );
 
   return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>;

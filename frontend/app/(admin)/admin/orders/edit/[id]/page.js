@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { use } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, formatTk } from "@/lib/api";
 import notify from "@/components/notify";
@@ -485,8 +484,8 @@ function EditOrder({ id }) {
   );
 }
 
-export default function OrderEditPage({ params }) {
-  const { id } = use(params);
+export default function OrderEditPage() {
+  const { id } = useParams();
   return (
     <PageGate permission="view orders">
       <EditOrder id={id} />

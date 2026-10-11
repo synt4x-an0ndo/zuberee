@@ -9,19 +9,19 @@ import "@/styles/css/19e5daabf9cb4494.css";
 import "@/styles/css/5b92b8a8352367c2.css";
 import "@/styles/css/5ff24143f2d57ea6.css";
 import "@/styles/account.css";
+import "@/styles/storefront-theme.css";
 
 /** Storefront shell: header + content + footer + cart drawer. */
 export default function SiteLayout({ children }) {
   return (
     <>
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <SiteHeader />
-      <main className="frontMain" style={{ paddingBottom: 80 }}>
-        <div style={{ minHeight: "60vh" }}>{children}</div>
+      <main id="main-content" className="frontMain site-main">
+        {children}
       </main>
       <SiteFooter />
       <CartDrawer />
-      {/* keep space for the mobile bottom nav */}
-      <div className="d-xl-none" style={{ height: 54 }} />
     </>
   );
 }

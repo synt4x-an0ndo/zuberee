@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import notify from "@/components/notify";
@@ -147,8 +148,8 @@ function EditCustomer({ id }) {
   );
 }
 
-export default function CustomerEditPage({ params }) {
-  const { id } = use(params);
+export default function CustomerEditPage() {
+  const { id } = useParams();
   return (
     <PageGate permission="view customers">
       <EditCustomer id={id} />
