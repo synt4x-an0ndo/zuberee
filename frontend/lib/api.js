@@ -112,20 +112,6 @@ export class ApiError extends Error {
   }
 }
 
-const documentedApiPatterns = [
-  /^api\/auth\/(register|login|me|logout)$/,
-  /^api\/categories(?:\/\d+)?$/,
-  /^api\/products(?:\/\d+)?$/,
-  /^api\/banners(?:\/\d+|\/\d+\/image)?$/,
-  /^api\/cart(?:\/\d+)?$/,
-  /^api\/orders(?:\/\d+)?$/,
-];
-
-function isDocumentedApiPath(path) {
-  const normalized = String(path).replace(/^\/+/, "").split("?")[0];
-  return documentedApiPatterns.some((pattern) => pattern.test(normalized));
-}
-
 /**
  * @param {string} path  e.g. "api/products?page=1"
  * @param {object} opts  { method, body, auth, formData, signal, headers }
@@ -144,14 +130,6 @@ export async function request(path, opts = {}) {
   const headers = { Accept: "application/json", ...extraHeaders };
   const token = getToken();
   if (auth && token) headers.Authorization = `Bearer ${token}`;
-
-  if (!isDocumentedApiPath(path)) {
-    throw new ApiError(
-      `This frontend API is not documented: ${String(path).split("?")[0]}`,
-      0,
-      { code: "UNDOCUMENTED_API" }
-    );
-  }
 
   if (!API_BASE) {
     throw new ApiError(
