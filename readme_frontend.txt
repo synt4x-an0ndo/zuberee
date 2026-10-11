@@ -477,3 +477,234 @@ API ENDPOINT: http://localhost:3001/api/banners/1/image
 - Invalid credentials: Return `401 Unauthorized`
 - Failure response: Return `500 Internal Server Error`
 - Failure message: `Something went wrong while logging in.`
+
+Account API
+Get My Profile API
+API endpoint: GET /api/account/me
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+Data source: Fetch from database using userId from token
+
+Includes: User info with all addresses sorted by createdAt desc
+
+Includes: _count.orders for total order count
+
+Additional query: deliveredCount for delivered orders
+
+Additional query: pendingCount for pending, confirmed, processing, shipped orders
+
+Response user fields: id, name, email, phone, image, role, joined_at, updated_at
+
+Response address fields: id, full_name, phone, address_line, city, postal_code, country, created_at
+
+Response stats fields: total_orders, pending_orders, delivered_orders, wishlist
+
+Role format: Lowercase (admin, customer)
+
+Image field: Profile picture URL or null
+
+Success response: success, message, data
+
+Success message: User profile loaded.
+
+Invalid/missing token: Return 401 Unauthorized
+
+User not found: Return 404 Not Found
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to load user profile.
+
+Update Profile API
+API endpoint: PUT /api/account/profile
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+Request fields: name (optional), phone (optional), image (optional)
+
+Validation: name must be non-empty string if provided
+
+Validation: phone must be string or null if provided
+
+Validation: image must be string URL or null if provided
+
+Empty phone handling: Empty string treated as null
+
+Empty image handling: Empty string treated as null
+
+Validation: At least one valid field must be provided
+
+Updatable fields: Only name, phone, image
+
+Non-updatable fields: email, role, passwordHash
+
+Success response: success, message, data
+
+Success message: Profile updated successfully.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Invalid name: Return 400 Bad Request
+
+Invalid phone: Return 400 Bad Request
+
+Invalid image: Return 400 Bad Request
+
+No valid fields: Return 400 Bad Request
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to update profile.
+
+Create Address API
+API endpoint: POST /api/account/addresses
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+Request fields: fullName or full_name, phone, addressLine or address_line, city, postalCode or postal_code (optional), country (optional, default Bangladesh)
+
+Validation: fullName required and non-empty
+
+Validation: phone required and non-empty
+
+Validation: addressLine required and non-empty
+
+Validation: city required and non-empty
+
+User association: Address saved with userId from token
+
+Success response: success, message, data
+
+Success message: Address added successfully.
+
+Success status: 201 Created
+
+Invalid/missing token: Return 401 Unauthorized
+
+Missing required fields: Return 400 Bad Request
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to add address.
+
+Get My Addresses API
+API endpoint: GET /api/account/addresses
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+Filter: Only addresses belonging to token userId
+
+Ordering: Addresses ordered by createdAt desc
+
+Success response: success, message, data
+
+Success message: Addresses loaded.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to load addresses.
+
+Update Address API
+API endpoint: PUT /api/account/addresses/:id
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+URL param: id is address ID
+
+Ownership check: Address must belong to token userId
+
+Request fields: fullName or full_name, phone, addressLine or address_line, city, postalCode or postal_code, country
+
+Validation: Address ID must be valid positive integer
+
+Validation: Address must exist and belong to the user
+
+Validation: Provided fields must not be empty strings
+
+Validation: At least one valid field must be provided
+
+Success response: success, message, data
+
+Success message: Address updated successfully.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Invalid address ID: Return 400 Bad Request
+
+Address not found: Return 404 Not Found
+
+Empty field: Return 400 Bad Request
+
+No valid fields: Return 400 Bad Request
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to update address.
+
+Delete Address API
+API endpoint: DELETE /api/account/addresses/:id
+
+Authentication: JWT required
+
+Authorization: Any logged-in user
+
+Authorization header: Bearer JWT token
+
+Token validation: Verify using authenticateRequest()
+
+URL param: id is address ID
+
+Ownership check: Address must belong to token userId
+
+Validation: Address ID must be valid positive integer
+
+Validation: Address must exist and belong to the user
+
+Delete behavior: Permanently deletes address row
+
+Success response: success, message, data
+
+Success message: Address deleted successfully.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Invalid address ID: Return 400 Bad Request
+
+Address not found: Return 404 Not Found
+
+Failure response: Return 500 Internal Server Error
+
+Failure message: Failed to delete address.
