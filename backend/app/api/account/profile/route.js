@@ -1,80 +1,131 @@
-import bcrypt from "bcryptjs";
 import prisma from "../../../../directory/prisma/prisma.js";
-import { authenticateRequest } from "@/directory/auth/auth.js";
+import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
-function publicUser(user) {
-    return {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        createdAt: user.createdAt,
-        addresses: user.addresses || [],
-    };
-}
-
-export async function GET(request) {
-    const auth = await authenticateRequest(request);
-    if (!auth.authenticated) {
-        return Response.json({ success: false, message: auth.message, data: null }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-        where: { id: Number(auth.user.userId) },
-        include: { addresses: { orderBy: { createdAt: "desc" } } },
-    });
-
-    if (!user) {
-        return Response.json({ success: false, message: "User not found.", data: null }, { status: 404 });
-    }
-
-    return Response.json({ success: true, message: "Profile loaded.", data: publicUser(user) });
-}
-
-export async function PATCH(request) {
-    const auth = await authenticateRequest(request);
-    if (!auth.authenticated) {
-        return Response.json({ success: false, message: auth.message, data: null }, { status: 401 });
-    }
-
+export async function PUT(request) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated) {
+            return Response.json(
+                {
+                    success: false,
+                    message: auth.message,
+                    data: null,
+                },
+                { status: 401 }
+            );
+        }
+
         const body = await request.json();
-        const name = String(body.name || "").trim();
-        const email = String(body.email || "").trim().toLowerCase();
-        const phone = String(body.phone || "").trim() || null;
 
-        if (!name || !email) {
-            return Response.json({ success: false, message: "Name and email are required.", data: null }, { status: 400 });
-        }
+        const { name, phone, image } = body;
 
-        const duplicate = await prisma.user.findFirst({
-            where: { email, NOT: { id: Number(auth.user.userId) } },
-        });
-        if (duplicate) {
-            return Response.json({ success: false, message: "Email is already registered.", data: null }, { status: 409 });
-        }
+        const updateData = {};
 
-        const data = { name, email, phone };
-        if (body.password) {
-            if (String(body.password).length < 8) {
-                return Response.json({ success: false, message: "Password must be at least 8 characters long.", data: null }, { status: 400 });
+        if (name !== undefined) {
+            if (typeof name !== "string" || !name.trim()) {
+                return Response.json(
+                    {
+                        success: false,
+                        message: "Name must be a non-empty string.",
+                        data: null,
+                    },
+                    { status: 400 }
+                );
             }
-            if (body.password !== body.confirmPassword) {
-                return Response.json({ success: false, message: "Password and confirm password do not match.", data: null }, { status: 400 });
-            }
-            data.passwordHash = await bcrypt.hash(body.password, 10);
+
+            updateData.name = name.trim();
         }
 
-        const user = await prisma.user.update({
-            where: { id: Number(auth.user.userId) },
-            data,
-            include: { addresses: { orderBy: { createdAt: "desc" } } },
+        if (phone !== undefined) {
+            if (phone !== null && typeof phone !== "string") {
+                return Response.json(
+                    {
+                        success: false,
+                        message: "Phone must be a string or null.",
+                        data: null,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            updateData.phone =
+                phone === null || phone.trim() === ""
+                    ? null
+                    : phone.trim();
+        }
+
+        if (image !== undefined) {
+            if (image !== null && typeof image !== "string") {
+                return Response.json(
+                    {
+                        success: false,
+                        message: "Image must be a string URL or null.",
+                        data: null,
+                    },
+                    { status: 400 }
+                );
+            }
+
+            updateData.image =
+                image === null || image.trim() === ""
+                    ? null
+                    : image.trim();
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return Response.json(
+                {
+                    success: false,
+                    message: "No valid fields to update.",
+                    data: null,
+                },
+                { status: 400 }
+            );
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: auth.user.userId },
+            data: updateData,
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                image: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         });
 
-        return Response.json({ success: true, message: "Profile updated.", data: publicUser(user) });
+        return Response.json(
+            {
+                success: true,
+                message: "Profile updated successfully.",
+                data: {
+                    id: updatedUser.id,
+                    name: updatedUser.name,
+                    email: updatedUser.email,
+                    phone: updatedUser.phone,
+                    image: updatedUser.image,
+                    role: updatedUser.role.toLowerCase(),
+                    joined_at: updatedUser.createdAt,
+                    updated_at: updatedUser.updatedAt,
+                },
+            },
+            { status: 200 }
+        );
     } catch (error) {
-        console.error("Profile API error:", error);
-        return Response.json({ success: false, message: "Unable to update profile.", data: null }, { status: 500 });
+        console.error("Update profile API error:", error);
+
+        return Response.json(
+            {
+                success: false,
+                message: "Failed to update profile.",
+                data: null,
+            },
+            { status: 500 }
+        );
     }
 }
