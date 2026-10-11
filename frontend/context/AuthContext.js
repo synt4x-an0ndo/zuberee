@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
         // /auth/me verifies the token; the profile endpoint supplies the name,
         // phone, and address fields needed by the account and checkout screens.
         try {
-          const profileResponse = await api.get("api/account/profile");
+          const profileResponse = await api.get("api/account/me");
           const profile = userFromResponse(profileResponse);
           if (profile) currentUser = { ...currentUser, ...profile };
         } catch {
@@ -88,7 +88,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateProfile = useCallback(async (details) => {
-    const response = await api.patch("api/account/profile", details);
+    const response = await api.put("api/account/profile", details);
     const updatedUser = userFromResponse(response);
     setUser((current) => ({ ...current, ...(updatedUser || {}) }));
     return updatedUser;
