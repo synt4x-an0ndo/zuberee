@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, formatTk, imgUrl } from "@/lib/api";
 import { normalizeOrder } from "@/lib/order";
@@ -163,8 +164,8 @@ function Invoice({ id }) {
   );
 }
 
-export default function InvoicePage({ params }) {
-  const { orderId } = use(params);
+export default function InvoicePage() {
+  const { orderId } = useParams();
   return (
     <PageGate permission="view orders">
       <Invoice id={orderId} />

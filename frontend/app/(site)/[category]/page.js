@@ -1,9 +1,9 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
-import { api, imgUrl, unwrapList } from "@/lib/api";
-import notify from "@/components/notify";
+import { api, imgUrl, normalizedProductStatus, productColors, unwrapList } from "@/lib/api";
 import Loader from "@/components/Loader";
 import "@/styles/css/b2790d3f6ef2e460.css";
 
@@ -12,53 +12,49 @@ import "@/styles/css/b2790d3f6ef2e460.css";
  *  - Products : GET api/products?category={slug}
  *  - Filters  : derived from the product response because the backend exposes
  *               no separate category-filter endpoint.
- *
- * NOTE: `params` arrives as a Promise in Next 14 client components -> unwrap
- * with React.use().
+ * The route slug is read with Next.js useParams(), which is compatible with
+ * this app's React 18 runtime and avoids depending on React 19's `use` hook.
  */
-export default function CategoryPage({ params }) {
-  const { category } = use(params);
+export default function CategoryPage() {
+  const { category } = useParams();
 
   const [allProducts, setAllProducts] = useState([]);
-  const [pagination, setPagination] = useState(null);
   const [activeSizes, setActiveSizes] = useState([]);
   const [activeColors, setActiveColors] = useState([]);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [meta, setMeta] = useState(null); // first response (category id/name)
+  const [visibleCount, setVisibleCount] = useState(24);
+  const [loadError, setLoadError] = useState("");
+  const [meta, setMeta] = useState(null);
+  const requestId = useRef(0);
 
-  const buildQuery = useCallback(
-    (page) => {
-      const qs = new URLSearchParams({ category });
-      return qs.toString();
-    },
-    [category]
-  );
+  const fetchProducts = useCallback(async () => {
+    const currentRequestId = ++requestId.current;
+    setLoading(true);
+    setLoadError("");
+    try {
+      const query = category
+        ? `?${new URLSearchParams({ category }).toString()}`
+        : "";
+      const response = await api.get(`api/products?${query}`, { auth: false });
+      if (currentRequestId !== requestId.current) return;
+      const list = unwrapList(response, ["products"]);
+      setAllProducts(list);
+      const categoryRecord = list.find((product) => product.category?.[0])?.category?.[0];
+      setMeta(categoryRecord || null);
+    } catch (error) {
+      if (currentRequestId !== requestId.current) return;
+      setLoadError(error?.message || "Products could not be loaded.");
+      setAllProducts([]);
+      setMeta(null);
+    } finally {
+      if (currentRequestId === requestId.current) setLoading(false);
+    }
+  }, [category]);
 
-  const fetchProducts = useCallback(
-    async (page = 1, append = false) => {
-      if (page === 1) setLoading(true);
-      else setLoadingMore(true);
-      try {
-        const r = await api.get(`api/products?${buildQuery(page)}`, { auth: false });
-        const list = unwrapList(r, ["products"]);
-        setAllProducts((prev) => (append ? [...prev, ...list] : list));
-        setPagination({ total: list.length, current_page: 1, last_page: 1, has_more: false });
-        if (list[0]?.category?.[0]) setMeta(list[0].category[0]);
-      } catch {
-        notify.error("Failed to load products");
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
-      }
-    },
-    [buildQuery]
-  );
-
-  /* products (refetch on any filter change) */
   useEffect(() => {
-    fetchProducts(1, false);
+    fetchProducts();
+    return () => { requestId.current += 1; };
   }, [fetchProducts]);
 
   const filters = useMemo(() => {
@@ -72,7 +68,7 @@ export default function CategoryPage({ params }) {
         current.available += Number(variant.pivot?.stock) || 0;
         sizes.set(size, current);
       });
-      (product.colors || []).forEach((color) => {
+      productColors(product).forEach((color) => {
         if (!color.name) return;
         const current = colors.get(color.name) || {
           name: color.name,
@@ -80,7 +76,9 @@ export default function CategoryPage({ params }) {
           image: color.image,
           available: 0,
         };
-        current.available += Number(product.stock) || 0;
+        const available = (product.sizes || []).some((size) => Number(size.pivot?.stock) > 0) ||
+          normalizedProductStatus(product) === "in-stock";
+        current.available += available ? 1 : 0;
         colors.set(color.name, current);
       });
     });
@@ -91,21 +89,27 @@ export default function CategoryPage({ params }) {
     const matchesSize = !activeSizes.length || (product.sizes || []).some((size) =>
       activeSizes.includes(String(size.size))
     );
-    const matchesColor = !activeColors.length || (product.colors || []).some((color) =>
+    const matchesColor = !activeColors.length || productColors(product).some((color) =>
       activeColors.includes(color.name)
     );
-    const matchesStock = !inStockOnly || product.status === "in-stock" ||
+    const matchesStock = !inStockOnly || normalizedProductStatus(product) === "in-stock" ||
       (product.sizes || []).some((size) => Number(size.pivot?.stock) > 0);
     return matchesSize && matchesColor && matchesStock;
   }), [activeColors, activeSizes, allProducts, inStockOnly]);
 
-  const toggle = (list, setList, value) =>
-    setList((arr) =>
-      arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [activeSizes, activeColors, inStockOnly, category]);
+
+  const toggle = (setList, value) =>
+    setList((current) => current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value]
     );
 
-  const hasFilters =
-    activeSizes.length > 0 || activeColors.length > 0 || inStockOnly;
+  const hasFilters = activeSizes.length > 0 || activeColors.length > 0 || inStockOnly;
+  const canLoadMore = visibleCount < products.length;
+  const loadMore = () => setVisibleCount((count) => Math.min(count + 24, products.length));
 
   return (
     <div className="container py-4">
@@ -114,9 +118,7 @@ export default function CategoryPage({ params }) {
         <h4 className="fw-bold mb-0" style={{ color: "var(--primary-color)" }}>
           {filters?.category?.name || category.replace(/-/g, " ")}
         </h4>
-        {pagination?.total != null && (
-          <span className="text-muted small">{pagination.total} products</span>
-        )}
+        {!loading && <span className="text-muted small">{products.length} products</span>}
       </div>
 
       {/* -------- filter bar -------- */}
@@ -148,7 +150,7 @@ export default function CategoryPage({ params }) {
                       background: active ? "var(--primary-color)" : "#fff",
                       color: active ? "#fff" : "#333",
                     }}
-                    onClick={() => toggle(activeSizes, setActiveSizes, String(s.size))}
+                    onClick={() => toggle(setActiveSizes, String(s.size))}
                   >
                     {s.size}
                   </button>
@@ -180,16 +182,21 @@ export default function CategoryPage({ params }) {
                 const active = activeColors.includes(c.name);
                 const out = (c.available ?? 0) <= 0;
                 const key = `${c.name}-${i}`;
+                const swatchImage = imgUrl(c.image);
+                const swatchCode = /^#[\da-f]{3,8}$/i.test(String(c.code || "")) ? c.code : "#d0d5dd";
                 return (
                   <button
                     key={key}
                     type="button"
                     className={`color-mini-swatch btn btn-sm border d-flex align-items-center gap-1 ${active ? "bg-light" : ""} ${out ? "opacity-50" : ""}`}
+                    disabled={out}
+                    aria-pressed={active}
                     style={{
                       borderColor: active ? "var(--primary-color)" : "#dee2e6",
                       fontSize: 11,
                     }}
-                    onClick={() => toggle(activeColors, setActiveColors, c.name)}
+                    onClick={() => toggle(setActiveColors, c.name)}
+                    aria-label={`Filter by ${c.name}${out ? ", sold out" : ""}`}
                     title={out ? "Sold out" : `${c.available} available`}
                   >
                     <span
@@ -197,10 +204,12 @@ export default function CategoryPage({ params }) {
                       style={{
                         width: 14,
                         height: 14,
-                        background: c.image ? `url(${imgUrl(c.image)}) center/cover` : c.code || "#d0d5dd",
+                        backgroundColor: swatchCode,
                         border: "1px solid #ccc",
                       }}
-                    />
+                    >
+                      {swatchImage && <img src={swatchImage} alt="" loading="lazy" />}
+                    </span>
                     <span className="color-mini-name">{c.name}</span>
                     {out && <span className="text-muted">(Sold out)</span>}
                   </button>
@@ -240,33 +249,36 @@ export default function CategoryPage({ params }) {
       {/* -------- products -------- */}
       {loading ? (
         <Loader />
+      ) : loadError && allProducts.length === 0 ? (
+        <div className="empty-state text-center py-5">
+          <p className="text-muted">{loadError}</p>
+          <button type="button" className="btn btn-outline-secondary" onClick={() => fetchProducts(1)}>
+            Try again
+          </button>
+        </div>
       ) : products.length === 0 ? (
-        <div className="text-center py-5 text-muted">No products found</div>
+        <div className="empty-state text-center py-5">
+          <h2 className="h5">No products found</h2>
+          <p className="text-muted mb-0">Try changing or clearing your filters.</p>
+        </div>
       ) : (
         <>
           <div className="row mx-0">
-            {products.map((p, i) => (
-              <div key={`${p.id}-${i}`} className="col-6 col-md-4 col-lg-3 px-1 px-md-2 mb-3">
-                <ProductCard product={p} />
+            {products.slice(0, visibleCount).map((product, index) => (
+              <div key={`${product.id}-${index}`} className="col-6 col-md-4 col-lg-3 px-1 px-md-2 mb-3">
+                <ProductCard product={product} />
               </div>
             ))}
           </div>
 
-          {pagination?.has_more && (
+          {canLoadMore && (
             <div className="text-center my-4">
               <button
+                type="button"
                 className="slot-loadmore-btn"
-                disabled={loadingMore}
-                onClick={() => fetchProducts((pagination.current_page || 1) + 1, true)}
+                onClick={loadMore}
               >
-                {loadingMore ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" />
-                    Loading...
-                  </>
-                ) : (
-                  "Load More"
-                )}
+                Load more
               </button>
             </div>
           )}

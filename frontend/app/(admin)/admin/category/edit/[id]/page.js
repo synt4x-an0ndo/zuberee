@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import CategoryForm from "@/components/admin/CategoryForm";
 import PageGate from "@/components/admin/PageGate";
 import { api } from "@/lib/api";
@@ -47,8 +48,8 @@ function EditForm({ id }) {
   return <CategoryForm id={id} initial={initial} />;
 }
 
-export default function CategoryEditPage({ params }) {
-  const { id } = use(params);
+export default function CategoryEditPage() {
+  const { id } = useParams();
   return (
     <PageGate permission="edit categories">
       <EditForm id={id} />

@@ -8,6 +8,14 @@ import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
 
+function broadcastBannerChange() {
+  try {
+    window.localStorage.setItem("banner-sync", String(Date.now()));
+  } catch {
+    // Local storage may be unavailable; the next navigation will reload banners.
+  }
+}
+
 /**
  * Homepage banners (/dashboard/banners)
  *  - GET    api/banners
@@ -24,10 +32,6 @@ function BannersPage() {
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const fileRefs = useRef({});
-
-  const broadcastChange = () => {
-    window.localStorage.setItem("banner-sync", String(Date.now()));
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,7 +90,7 @@ function BannersPage() {
       notify.success("Banners saved successfully", "Banners Saved");
       setDrafts([{ image: null, link: "", display_priority: "0", is_active: "true" }]);
       await load();
-      broadcastChange();
+      broadcastBannerChange();
     } catch (err) {
       notify.error(err.message || "Failed", "Could not save banners");
     } finally {
@@ -112,7 +116,7 @@ function BannersPage() {
         return next;
       });
       notify.success("Banner deleted", "Banner Deleted");
-      broadcastChange();
+      broadcastBannerChange();
     } catch (e) {
       notify.error(e.message || "Failed to delete", "Could not delete banner");
     }
@@ -131,7 +135,7 @@ function BannersPage() {
       await api.upload(`api/banners/${id}`, fd, { method: "PUT" });
       notify.success("Banner updated successfully", "Banner Updated");
       await load();
-      broadcastChange();
+      broadcastBannerChange();
     } catch (e) {
       notify.error(e.message || "Failed to update banner", "Could not update banner");
     }

@@ -1,6 +1,5 @@
 /* ------------------------------------------------------------------
- * Global toast styling - top-left notifications (react-toastify).
- * Additive refinements only; react-toastify provides the base look,
+ * Global styling for top-left notifications.
  * entrance/exit animations and the coloured theme.
  * ------------------------------------------------------------------ */
 
@@ -45,3 +44,26 @@
     max-width: calc(100vw - 24px) !important;
   }
 }
+.eyara-toast-host {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 2000;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+.eyara-toast {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  color: #fff;
+  background: #343a40;
+  box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 18%);
+  font-size: 0.875rem;
+}
+
+.eyara-toast--success { background: #198754; }
+.eyara-toast--error { background: #dc3545; }
+.eyara-toast--warning { background: #fd7e14; }
+.eyara-toast--info { background: #0d6efd; }

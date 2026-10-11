@@ -79,7 +79,7 @@ function Summary() {
       setError("");
       try {
         const r = await api.get(`api/dashboard/summary?${qs}`);
-        if (alive) setData(r);
+        if (alive) setData(r?.data ?? r);
       } catch (e) {
         if (alive) setError(e.message || "The dashboard data could not be loaded.");
       } finally {

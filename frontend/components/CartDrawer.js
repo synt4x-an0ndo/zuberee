@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FaMinus, FaPlus, FaTrash, FaXmark as FaTimes, FaArrowLeft, FaBagShopping as FaShoppingBag } from "react-icons/fa6";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatTk, imgUrl, API_BASE } from "@/lib/api";
+import { api, formatTk, imgUrl } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 import notify from "@/components/notify";
 
@@ -12,10 +12,7 @@ import notify from "@/components/notify";
  * Slide-in cart + checkout drawer (same flow as the original site):
  *  - cart tab: qty steppers, remove, subtotal
  *  - checkout tab: name / phone / district / address / COD
- *  - shipping quote:  GET  api/shipping-costs-latest
  *  - place order:     POST api/orders
- *  - abandoned-cart:  POST api/track-abandoned-checkout   (X-Session-ID)
- *  - conversion:      POST api/mark-checkout-converted
  */
 export default function CartDrawer() {
   const {
@@ -40,44 +37,24 @@ export default function CartDrawer() {
     address: "",
     district: "",
     payment_method: "cash",
-    delivery_notes: "",
   });
   const [shipping, setShipping] = useState(0);
+  const [shippingStatus, setShippingStatus] = useState("idle");
   const [placing, setPlacing] = useState(false);
-  const trackedOnce = useRef(false);
+  const closeButtonRef = useRef(null);
 
   const grand = total + shipping;
 
-  const sessionId = () => {
-    let s = sessionStorage.getItem("checkout_session_id");
-    if (!s) {
-      s = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      sessionStorage.setItem("checkout_session_id", s);
-    }
-    return s;
-  };
-
-  /* Shipping quote when district changes (same rule as original) */
+  /* Shipping quotes are unavailable until the backend endpoint is provided. */
   useEffect(() => {
-    if (!form.district) return;
-    let alive = true;
-    (async () => {
-      try {
-        const r = await api.get("api/shipping-costs-latest", { auth: false });
-        const data = r?.data || r;
-        if (!alive) return;
-        const cost =
-          form.district === "dhaka"
-            ? data.inside_dhaka || data.one_shipping_cost || 0
-            : data.outside_dhaka || data.one_shipping_cost || 0;
-        setShipping(Number(cost) || 0);
-      } catch {
-        if (alive) setShipping(0);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    if (!form.district) {
+      setShipping(0);
+      setShippingStatus("idle");
+      return undefined;
+    }
+    setShipping(0);
+    setShippingStatus("unavailable");
+    return undefined;
   }, [form.district]);
 
   /* "Buy Now" -> open drawer on the checkout tab */
@@ -85,57 +62,24 @@ export default function CartDrawer() {
     if (checkoutSignal > 0) setTab("checkout");
   }, [checkoutSignal]);
 
-  /* Abandoned checkout tracking (fire & forget, once per drawer session) */
-  const trackAbandoned = async () => {
-    if (trackedOnce.current) return;
-    if (!form.phone || items.length === 0) return;
-    trackedOnce.current = true;
-    try {
-      const payload = {
-        name: form.name,
-        phone: form.phone,
-        address: form.address,
-        cart_items: items,
-      };
-      await fetch(`${API_BASE}/api/track-abandoned-checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Session-ID": sessionId(),
-        },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      });
-    } catch {
-      /* tracking must never block checkout */
-    }
-  };
-
   useEffect(() => {
-    if (!open) return;
-    trackedOnce.current = false;
-    const onLeave = () => trackAbandoned();
-    window.addEventListener("beforeunload", onLeave);
-    const onVis = () => {
-      if (document.visibilityState === "hidden") onLeave();
-    };
-    document.addEventListener("visibilitychange", onVis);
+    if (!open) return undefined;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      window.removeEventListener("beforeunload", onLeave);
-      document.removeEventListener("visibilitychange", onVis);
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = previousOverflow;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tab, items, form.phone]);
+  }, [open]);
 
   useEffect(() => {
-    if (open && tab === "checkout" && form.phone) {
-      const t = setTimeout(trackAbandoned, 3000);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, tab, form.phone]);
+    if (!open) return undefined;
+    closeButtonRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closeCart();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, closeCart]);
 
   if (!open) return null;
 
@@ -149,11 +93,9 @@ export default function CartDrawer() {
       return;
     }
     setPlacing(true);
-    const cookieVal = (name) =>
-      (document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`)) || [])[1] || null;
 
     const body = {
-      shippingFee: Number(shipping) || 0,
+      shippingFee: shippingStatus === "ready" ? Number(shipping) || 0 : 0,
       ...(isAuthenticated
         ? { shippingAddress: [form.address, form.district].filter(Boolean).join(", ") }
         : {
@@ -163,26 +105,24 @@ export default function CartDrawer() {
         }),
     };
     try {
-      if (form.phone) {
-        try {
-          await api.post("api/mark-checkout-converted", {
-            session_id: sessionId(),
-            phone: form.phone,
-          });
-        } catch {
-          /* non-critical */
-        }
-      }
       await api.post("api/orders", body);
-      await refreshCart();
-      notify.success("Thank you for your purchase.", "Order Placed!");
+      try {
+        await refreshCart();
+      } catch {
+        // The order has succeeded; a failed cart refresh must not report failure.
+      }
+      notify.success(
+        shippingStatus === "unavailable"
+          ? "Order placed. The store will confirm delivery charges with you."
+          : "Thank you for your purchase.",
+        "Order placed!"
+      );
       setForm({
         name: "",
         phone: "",
         address: "",
         district: "",
         payment_method: "cash",
-        delivery_notes: "",
       });
       setShipping(0);
       setTab("cart");
@@ -190,7 +130,12 @@ export default function CartDrawer() {
     } catch (err) {
       const shortfalls = err?.data?.shortfalls;
       if (Array.isArray(shortfalls) && shortfalls.length) {
-        notify.error(shortfalls.map((s) => s.message || s).join("\n"), "Order Failed");
+        const details = shortfalls.map((item) => {
+          if (typeof item === "string") return item;
+          const label = [item.title, item.variant_label].filter(Boolean).join(" — ");
+          return `${label || "An item"}: ${item.message || `${item.available ?? 0} available`}`;
+        });
+        notify.error(details.join("\n"), "Order failed");
       } else {
         notify.error(err.message || "Failed to place order", "Order Failed");
       }
@@ -202,34 +147,30 @@ export default function CartDrawer() {
   return (
     <>
       <div
-        className="position-fixed top-0 start-0 w-100 h-100"
-        style={{ background: "rgba(0,0,0,.5)", zIndex: 1050 }}
+        className="cart-drawer-overlay position-fixed top-0 start-0 w-100 h-100"
+        aria-hidden="true"
         onClick={closeCart}
       />
       <aside
-        className="position-fixed top-0 end-0 h-100 bg-white d-flex flex-column"
-        style={{ width: "min(430px, 92vw)", zIndex: 1060, boxShadow: "-6px 0 24px rgba(0,0,0,.15)" }}
+        className="cart-drawer cart-drawer-panel position-fixed top-0 end-0 h-100 bg-white d-flex flex-column"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cart-drawer-title"
+        tabIndex={-1}
       >
         {/* header */}
         <div className="cart-drawer-header d-flex align-items-center justify-content-between border-bottom">
-          <h5 className="mb-0 fw-bold">
-            {tab === "cart" ? (
-              <>
-                <FaShoppingBag className="me-2" style={{ color: "var(--primary-color)" }} />
-                Cart
-              </>
-            ) : (
-              <>
-                <FaArrowLeft
-                  className="me-2"
-                  style={{ cursor: "pointer", color: "var(--primary-color)" }}
-                  onClick={() => setTab("cart")}
-                />
-                Checkout
-              </>
+          <div className="d-flex align-items-center gap-2">
+            {tab === "checkout" && (
+              <button type="button" className="cart-back-button" onClick={() => setTab("cart")} aria-label="Back to cart">
+                <FaArrowLeft />
+              </button>
             )}
-          </h5>
-          <button className="border-0 bg-transparent" onClick={closeCart} aria-label="Close cart">
+            <h2 id="cart-drawer-title" className="h5 mb-0 fw-bold">
+              {tab === "cart" ? <><FaShoppingBag className="me-2" aria-hidden="true" />Cart</> : "Checkout"}
+            </h2>
+          </div>
+          <button ref={closeButtonRef} type="button" className="cart-close-button" onClick={closeCart} aria-label="Close cart">
             <FaTimes size={18} />
           </button>
         </div>
@@ -283,7 +224,9 @@ export default function CartDrawer() {
                       </div>
                       <div className="d-flex align-items-center gap-2 mt-1">
                         <button
+                          type="button"
                           className="cart-minus border bg-white rounded-circle"
+                          aria-label={`Decrease quantity of ${it.title}`}
                           style={{ width: 24, height: 24 }}
                           onClick={() => dec(it.lineId)}
                         >
@@ -291,16 +234,19 @@ export default function CartDrawer() {
                         </button>
                         <span className="small fw-semibold">{it.qty}</span>
                         <button
+                          type="button"
                           className="cart-plus border bg-white rounded-circle"
+                          aria-label={`Increase quantity of ${it.title}`}
                           style={{ width: 24, height: 24 }}
                           onClick={() => inc(it.lineId)}
                         >
                           <FaPlus size={10} />
                         </button>
                         <button
-                          className="border-0 bg-transparent text-danger ms-1"
+                          type="button"
+                          className="cart-remove-button border-0 bg-transparent text-danger ms-1"
                           onClick={() => removeItem(it.lineId)}
-                          aria-label="Remove"
+                          aria-label={`Remove ${it.title} from cart`}
                         >
                           <FaTrash size={12} />
                         </button>
@@ -316,8 +262,11 @@ export default function CartDrawer() {
           ) : (
             <form className="checkout-form" onSubmit={placeOrder}>
               <div className="mb-3">
-                <label className="form-label small fw-semibold">👤 Full Name</label>
+                <label className="form-label small fw-semibold" htmlFor="checkout-name">Full name</label>
                 <input
+                  id="checkout-name"
+                  name="name"
+                  autoComplete="name"
                   className="form-control"
                   required={!isAuthenticated}
                   value={form.name}
@@ -326,8 +275,13 @@ export default function CartDrawer() {
                 />
               </div>
               <div className="mb-3">
-                <label className="form-label small fw-semibold">📞 Phone Number</label>
+                <label className="form-label small fw-semibold" htmlFor="checkout-phone">Phone number</label>
                 <input
+                  id="checkout-phone"
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
                   className="form-control"
                   required={!isAuthenticated}
                   value={form.phone}
@@ -336,8 +290,10 @@ export default function CartDrawer() {
                 />
               </div>
               <div className="mb-3">
-                <label className="form-label small fw-semibold">📍 District</label>
+                <label className="form-label small fw-semibold" htmlFor="checkout-district">District</label>
                 <select
+                  id="checkout-district"
+                  name="district"
                   className="form-select"
                   required
                   value={form.district}
@@ -352,43 +308,46 @@ export default function CartDrawer() {
                 </select>
               </div>
               <div className="mb-3">
-                <label className="form-label small fw-semibold">
-                  🏠 Full Address <span className="text-muted">(Required)</span>
+                <label className="form-label small fw-semibold" htmlFor="checkout-address">
+                  Full delivery address <span className="text-muted">(required)</span>
                 </label>
                 <textarea
+                  id="checkout-address"
+                  name="address"
+                  autoComplete="street-address"
                   className="form-control"
-                  rows={2}
+                  rows={3}
                   required
                   value={form.address}
                   onChange={(e) => setField("address", e.target.value)}
                   placeholder="House, road, area..."
                 />
               </div>
-              <div className="mb-3">
-                <label className="form-label small fw-semibold">🚚 Delivery Notes</label>
-                <textarea
-                  className="form-control"
-                  rows={2}
-                  value={form.delivery_notes}
-                  onChange={(e) => setField("delivery_notes", e.target.value)}
-                  placeholder="Any instructions for delivery..."
-                />
-              </div>
-
               <div className="border rounded p-3 mb-3 bg-light">
                 <div className="d-flex justify-content-between small mb-1">
-                  <span>Subtotal:</span>
+                  <span>Items subtotal:</span>
                   <span className="fw-semibold">{formatTk(total)}৳</span>
                 </div>
                 <div className="d-flex justify-content-between small mb-1">
-                  <span>Shipping:</span>
+                  <span>Delivery fee:</span>
                   <span className="fw-semibold">
-                    {form.district ? `${formatTk(shipping)}৳` : "Calculated at checkout"}
+                    {shippingStatus === "ready"
+                      ? `${formatTk(shipping)}৳`
+                      : shippingStatus === "loading"
+                        ? "Checking…"
+                        : shippingStatus === "unavailable"
+                          ? "To be confirmed"
+                          : "Select a district"}
                   </span>
                 </div>
+                {shippingStatus === "unavailable" && (
+                  <p className="cart-shipping-note" role="status">
+                    Delivery fees could not be retrieved. The store will confirm the charge with you before fulfillment.
+                  </p>
+                )}
                 <hr className="my-2" />
                 <div className="d-flex justify-content-between">
-                  <span className="fw-bold">Total Amount:</span>
+                  <span className="fw-bold">{shippingStatus === "ready" ? "Total amount:" : "Items total:"}</span>
                   <span className="fw-bold" style={{ color: "var(--primary-color)" }}>
                     {formatTk(grand)}৳
                   </span>

@@ -243,16 +243,18 @@ export default function AdminShell({ children }) {
       >
         <div className="d-flex justify-content-between align-items-center sideBar_icon_siteName">
           <div style={{ display: open || mobile ? "block" : "none", minWidth: 0 }}>
-            <Link href="/admin">
-              <span className="sidebar-brand-logo" aria-hidden="true" />
+            <Link href="/admin" className="sidebar-brand-link" aria-label="Eyara administration dashboard">
+              <span className="sidebar-brand-logo" aria-hidden="true">Eyara<span>Admin</span></span>
             </Link>
           </div>
           <button
+            type="button"
             className="sidebar-toggle-btn"
             onClick={() =>
               isMobile ? setMobile((v) => !v) : setOpen((v) => !v)
             }
             aria-label="Toggle sidebar"
+            aria-expanded={isMobile ? mobile : open}
           >
             <FaBars className="sideBarIcon" />
           </button>
@@ -286,25 +288,24 @@ export default function AdminShell({ children }) {
               const isOpen = expanded === item.label;
               return (
                 <div key={item.label} className="mb-2">
-                  <div
-                    className={`sidebar-menu-header d-flex align-items-center justify-content-between gap-2 text-white ${isOpen ? "active" : ""
-                      }`}
+                  <button
+                    type="button"
+                    className={`sidebar-menu-header d-flex align-items-center justify-content-between gap-2 text-white ${isOpen ? "active" : ""}`}
+                    aria-expanded={isOpen}
                     onClick={() => setExpanded(isOpen ? null : item.label)}
                   >
-                    <div className="d-flex align-items-center gap-2">
+                    <span className="d-flex align-items-center gap-2">
                       <item.Icon className="text-white sidebar-nav-icon" aria-hidden="true" />
                       {labelVisible && <span className="sidebar-label">{item.label}</span>}
-                    </div>
+                    </span>
                     {labelVisible && (
                       <FaChevronDown
                         size={10}
-                        style={{
-                          transform: isOpen ? "rotate(180deg)" : "none",
-                          transition: ".2s",
-                        }}
+                        aria-hidden="true"
+                        style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: ".2s" }}
                       />
                     )}
-                  </div>
+                  </button>
                   {isOpen && labelVisible && (
                     <div className="sidebar-submenu">
                       {item.submenus
@@ -339,8 +340,10 @@ export default function AdminShell({ children }) {
         {/* top bar */}
         <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
           <button
+            type="button"
             className="btn btn-sm btn-outline-secondary d-md-none"
             onClick={() => setMobile(true)}
+            aria-label="Open admin navigation"
           >
             <FaBars />
           </button>
@@ -349,7 +352,7 @@ export default function AdminShell({ children }) {
             <span className="small text-muted d-none d-sm-inline">
               {auth.userName}
             </span>
-            <button className="btn btn-sm btn-outline-danger" onClick={auth.logout}>
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={auth.logout}>
               <FaRightFromBracket className="me-1" /> Logout
             </button>
           </div>
