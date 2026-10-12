@@ -1,0 +1,158 @@
+import prisma from "../../../directory/prisma/prisma.js";
+
+function formatSearchProduct(product) {
+    return {
+        id: product.id,
+        title: product.name,
+        sku: product.sku,
+        price: Number(product.price),
+        discount:
+            product.discount === null ? null : Number(product.discount),
+        status: product.status.toLowerCase().replace("_", "-"),
+        short_description: product.shortDescription,
+        description: product.description,
+        video_url: product.videoUrl,
+        images: product.images.map((image) => ({
+            id: image.id,
+            image: image.imageUrl,
+            position: image.isPrimary ? 0 : 1,
+        })),
+        colors: product.colors.map((color) => ({
+            id: String(color.id),
+            name: color.name,
+            code: color.code,
+            image: color.image,
+        })),
+        sizes: product.variants.map((variant) => ({
+            id: variant.id,
+            size: variant.value,
+            pivot: {
+                product_id: variant.productId,
+                size_id: variant.id,
+                price:
+                    variant.price === null
+                        ? null
+                        : Number(variant.price),
+                stock: variant.stock,
+            },
+        })),
+        track_inventory:
+            product.inventory?.trackInventory ?? false,
+        category: product.category
+            ? {
+                id: product.category.id,
+                name: product.category.name,
+                slug: product.category.slug,
+            }
+            : null,
+        created_at: product.createdAt,
+        updated_at: product.updatedAt,
+    };
+}
+
+export async function GET(request) {
+    try {
+        const { searchParams } = new URL(request.url);
+
+        const q = searchParams.get("q")?.trim();
+        const category = searchParams.get("category")?.trim();
+        const minPrice = searchParams.get("min_price");
+        const maxPrice = searchParams.get("max_price");
+
+        const products = await prisma.product.findMany({
+            where: {
+                isActive: true,
+
+                ...(q
+                    ? {
+                        OR: [
+                            {
+                                name: {
+                                    contains: q,
+                                    mode: "insensitive",
+                                },
+                            },
+                            {
+                                sku: {
+                                    contains: q,
+                                    mode: "insensitive",
+                                },
+                            },
+                            {
+                                description: {
+                                    contains: q,
+                                    mode: "insensitive",
+                                },
+                            },
+                            {
+                                shortDescription: {
+                                    contains: q,
+                                    mode: "insensitive",
+                                },
+                            },
+                        ],
+                    }
+                    : {}),
+
+                ...(category
+                    ? {
+                        category: {
+                            slug: category,
+                        },
+                    }
+                    : {}),
+
+                ...(minPrice || maxPrice
+                    ? {
+                        price: {
+                            ...(minPrice
+                                ? { gte: Number(minPrice) }
+                                : {}),
+                            ...(maxPrice
+                                ? { lte: Number(maxPrice) }
+                                : {}),
+                        },
+                    }
+                    : {}),
+            },
+
+            orderBy: {
+                createdAt: "desc",
+            },
+
+            include: {
+                category: {
+                    select: {
+                        id: true,
+                        name: true,
+                        slug: true,
+                    },
+                },
+                images: {
+                    orderBy: {
+                        isPrimary: "desc",
+                    },
+                },
+                variants: true,
+                colors: true,
+                inventory: true,
+            },
+        });
+
+        return Response.json({
+            success: true,
+            message: "Products loaded.",
+            data: products.map(formatSearchProduct),
+        });
+    } catch (error) {
+        console.error("Product search API error:", error);
+
+        return Response.json(
+            {
+                success: false,
+                message: "Failed to search products.",
+            },
+            { status: 500 }
+        );
+    }
+}

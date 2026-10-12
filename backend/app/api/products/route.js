@@ -10,39 +10,24 @@ const VALID_STATUSES = [
 function formatProduct(product) {
     return {
         id: product.id,
-
         title: product.name,
-
         sku: product.sku,
-
         price: Number(product.price),
-
         discount:
-            product.discount === null
-                ? null
-                : Number(product.discount),
-
-        status: product.status
-            .toLowerCase()
-            .replace("_", "-"),
-
+            product.discount === null ? null : Number(product.discount),
+        status: product.status.toLowerCase().replace("_", "-"),
         short_description: product.shortDescription,
-
         description: product.description,
-
         video_url: product.videoUrl,
-
         images: product.images.map((image) => ({
             image: image.imageUrl,
         })),
-
         colors: product.colors.map((color) => ({
             id: color.id,
             name: color.name,
             code: color.code,
             image: color.image,
         })),
-
         sizes: product.variants.map((variant) => ({
             id: variant.id,
             size: variant.value,
@@ -54,7 +39,6 @@ function formatProduct(product) {
                 stock: variant.stock,
             },
         })),
-
         category: product.category
             ? [
                 {
@@ -64,23 +48,16 @@ function formatProduct(product) {
                 },
             ]
             : [],
-
         inventory: {
             track_inventory:
                 product.inventory?.trackInventory ?? false,
-
             combinations: [],
         },
-
         product_colors: [],
-
-        specifications: product.specifications.map(
-            (specification) => ({
-                key: specification.key,
-                value: specification.value,
-            })
-        ),
-
+        specifications: product.specifications.map((specification) => ({
+            key: specification.key,
+            value: specification.value,
+        })),
         faqs: product.faqs.map((faq) => ({
             id: faq.id,
             question: faq.question,
@@ -89,20 +66,13 @@ function formatProduct(product) {
     };
 }
 
-// =====================================================
-// GET ALL PRODUCTS
-// GET /api/products
-// =====================================================
-
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
 
         const search = searchParams.get("search")?.trim();
-
-        const category = searchParams
-            .get("category")
-            ?.trim();
+        const category = searchParams.get("category")?.trim();
+        const status = searchParams.get("status")?.trim();
 
         const products = await prisma.product.findMany({
             where: {
@@ -140,6 +110,12 @@ export async function GET(request) {
                         },
                     }
                     : {}),
+
+                ...(status
+                    ? {
+                        status: status.toUpperCase().replace("-", "_"),
+                    }
+                    : {}),
             },
 
             orderBy: {
@@ -154,21 +130,15 @@ export async function GET(request) {
                         slug: true,
                     },
                 },
-
                 images: {
                     orderBy: {
                         isPrimary: "desc",
                     },
                 },
-
                 variants: true,
-
                 colors: true,
-
                 specifications: true,
-
                 faqs: true,
-
                 inventory: true,
             },
         });
@@ -186,17 +156,10 @@ export async function GET(request) {
                 success: false,
                 message: "Failed to load products.",
             },
-            {
-                status: 500,
-            }
+            { status: 500 }
         );
     }
 }
-
-// =====================================================
-// CREATE PRODUCT
-// POST /api/products
-// =====================================================
 
 export async function POST(request) {
     try {
@@ -225,13 +188,7 @@ export async function POST(request) {
         } = body;
 
         const productName = title ?? name;
-
-        const productCategoryId =
-            category_id ?? categoryId;
-
-        // ---------------------------------------------
-        // Required validation
-        // ---------------------------------------------
+        const productCategoryId = category_id ?? categoryId;
 
         if (
             !productName ||
@@ -288,14 +245,8 @@ export async function POST(request) {
             );
         }
 
-        // ---------------------------------------------
-        // Status validation
-        // ---------------------------------------------
-
         const productStatus = status
-            ? String(status)
-                .toUpperCase()
-                .replace("-", "_")
+            ? String(status).toUpperCase().replace("-", "_")
             : "IN_STOCK";
 
         if (!VALID_STATUSES.includes(productStatus)) {
@@ -308,16 +259,11 @@ export async function POST(request) {
             );
         }
 
-        // ---------------------------------------------
-        // Category validation
-        // ---------------------------------------------
-
-        const categoryRecord =
-            await prisma.category.findUnique({
-                where: {
-                    id: Number(productCategoryId),
-                },
-            });
+        const categoryRecord = await prisma.category.findUnique({
+            where: {
+                id: Number(productCategoryId),
+            },
+        });
 
         if (!categoryRecord) {
             return Response.json(
@@ -329,17 +275,12 @@ export async function POST(request) {
             );
         }
 
-        // ---------------------------------------------
-        // SKU duplicate validation
-        // ---------------------------------------------
-
         if (sku?.trim()) {
-            const existingSku =
-                await prisma.product.findUnique({
-                    where: {
-                        sku: sku.trim(),
-                    },
-                });
+            const existingSku = await prisma.product.findUnique({
+                where: {
+                    sku: sku.trim(),
+                },
+            });
 
             if (existingSku) {
                 return Response.json(
@@ -352,41 +293,23 @@ export async function POST(request) {
             }
         }
 
-        // ---------------------------------------------
-        // Create product
-        // ---------------------------------------------
-
         const product = await prisma.product.create({
             data: {
                 name: productName.trim(),
-
                 sku: sku?.trim() || null,
-
                 price: Number(price),
-
                 discount:
                     discount === undefined ||
                     discount === null ||
                     discount === ""
                         ? null
                         : Number(discount),
-
                 status: productStatus,
-
                 shortDescription:
-                    short_description ??
-                    shortDescription ??
-                    null,
-
+                    short_description ?? shortDescription ?? null,
                 description: description ?? null,
-
-                videoUrl:
-                    video_url ??
-                    videoUrl ??
-                    null,
-
+                videoUrl: video_url ?? videoUrl ?? null,
                 stock: Number(body.stock ?? 0),
-
                 isActive:
                     body.isActive !== undefined
                         ? Boolean(body.isActive)
@@ -405,12 +328,9 @@ export async function POST(request) {
                                 typeof image === "string"
                                     ? image
                                     : image.image,
-
                             isPrimary:
                                 typeof image === "object"
-                                    ? Boolean(
-                                        image.isPrimary
-                                    )
+                                    ? Boolean(image.isPrimary)
                                     : index === 0,
                         }))
                         : [],
@@ -420,23 +340,15 @@ export async function POST(request) {
                     create: Array.isArray(sizes)
                         ? sizes.map((size) => ({
                             name: "size",
-
-                            value:
-                                size.size ??
-                                size.value ??
-                                "",
-
+                            value: size.size ?? size.value ?? "",
                             price:
                                 size.price === undefined ||
                                 size.price === null ||
                                 size.price === ""
                                     ? null
                                     : Number(size.price),
-
                             stock: Number(
-                                size.stock ??
-                                size.pivot?.stock ??
-                                0
+                                size.stock ?? size.pivot?.stock ?? 0
                             ),
                         }))
                         : [],
@@ -453,15 +365,11 @@ export async function POST(request) {
                 },
 
                 specifications: {
-                    create: Array.isArray(
-                        specifications
-                    )
-                        ? specifications.map(
-                            (specification) => ({
-                                key: specification.key,
-                                value: specification.value,
-                            })
-                        )
+                    create: Array.isArray(specifications)
+                        ? specifications.map((specification) => ({
+                            key: specification.key,
+                            value: specification.value,
+                        }))
                         : [],
                 },
 
@@ -477,8 +385,7 @@ export async function POST(request) {
                 inventory: {
                     create: {
                         trackInventory: Boolean(
-                            inventory.track_inventory ??
-                            false
+                            inventory.track_inventory ?? false
                         ),
                     },
                 },
@@ -492,21 +399,15 @@ export async function POST(request) {
                         slug: true,
                     },
                 },
-
                 images: {
                     orderBy: {
                         isPrimary: "desc",
                     },
                 },
-
                 variants: true,
-
                 colors: true,
-
                 specifications: true,
-
                 faqs: true,
-
                 inventory: true,
             },
         });

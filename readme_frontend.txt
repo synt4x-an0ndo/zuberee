@@ -708,3 +708,21 @@ Address not found: Return 404 Not Found
 Failure response: Return 500 Internal Server Error
 
 Failure message: Failed to delete address.
+
+
+==================================
+1. /api/products
+GET http://localhost:3001/api/products
+GET http://localhost:3001/api/products?category=t-shirts
+GET http://localhost:3001/api/products?search=premium
+
+2. /api/product-search
+GET http://localhost:3001/api/product-search?q=premium
+GET http://localhost:3001/api/product-search?q=black&category=t-shirts
+GET http://localhost:3001/api/product-search?min_price=1000&max_price=3000
+
+3. /api/product-pagination
+GET http://localhost:3001/api/product-pagination?page=1&per_page=10
+GET http://localhost:3001/api/product-pagination?page=2&per_page=10
+GET http://localhost:3001/api/product-pagination?page=1&per_page=4&category=t-shirts
+GET http://localhost:3001/api/product-pagination?search=premium&page=1&per_page=10
