@@ -50,14 +50,26 @@ function formatSearchProduct(product) {
     };
 }
 
+/**
+ * Parse a query-string number defensively.
+ * Returns the numeric value, or null when the value is missing/blank
+ * or not a finite number (e.g. "10000?" from a malformed URL) so that
+ * invalid input is ignored instead of reaching Prisma as NaN.
+ */
+function toFiniteNumber(value) {
+    if (value === null || value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
 
         const q = searchParams.get("q")?.trim();
         const category = searchParams.get("category")?.trim();
-        const minPrice = searchParams.get("min_price");
-        const maxPrice = searchParams.get("max_price");
+        const minPrice = toFiniteNumber(searchParams.get("min_price"));
+        const maxPrice = toFiniteNumber(searchParams.get("max_price"));
 
         const products = await prisma.product.findMany({
             where: {
@@ -102,14 +114,14 @@ export async function GET(request) {
                     }
                     : {}),
 
-                ...(minPrice || maxPrice
+                ...((minPrice !== null || maxPrice !== null)
                     ? {
                         price: {
-                            ...(minPrice
-                                ? { gte: Number(minPrice) }
+                            ...(minPrice !== null
+                                ? { gte: minPrice }
                                 : {}),
-                            ...(maxPrice
-                                ? { lte: Number(maxPrice) }
+                            ...(maxPrice !== null
+                                ? { lte: maxPrice }
                                 : {}),
                         },
                     }

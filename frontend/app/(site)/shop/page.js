@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ProductCard from "@/components/ProductCard";
-import { api, salePrice, unwrapList } from "@/lib/api";
+import { api, unwrapList } from "@/lib/api";
 import Loader from "@/components/Loader";
 
 const PAGE_SIZE = 24;
@@ -20,14 +20,34 @@ function ShopContent() {
   const searchParams = useSearchParams();
   const querySearch = searchParams.get("search")?.trim() || "";
   const [options, setOptions] = useState(null);
-  const [allProducts, setAllProducts] = useState([]);
-  const [filters, setFilters] = useState(null);
+  // Server-side filters sent to /api/product-pagination (documented contract).
+  const [filters, setFilters] = useState(null); // { category, search, min_price, max_price }
+  const [sizeFilter, setSizeFilter] = useState([]); // client-side only (no API support)
   const [searchInput, setSearchInput] = useState(querySearch);
   const [priceInput, setPriceInput] = useState({ min: "", max: "" });
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const [products, setProducts] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [page, setPage] = useState(1);
+
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
 
+  const requestId = useRef(0);
+
+  /* Build the documented /api/product-pagination query for a given page. */
+  const buildParams = useCallback((pageNumber) => {
+    const params = new URLSearchParams({ page: String(pageNumber), per_page: String(PAGE_SIZE) });
+    if (!filters) return params;
+    if (filters.category) params.set("category", filters.category);
+    if (filters.search) params.set("search", filters.search);
+    if (filters.min_price !== "") params.set("min_price", filters.min_price);
+    if (filters.max_price !== "") params.set("max_price", filters.max_price);
+    return params;
+  }, [filters]);
+
+  /* ---- initial load: categories + full product list for the filter options ---- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -41,35 +61,35 @@ function ShopContent() {
         if (!alive) return;
 
         const categories = flattenCategories(unwrapList(categoriesResponse, ["categories"]));
-        const loadedProducts = unwrapList(productsResponse, ["products"]);
+        const allProducts = unwrapList(productsResponse, ["products"]);
         const sizes = [...new Set(
-          loadedProducts.flatMap((product) => (product.sizes || []).map((size) => String(size.size || "")))
+          allProducts.flatMap((product) => (product.sizes || []).map((size) => String(size.size || "")))
             .filter(Boolean)
         )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-        const prices = loadedProducts
-          .map((product) => salePrice(product))
+        // The backend price filter (see /api/product-pagination) operates on the
+        // base product price, so the range is derived from product.price to stay
+        // aligned with the documented contract.
+        const prices = allProducts
+          .map((product) => Number(product.price))
           .filter((price) => Number.isFinite(price));
         const priceRange = {
           min: prices.length ? Math.min(...prices) : 0,
           max: prices.length ? Math.max(...prices) : 0,
         };
 
-        setAllProducts(loadedProducts);
         setOptions({ categories, sizes, price_range: priceRange });
         setPriceInput({ min: String(priceRange.min), max: String(priceRange.max) });
         setFilters({
-          categories: [],
-          sizes: [],
+          category: "",
+          search: querySearch,
           min_price: String(priceRange.min),
           max_price: String(priceRange.max),
-          search: querySearch,
         });
       } catch (cause) {
         if (!alive) return;
         setError(cause?.message || "The shop could not be loaded.");
-        setAllProducts([]);
         setOptions({ categories: [], sizes: [], price_range: { min: 0, max: 0 } });
-        setFilters({ categories: [], sizes: [], min_price: "", max_price: "", search: querySearch });
+        setFilters({ category: "", search: querySearch, min_price: "", max_price: "" });
       } finally {
         if (alive) setLoading(false);
       }
@@ -106,60 +126,88 @@ function ShopContent() {
     return () => window.clearTimeout(timer);
   }, [priceInput, filters]);
 
+  /* ---- fetch page 1 whenever the server-side filters change ---- */
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [filters]);
+    if (!options || !filters) return undefined;
+    const currentRequestId = ++requestId.current;
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    (async () => {
+      try {
+        const response = await api.get(`api/product-pagination?${buildParams(1).toString()}`, {
+          auth: false,
+          signal: controller.signal,
+        });
+        if (currentRequestId !== requestId.current) return;
+        setProducts(unwrapList(response, ["products", "results"]));
+        setMeta(response?.meta || null);
+        setPage(1);
+      } catch (cause) {
+        if (cause?.name === "AbortError" || currentRequestId !== requestId.current) return;
+        setError(cause?.message || "The shop could not be loaded.");
+        setProducts([]);
+        setMeta(null);
+      } finally {
+        if (currentRequestId === requestId.current) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [buildParams, filters, options]);
 
-  const products = useMemo(() => {
-    if (!filters) return [];
-    const query = filters.search.trim().toLowerCase();
-    const min = filters.min_price === "" ? -Infinity : Number(filters.min_price);
-    const max = filters.max_price === "" ? Infinity : Number(filters.max_price);
-    return allProducts.filter((product) => {
-      const categoryEntries = Array.isArray(product.category)
-        ? product.category
-        : product.category ? [product.category] : [];
-      const categoryIds = categoryEntries.map((category) => String(category?.id ?? category));
-      const productSizes = (product.sizes || []).map((size) => String(size.size));
-      const text = `${product.title || ""} ${product.sku || ""}`.toLowerCase();
-      const price = salePrice(product);
-      return (!filters.categories.length || filters.categories.some((id) => categoryIds.includes(String(id))))
-        && (!filters.sizes.length || filters.sizes.some((size) => productSizes.includes(size)))
-        && (!query || text.includes(query))
-        && price >= min
-        && price <= max;
-    });
-  }, [allProducts, filters]);
-
-  const toggle = (key, value) => {
-    setFilters((current) => {
-      if (!current) return current;
-      const selected = current[key] || [];
-      return {
-        ...current,
-        [key]: selected.includes(value)
-          ? selected.filter((item) => item !== value)
-          : [...selected, value],
-      };
-    });
+  /* ---- "Load more": fetch the next page and append it ---- */
+  const loadMore = async () => {
+    if (!meta || !meta.has_more || loadingMore || loading) return;
+    const nextPage = page + 1;
+    const capturedRequestId = requestId.current;
+    setLoadingMore(true);
+    try {
+      const response = await api.get(`api/product-pagination?${buildParams(nextPage).toString()}`, {
+        auth: false,
+      });
+      // Drop the result if a filter/search change started a newer request meanwhile.
+      if (capturedRequestId !== requestId.current) return;
+      setProducts((current) => [...current, ...unwrapList(response, ["products", "results"])]);
+      setMeta(response?.meta || meta);
+      setPage(nextPage);
+    } catch (cause) {
+      setError(cause?.message || "Could not load more products.");
+    } finally {
+      if (capturedRequestId === requestId.current) setLoadingMore(false);
+    }
   };
+
+  /* Size filter is a client-side refinement over the paginated results. */
+  const displayProducts = useMemo(() => {
+    if (!sizeFilter.length) return products;
+    return products.filter((product) =>
+      (product.sizes || []).some((size) => sizeFilter.includes(String(size.size)))
+    );
+  }, [products, sizeFilter]);
+
+  const selectCategory = (slug) =>
+    setFilters((current) => (current ? { ...current, category: current.category === slug ? "" : slug } : current));
+
+  const toggleSize = (size) =>
+    setSizeFilter((current) => (current.includes(size) ? current.filter((item) => item !== size) : [...current, size]));
 
   const clearFilters = () => {
     const priceRange = options?.price_range || { min: 0, max: 0 };
     setSearchInput("");
     setPriceInput({ min: String(priceRange.min), max: String(priceRange.max) });
-    setFilters({
-      categories: [],
-      sizes: [],
+    setSizeFilter([]);
+    setFilters((current) => (current ? {
+      ...current,
+      category: "",
+      search: "",
       min_price: String(priceRange.min),
       max_price: String(priceRange.max),
-      search: "",
-    });
+    } : current));
   };
 
-  const activeCount = (filters?.categories.length || 0)
-    + (filters?.sizes.length || 0)
+  const activeCount = (filters?.category ? 1 : 0)
     + (filters?.search ? 1 : 0)
+    + sizeFilter.length
     + (priceInput.min !== String(options?.price_range?.min ?? 0) || priceInput.max !== String(options?.price_range?.max ?? 0) ? 1 : 0);
 
   return (
@@ -169,15 +217,18 @@ function ShopContent() {
           <p className="shop-eyebrow mb-1">Curated for your everyday</p>
           <h1 className="h2 fw-bold mb-0">Shop all</h1>
         </div>
-        {!loading && <span className="shop-result-count">{products.length} products</span>}
+        {!loading && <span className="shop-result-count">{meta?.total ?? displayProducts.length} products</span>}
       </div>
 
       {loading || !options || !filters ? (
         <Loader />
-      ) : error && allProducts.length === 0 ? (
+      ) : error && products.length === 0 ? (
         <div className="empty-state text-center py-5">
           <h2 className="h5">Shop is temporarily unavailable</h2>
           <p className="text-muted mb-0">{error}</p>
+          <button type="button" className="btn btn-outline-secondary mt-3" onClick={() => setFilters({ ...filters })}>
+            Try again
+          </button>
         </div>
       ) : (
         <div className="row g-4">
@@ -202,14 +253,14 @@ function ShopContent() {
                 onChange={(event) => setSearchInput(event.target.value)}
               />
 
-              <FilterSection title="Category" count={filters.categories.length} defaultOpen>
+              <FilterSection title="Category" count={filters.category ? 1 : 0} defaultOpen>
                 <div className="shop-category-options">
                   {options.categories.map((category) => (
                     <label key={category.id} className="shop-checkbox-row">
                       <input
                         type="checkbox"
-                        checked={filters.categories.includes(String(category.id))}
-                        onChange={() => toggle("categories", String(category.id))}
+                        checked={filters.category === category.slug}
+                        onChange={() => selectCategory(category.slug)}
                       />
                       <span>{category.name}</span>
                     </label>
@@ -218,17 +269,17 @@ function ShopContent() {
                 </div>
               </FilterSection>
 
-              <FilterSection title="Size" count={filters.sizes.length}>
+              <FilterSection title="Size" count={sizeFilter.length}>
                 <div className="d-flex flex-wrap gap-2">
                   {options.sizes.map((size) => {
-                    const selected = filters.sizes.includes(size);
+                    const selected = sizeFilter.includes(size);
                     return (
                       <button
                         key={size}
                         type="button"
                         className={`shop-size-option ${selected ? "is-selected" : ""}`}
                         aria-pressed={selected}
-                        onClick={() => toggle("sizes", size)}
+                        onClick={() => toggleSize(size)}
                       >
                         {size}
                       </button>
@@ -274,7 +325,7 @@ function ShopContent() {
           </aside>
 
           <div className="col-lg-9">
-            {products.length === 0 ? (
+            {displayProducts.length === 0 ? (
               <div className="empty-state text-center py-5">
                 <h2 className="h5">No products match those filters</h2>
                 <p className="text-muted mb-3">Try a different search or clear your filters.</p>
@@ -283,16 +334,21 @@ function ShopContent() {
             ) : (
               <>
                 <div className="row mx-0 shop-product-grid">
-                  {products.slice(0, visibleCount).map((product) => (
+                  {displayProducts.map((product) => (
                     <div key={product.id} className="col-6 col-md-4 px-1 px-md-2 mb-3">
                       <ProductCard product={product} />
                     </div>
                   ))}
                 </div>
-                {visibleCount < products.length && (
+                {meta?.has_more && (
                   <div className="text-center mt-3">
-                    <button type="button" className="slot-loadmore-btn" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>
-                      Load more products
+                    <button
+                      type="button"
+                      className="slot-loadmore-btn"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                    >
+                      {loadingMore ? "Loading…" : "Load more products"}
                     </button>
                   </div>
                 )}

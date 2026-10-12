@@ -1,8 +1,8 @@
 "use client";
 
-import { AccountPage } from "@/components/AccountPages";
+import { AccountDashboard } from "@/components/AccountPages";
 
-// User Dashboard — reuses the existing account page (profile + orders), preserved as-is.
+// User Dashboard — the logged-in profile dashboard (sidebar + personal info).
 export default function UserDashboardPage() {
-    return <AccountPage />;
+    return <AccountDashboard />;
 }

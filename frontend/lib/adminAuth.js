@@ -9,7 +9,7 @@ import notify from "@/components/notify";
  * Admin auth helpers (same contract as the original dashboard):
  *  - token / user_id / roles / permissions kept in localStorage + cookies
  *  - hasPermission(): super-admin bypasses every permission check
- *  - refreshUserData(): GET api/auth/me -> latest roles + permissions
+ *  - refreshUserData(): GET api/account/me -> latest roles + permissions
  *  - logout(): POST api/auth/logout then clear everything
  */
 export function readJSON(key, fallback) {
@@ -72,7 +72,7 @@ export function useAdminAuth({ permission, role, autoRefresh = true } = {}) {
   const refreshUserData = useCallback(
     async ({ silent = false } = {}) => {
       try {
-        const response = await api.get("api/auth/me");
+        const response = await api.get("api/account/me");
         const payload = response?.data ?? response;
         const user = payload?.data?.user || payload?.user || payload?.data || payload;
         if (user) {

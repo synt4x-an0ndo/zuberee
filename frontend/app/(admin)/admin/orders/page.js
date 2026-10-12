@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { FaPen, FaReceipt, FaTruck, FaRepeat, FaChevronDown } from "react-icons/fa6";
 import { api, formatTk, imgUrl } from "@/lib/api";
 import notify from "@/components/notify";
@@ -13,7 +13,9 @@ import "@/styles/css/187416aab916025b.css";
 
 /**
  * Orders (/dashboard/orders)
- *  - GET    api/orders?page=&status=&from=&to=&search=   -> {data:{data:[],current_page,last_page}}
+ *  - GET    api/orders?status=   -> { data: [order] }  (admin only; the backend
+ *                                   returns the full list without pagination,
+ *                                   so paging + search/date are done client-side)
  *  - PATCH  api/orders/{id}           {status, paymentStatus}
  *  - DELETE api/orders/{id}
  *  - POST   api/orders/{id}/courier-check  {} | {force_refresh:true}
@@ -24,7 +26,7 @@ import "@/styles/css/187416aab916025b.css";
  *  - GET    api/footer-settings/1 (invoice branding)
  */
 function OrdersPage() {
-  const [rows, setRows] = useState([]);
+  const [allRows, setAllRows] = useState([]);
   const [pager, setPager] = useState({ current_page: 1, last_page: 1 });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -34,11 +36,14 @@ function OrdersPage() {
   const [courier, setCourier] = useState({}); // id -> loading
   const [badgeOrder, setBadgeOrder] = useState(null);
 
+  // The backend GET /api/orders returns every order (no server pagination) and
+  // only honours `status`. Search + date range + paging are handled here so the
+  // existing Prev/Next controls keep working with only the supported params.
   const qs = useCallback(() => {
-    const p = new URLSearchParams({ page: String(page) });
-    Object.entries(filters).forEach(([k, v]) => v && p.append(k, v));
+    const p = new URLSearchParams();
+    if (filters.status) p.append("status", filters.status);
     return p.toString();
-  }, [page, filters]);
+  }, [filters.status]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,11 +51,7 @@ function OrdersPage() {
     try {
       const r = await api.get(`api/orders?${qs()}`);
       const d = r?.data?.data || r?.data || [];
-      setRows(normalizeOrders(Array.isArray(d) ? d : []));
-      setPager({
-        current_page: r?.data?.current_page || 1,
-        last_page: r?.data?.last_page || 1,
-      });
+      setAllRows(normalizeOrders(Array.isArray(d) ? d : []));
     } catch (e) {
       setError(e.message || "Failed to load orders");
     } finally {
@@ -61,6 +62,40 @@ function OrdersPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /* ---- client-side search + date filtering over the full result set ---- */
+  const filtered = useMemo(() => {
+    const q = filters.search.trim().toLowerCase();
+    const from = filters.from ? new Date(`${filters.from}T00:00:00`) : null;
+    const to = filters.to ? new Date(`${filters.to}T23:59:59`) : null;
+    return allRows.filter((o) => {
+      if (q) {
+        const haystack = `${o.name || o.customer?.name || ""} ${o.phone || o.customer?.phone || ""} #${o.id}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (from || to) {
+        const created = o.created_at ? new Date(o.created_at) : null;
+        if (!created) return false;
+        if (from && created < from) return false;
+        if (to && created > to) return false;
+      }
+      return true;
+    });
+  }, [allRows, filters.search, filters.from, filters.to]);
+
+  /* ---- client-side pagination of the filtered set ---- */
+  const PER_PAGE = 20;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const rows = useMemo(
+    () => filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE),
+    [filtered, safePage]
+  );
+
+  // Keep the pager label in sync with the filtered result count.
+  useEffect(() => {
+    setPager({ current_page: safePage, last_page: totalPages });
+  }, [safePage, totalPages]);
 
   const updateStatus = async (order, value) => {
     if (!value) return;

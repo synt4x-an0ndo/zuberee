@@ -9,7 +9,7 @@
  *  - Login           -> POST {API}/api/auth/login  -> { success, message, data }
  *  - Token is stored in localStorage("token") AND a `token` cookie
  *  - All authenticated calls send:  Authorization: Bearer <token>
- *  - GET {API}/api/auth/me returns the current user
+ *  - GET {API}/api/account/me returns the current user
  *  - POST {API}/api/auth/logout invalidates the token
  * =========================================================================
  */
@@ -113,6 +113,19 @@ export class ApiError extends Error {
 }
 
 /**
+ * Join the base URL, a path (which may already contain a query string) and
+ * extra params without ever emitting a stray/duplicate "?".
+ * e.g. buildUrl("api/products?page=1", empty) -> ".../api/products?page=1"
+ */
+function buildUrl(path, params) {
+  const normalizedPath = String(path).replace(/^\/+/, "");
+  const query = params.toString();
+  const hasQueryInPath = normalizedPath.includes("?");
+  if (!query) return `${API_BASE}/${normalizedPath}`;
+  return `${API_BASE}/${normalizedPath}${hasQueryInPath ? "&" : "?"}${query}`;
+}
+
+/**
  * @param {string} path  e.g. "api/products?page=1"
  * @param {object} opts  { method, body, auth, formData, signal, headers }
  */
@@ -139,6 +152,14 @@ export async function request(path, opts = {}) {
     );
   }
 
+  const params = new URLSearchParams();
+  if (opts.params) {
+    for (const [key, value] of Object.entries(opts.params)) {
+      if (value === null || value === undefined) continue;
+      params.append(key, String(value));
+    }
+  }
+
   let payload = body;
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   if (body != null && !isFormData && !formData) {
@@ -146,14 +167,15 @@ export async function request(path, opts = {}) {
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(`${API_BASE}/${String(path).replace(/^\/+/, "")}`, {
-    method,
-    headers,
-    body: payload,
-    signal,
-    credentials,
-    cache: "no-store",
-  });
+  const res = await fetch(buildUrl(path, params), {
+      method,
+      headers,
+      body: payload,
+      signal,
+      credentials,
+      cache: "no-store",
+    }
+  );
 
   const ct = res.headers.get("content-type") || "";
   const isJson = ct.includes("application/json");

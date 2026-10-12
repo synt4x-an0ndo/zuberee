@@ -35,16 +35,16 @@ export function AuthProvider({ children }) {
         return;
       }
       try {
-        const sessionResponse = await api.get("api/auth/me");
+        const sessionResponse = await api.get("api/account/me");
         let currentUser = userFromResponse(sessionResponse);
-        // /auth/me verifies the token; the profile endpoint supplies the name,
+        // /account/me verifies the token; the profile endpoint supplies the name,
         // phone, and address fields needed by the account and checkout screens.
         try {
           const profileResponse = await api.get("api/account/me");
           const profile = userFromResponse(profileResponse);
           if (profile) currentUser = { ...currentUser, ...profile };
         } catch {
-          // Some API deployments expose only /auth/me. Keep the valid session.
+          // Some API deployments expose only /account/me. Keep the valid session.
         }
         if (alive) setUser(currentUser);
       } catch (error) {
