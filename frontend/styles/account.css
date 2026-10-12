@@ -211,6 +211,46 @@
     grid-column: 1/-1
 }
 
+.avatar-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 110px;
+    border: 1px solid #e1e5df;
+    border-radius: 8px;
+    background: #f1f3ef;
+    position: relative
+}
+
+.avatar-preview img {
+    width: 100%;
+    height: 110px;
+    object-fit: cover;
+    border-radius: 8px
+}
+
+.avatar-placeholder {
+    font-size: 34px;
+    font-weight: 700;
+    color: #87938b;
+    width: 100%;
+    height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px
+}
+
+.avatar-preview label {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    font-size: 11px;
+    color: #87938b;
+    cursor: pointer
+}
+
 .profile-divider {
     border-top: 1px solid #e1e5df;
     padding-top: 18px;
@@ -435,5 +475,297 @@
 
     .account-submit.compact {
         width: 100%
+    }
+}
+
+/* =====================================================================
+ * Profile Dashboard (/user) — sidebar + main content
+ * Scoped under .dash-* so existing account styles are untouched.
+ * ===================================================================== */
+.dash-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 28px;
+    align-items: start
+}
+
+.dash-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px
+}
+
+.dash-card {
+    background: #fff;
+    border: 1px solid #e7ece7;
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(24, 37, 30, .05)
+}
+
+/* ---- profile summary ---- */
+.dash-profile-card {
+    padding: 28px 22px;
+    text-align: center
+}
+
+.dash-avatar {
+    width: 92px;
+    height: 92px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #eef2ee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), .12)
+}
+
+.dash-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover
+}
+
+.dash-avatar-fallback {
+    font-family: Georgia, serif;
+    font-size: 30px;
+    font-weight: 700;
+    color: #47735d
+}
+
+.dash-name {
+    font-family: Georgia, serif;
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: #18251e;
+    margin: 0 0 4px
+}
+
+.dash-email {
+    font-size: .9rem;
+    color: #6b7a70;
+    margin: 0 0 12px;
+    word-break: break-word
+}
+
+.dash-role {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #47735d;
+    background: rgba(var(--primary-rgb), .1);
+    border: 1px solid rgba(var(--primary-rgb), .22);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin-bottom: 12px
+}
+
+.dash-joined {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 12px;
+    color: #8a978d;
+    margin: 0
+}
+
+/* ---- stats ---- */
+.dash-stats-card {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 4px 0
+}
+
+.dash-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 6px
+}
+
+.dash-stat + .dash-stat {
+    border-left: 1px solid #eef1ee
+}
+
+.dash-stat-value {
+    font-family: Georgia, serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #18251e;
+    line-height: 1
+}
+
+.dash-stat-label {
+    font-size: 11px;
+    color: #8a978d;
+    text-align: center
+}
+
+/* ---- sidebar nav ---- */
+.dash-nav-card {
+    padding: 8px
+}
+
+.dash-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #43524a;
+    font-size: .95rem;
+    text-decoration: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease
+}
+
+.dash-nav-item:hover {
+    background: #f4f7f4;
+    color: #18251e
+}
+
+.dash-nav-item.is-active {
+    background: rgba(var(--primary-rgb), .1);
+    color: var(--primary-color);
+    font-weight: 600
+}
+
+.dash-nav-item.is-disabled {
+    color: #a9b3ab;
+    cursor: not-allowed
+}
+
+.dash-nav-icon {
+    display: inline-flex;
+    align-items: center;
+    font-size: 15px
+}
+
+.dash-nav-label {
+    flex: 1
+}
+
+.dash-nav-chevron {
+    font-size: 11px;
+    color: #b7c0b9
+}
+
+.dash-nav-tag {
+    font-size: 10px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: #9aa49d;
+    background: #f1f3f1;
+    border-radius: 999px;
+    padding: 3px 8px
+}
+
+/* ---- main content ---- */
+.dash-main {
+    min-width: 0
+}
+
+.dash-info-card {
+    padding: 28px
+}
+
+.dash-info-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #eef1ee
+}
+
+.dash-info-title {
+    font-family: Georgia, serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: #18251e;
+    margin: 6px 0 0
+}
+
+.dash-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--primary-color);
+    background: var(--primary-color);
+    color: #fff;
+    font-size: .9rem;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 9px 20px;
+    cursor: pointer;
+    transition: opacity .15s ease
+}
+
+.dash-edit-btn:hover {
+    opacity: .9
+}
+
+.dash-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 28px
+}
+
+.dash-info-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0
+}
+
+.dash-info-field--wide {
+    grid-column: 1 / -1
+}
+
+.dash-info-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #8a978d
+}
+
+.dash-info-value {
+    font-size: 1.02rem;
+    color: #22302a;
+    word-break: break-word
+}
+
+.dash-editor {
+    margin-top: 26px;
+    padding-top: 26px;
+    border-top: 1px solid #eef1ee
+}
+
+/* ---- responsive: stack on mobile ---- */
+@media (max-width: 900px) {
+    .dash-layout {
+        grid-template-columns: 1fr
+    }
+}
+
+@media (max-width: 560px) {
+    .dash-info-grid {
+        grid-template-columns: 1fr
+    }
+
+    .dash-info-card {
+        padding: 20px
     }
 }

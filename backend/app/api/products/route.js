@@ -149,15 +149,20 @@ export async function GET(request) {
             data: products.map(formatProduct),
         });
     } catch (error) {
+        const errorResponse = {
+            success: false,
+            message: "Failed to load products.",
+            error: {
+                code: error?.code ?? null,
+                meta: error?.meta ?? null,
+                details: error?.details ?? null,
+                stack: process.env.NODE_ENV === "development" ? error?.stack ?? null : null,
+            },
+        };
+
         console.error("Get products API error:", error);
 
-        return Response.json(
-            {
-                success: false,
-                message: "Failed to load products.",
-            },
-            { status: 500 }
-        );
+        return Response.json(errorResponse, { status: 500 });
     }
 }
 

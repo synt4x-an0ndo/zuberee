@@ -35,26 +35,55 @@ export default function HomePage() {
     setLoading(true);
     setLoadError("");
     try {
-      const [categoriesResponse, productsResponse] = await Promise.all([
-        api.get("api/categories", { auth: false }),
-        api.get("api/products", { auth: false }),
-      ]);
-      const categoryTree = unwrapList(categoriesResponse, ["categories"]);
-      const categories = flattenCategories(categoryTree).filter((category) => {
+      const perPage = 100;
+      let page = 1;
+      const allProducts = [];
+      const seenIds = new Set();
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await api.get("api/products", {
+          auth: false,
+          params: { page: String(page), per_page: String(perPage) },
+        });
+        const payload = unwrapList(response, ["products"]);
+        const pageProducts = Array.isArray(payload) ? payload : [];
+        const nextPage = pageProducts.filter((product) => {
+          if (seenIds.has(product?.id)) return false;
+          seenIds.add(product?.id);
+          return true;
+        });
+        allProducts.push(...nextPage);
+        const meta = unwrapList(response, ["meta", "pagination"]);
+        hasMore =
+          Array.isArray(meta?.products) && meta?.products?.length > 0;
+        page += 1;
+      }
+
+      const categoryTree = await api.get("api/categories", { auth: false });
+      const categoryList = unwrapList(categoryTree, ["categories"]);
+      const categories = flattenCategories(categoryList).filter((category) => {
         const homepageFlag = category.home_category ?? category.showOnHomepage;
         return homepageFlag == null || asBoolean(homepageFlag, false);
       });
-      const products = unwrapList(productsResponse, ["products"]);
+
+      const eligibleProducts = allProducts.filter((product) => {
+        const status = String(product?.status || "").toLowerCase().replace(/_/g, "-");
+        if (["out-of-stock", "sold-out", "discontinued"].includes(status)) return false;
+        return true;
+      });
+
       const grouped = categories.map((category) => ({
         id: category.id,
         name: category.name,
         slug: category.slug,
-        products: products.filter((product) =>
+        products: eligibleProducts.filter((product) =>
           (Array.isArray(product.category) ? product.category : [product.category])
             .filter(Boolean)
             .some((item) => String(item.id) === String(category.id))
-        ).slice(0, 8),
+        ),
       })).filter((slot) => slot.products.length > 0);
+
       setSlots(grouped);
     } catch (error) {
       setSlots([]);

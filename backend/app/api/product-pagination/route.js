@@ -50,6 +50,18 @@ function formatPaginatedProduct(product) {
     };
 }
 
+/**
+ * Parse a query-string number defensively.
+ * Returns the numeric value, or null when the value is missing/blank
+ * or not a finite number (e.g. "10000?" from a malformed URL) so that
+ * invalid input is ignored instead of reaching Prisma as NaN.
+ */
+function toFiniteNumber(value) {
+    if (value === null || value.trim() === "") return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -58,8 +70,8 @@ export async function GET(request) {
         const category = searchParams.get("category")?.trim();
         const status = searchParams.get("status")?.trim();
 
-        const minPrice = searchParams.get("min_price");
-        const maxPrice = searchParams.get("max_price");
+        const minPrice = toFiniteNumber(searchParams.get("min_price"));
+        const maxPrice = toFiniteNumber(searchParams.get("max_price"));
 
         const pageParam = searchParams.get("page");
         const perPageParam = searchParams.get("per_page");
@@ -124,14 +136,14 @@ export async function GET(request) {
                 }
                 : {}),
 
-            ...(minPrice || maxPrice
+            ...((minPrice !== null || maxPrice !== null)
                 ? {
                     price: {
-                        ...(minPrice
-                            ? { gte: Number(minPrice) }
+                        ...(minPrice !== null
+                            ? { gte: minPrice }
                             : {}),
-                        ...(maxPrice
-                            ? { lte: Number(maxPrice) }
+                        ...(maxPrice !== null
+                            ? { lte: maxPrice }
                             : {}),
                     },
                 }
@@ -181,14 +193,19 @@ export async function GET(request) {
             },
         });
     } catch (error) {
+        const errorResponse = {
+            success: false,
+            message: "Failed to load products.",
+            error: {
+                code: error?.code ?? null,
+                meta: error?.meta ?? null,
+                details: error?.details ?? null,
+                stack: process.env.NODE_ENV === "development" ? error?.stack ?? null : null,
+            },
+        };
+
         console.error("Product pagination API error:", error);
 
-        return Response.json(
-            {
-                success: false,
-                message: "Failed to load products.",
-            },
-            { status: 500 }
-        );
+        return Response.json(errorResponse, { status: 500 });
     }
 }

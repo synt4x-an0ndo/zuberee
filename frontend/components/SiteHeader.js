@@ -12,6 +12,7 @@ import {
   FaUser,
   FaArrowRightToBracket,
   FaArrowRightFromBracket,
+  FaBoxOpen,
 } from "react-icons/fa6";
 import { FaWhatsapp } from "react-icons/fa";
 import { useSite } from "@/context/SiteContext";
@@ -271,6 +272,15 @@ export default function SiteHeader() {
   }, []);
 
   useEffect(() => {
+    if (!accountOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [accountOpen]);
+
+  useEffect(() => {
     if (!drawerOpen) {
       document.body.style.removeProperty("overflow");
       return undefined;
@@ -422,7 +432,16 @@ export default function SiteHeader() {
                             style={accountMenuItemStyle}
                           >
                             <FaUser />
-                            <span>Dashboard</span>
+                            <span>Profile</span>
+                          </Link>
+                          <Link
+                            href="/user/orders"
+                            role="menuitem"
+                            onClick={() => setAccountOpen(false)}
+                            style={accountMenuItemStyle}
+                          >
+                            <FaBoxOpen />
+                            <span>My Orders</span>
                           </Link>
                           <button
                             type="button"

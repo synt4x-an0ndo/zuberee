@@ -196,7 +196,20 @@ export default function ProductPage() {
     : sizeStock != null
       ? sizeStock <= 0
       : product.stock != null && Number(product.stock) <= 0;
-  const soldOut = !isPreorder && (explicitOut || (tracked && stockOut));
+  // The backend enforces variant/product stock regardless of `track_inventory`
+  // (POST /api/cart rejects when the selected variant's stock < quantity), so the
+  // UI must honour a 0-stock selection too. Otherwise the Buy/Add-to-Cart buttons
+  // stay enabled but the request silently fails with "Not enough stock".
+  // A product whose every size is out of stock is unbuyable as a whole, so flag it
+  // up front (before a size is chosen) instead of showing a misleading IN STOCK.
+  const everySizeOutOfStock = sizes.length > 0 && sizes.every(
+    (size) => size.pivot?.stock != null && Number(size.pivot.stock) <= 0
+  );
+  const productFullyOut = !isPreorder && everySizeOutOfStock;
+  const soldOut = !isPreorder && (explicitOut || stockOut || productFullyOut);
+  // Reflect a fully out-of-stock product in the badge, which otherwise keys off
+  // the product's `status` field and can still read "IN STOCK".
+  const displayBadge = productFullyOut ? "sold-out" : badge;
   const maxQty = comboStock ?? sizeStock ?? (
     product.stock != null && Number.isFinite(Number(product.stock)) ? Number(product.stock) : null
   );
@@ -306,17 +319,17 @@ export default function ProductPage() {
             <span className="fw-bold product-price" style={{ fontSize: 24 }}>
               {formatTk(unitPrice)}৳
             </span>
-            {badge === "prebook" && (
+            {displayBadge === "prebook" && (
               <span className="product_status_badge position-static px-3 py-1">
                 PRE-BOOK
               </span>
             )}
-            {badge === "in-stock" && (
+            {displayBadge === "in-stock" && (
               <span className="product_status_badge in-stock-badge position-static px-3 py-1">
                 IN STOCK
               </span>
             )}
-            {badge === "sold-out" && (
+            {displayBadge === "sold-out" && (
               <span className="product_status_badge sold-out-badge position-static px-3 py-1">
                 SOLD OUT
               </span>
@@ -391,9 +404,11 @@ export default function ProductPage() {
                 {sizes.map((size) => {
                   const active = String(activeSize?.id) === String(size.id);
                   const stock = size.pivot?.stock != null ? Number(size.pivot.stock) : null;
+                  // Backend rejects a variant whose stock < quantity regardless of
+                  // `track_inventory`, so disable 0-stock sizes here too.
                   const out = !isPreorder && (
                     ["out-of-stock", "sold-out", "discontinued"].includes(status) ||
-                    (tracked && stock != null && stock <= 0)
+                    (stock != null && stock <= 0)
                   );
                   return (
                     <button
