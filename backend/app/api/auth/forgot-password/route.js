@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import prisma from "../../../../directory/prisma/prisma.js";
+import { sendPasswordResetEmail } from "../../../../lib/mailer.js";
 
 const TOKEN_EXPIRY_MINUTES = 30;
 
@@ -25,6 +26,7 @@ export async function POST(request) {
             where: { email: normalizedEmail },
         });
 
+        // Always return success to prevent email enumeration.
         if (!user) {
             return Response.json({
                 success: true,
@@ -34,6 +36,7 @@ export async function POST(request) {
             });
         }
 
+        // Random 64-char hex token (32 bytes).
         const token = crypto.randomBytes(32).toString("hex");
 
         const expiresAt = new Date(
@@ -57,11 +60,13 @@ export async function POST(request) {
 
         const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
-        console.log("=== PASSWORD RESET LINK ===");
-        console.log("Email:", normalizedEmail);
-        console.log("Link:", resetLink);
-        console.log("Expires:", expiresAt);
-        console.log("===========================");
+        // Spec: Email (SMTP) when configured, console log in dev.
+        await sendPasswordResetEmail({
+            to: normalizedEmail,
+            name: user.name,
+            resetLink,
+            expiresAt,
+        });
 
         return Response.json({
             success: true,

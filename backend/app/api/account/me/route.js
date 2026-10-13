@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
@@ -6,7 +7,7 @@ export async function GET(request) {
         const auth = await authenticateRequest(request);
 
         if (!auth.authenticated) {
-            return Response.json(
+            return NextResponse.json(
                 {
                     success: false,
                     message: auth.message,
@@ -47,7 +48,7 @@ export async function GET(request) {
         });
 
         if (!user) {
-            return Response.json(
+            return NextResponse.json(
                 {
                     success: false,
                     message: "User not found.",
@@ -73,7 +74,7 @@ export async function GET(request) {
             },
         });
 
-        return Response.json(
+        return NextResponse.json(
             {
                 success: true,
                 message: "User profile loaded.",
@@ -109,7 +110,7 @@ export async function GET(request) {
     } catch (error) {
         console.error("Get profile API error:", error);
 
-        return Response.json(
+        return NextResponse.json(
             {
                 success: false,
                 message: "Failed to load user profile.",
