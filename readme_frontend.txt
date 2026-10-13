@@ -1068,3 +1068,298 @@ Prevent deletion: If used by any ProductVariant.value
 Size not found: Return 404 Not Found
 
 In use: Return 409 Conflict
+
+Get All Orders API (Admin)
+API endpoint: GET /api/admin/orders
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Authorization header: Bearer JWT token
+
+Query param search: Search user name, user phone, guest name, guest phone
+
+Query param status: Filter by order status
+
+Query param district: Filter by district (case-insensitive)
+
+Query param product_id: Filter orders containing this product
+
+Query param min_price: Filter by min total amount
+
+Query param max_price: Filter by max total amount
+
+Query param from: Filter from date (YYYY-MM-DD)
+
+Query param to: Filter to date (YYYY-MM-DD)
+
+Query param page: Pagination page (default 1)
+
+Query param per_page: Items per page (default 50, max 100)
+
+Status values: pending, confirmed, processing, shipped, delivered, cancelled
+
+Search mode: Case-insensitive using mode: "insensitive"
+
+Ordering: createdAt desc
+
+Includes: Order items, product info (id, name, sku, first image), user info (id, name, phone, email)
+
+Response fields: id, order_number, user_id, name, phone, address, district, shipping_cost, subtotal, total, advance_payment, payment_method, delivery_notes, status, courier_entry, created_at, updated_at, customer_type, assigned_badge, order_items
+
+Item fields: id, order_id, product_id, product_variant_id, title, sku, unitPrice, qty, totalPrice, colorImage, color_name, size, variant
+
+Meta fields: current_page, per_page, total, total_pages, has_more, from, to
+
+Success response: success, message, data, meta
+
+Success message: Orders loaded.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to load orders.
+
+Get Order Product Options API (Admin)
+API endpoint: GET /api/admin/orders/product-options
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Response fields per item: id, title, sku
+
+Title mapping: title from Product.name
+
+Ordering: name asc
+
+Use case: Product filter dropdown populate
+
+Success response: success, message, data
+
+Success message: Product options loaded.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to load products.
+
+Get Order Districts API (Admin)
+API endpoint: GET /api/admin/orders/districts
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Filter: Excludes null districts
+
+Distinct: Unique districts only
+
+Ordering: district asc
+
+Response: Plain array of district strings
+
+Use case: District filter dropdown populate
+
+Success response: success, message, data
+
+Success message: Districts loaded.
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to load districts.
+
+Get Single Order API (Admin)
+API endpoint: GET /api/admin/orders/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param: id is order ID
+
+Validation: Order ID must be valid positive integer
+
+Includes: Order items with product id, name, sku
+
+Response fields: id, user_id, guest, status, payment_status, total_amount, shipping_fee, shipping_address, district, advance_payment, payment_method, items, created_at, updated_at
+
+Guest order: user_id null, guest object with name and phone
+
+Success response: success, message, data
+
+Success message: Order loaded.
+
+Invalid order ID: Return 400 Bad Request
+
+Order not found: Return 404 Not Found
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to load order.
+
+Update Order API (Admin)
+API endpoint: PATCH /api/admin/orders/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param: id is order ID
+
+Request fields: status (optional), paymentStatus or payment_status (optional)
+
+Valid statuses: pending, confirmed, processing, shipped, delivered, cancelled
+
+Valid payment statuses: pending, paid, failed, refunded
+
+Status normalization: Uppercase and replace - with _
+
+Validation: At least one field required
+
+Validation: Order must exist
+
+Success response: success, message, data
+
+Success message: Order updated.
+
+Invalid order ID: Return 400 Bad Request
+
+Invalid status: Return 400 Bad Request
+
+Invalid payment status: Return 400 Bad Request
+
+No valid fields: Return 400 Bad Request
+
+Order not found: Return 404 Not Found
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to update order.
+
+Delete Order API (Admin)
+API endpoint: DELETE /api/admin/orders/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param: id is order ID
+
+Business rule: Delivered orders cannot be deleted
+
+Validation: Order must exist
+
+Delete behavior: Order and its items deleted via cascade
+
+Success response: success, message
+
+Success message: Order deleted.
+
+Invalid order ID: Return 400 Bad Request
+
+Delivered order: Return 409 Conflict
+
+Order not found: Return 404 Not Found
+
+Invalid/missing token: Return 401 Unauthorized
+
+Non-admin user: Return 403 Forbidden
+
+Failure message: Failed to delete order.
+
+Create Order API (Public)
+API endpoint: POST /api/orders
+
+Authentication: Optional (guest + logged-in)
+
+Guest request fields: guestName, guestPhone, guestAddress
+
+Logged-in request fields: shippingAddressId (optional), shippingAddress (optional)
+
+Common request fields: district (optional), shippingFee (optional, default 0), advancePayment (optional, default 0), paymentMethod (optional, default cash), items (optional array)
+
+Item fields: productId or product_id, variantId or variant_id (optional), quantity
+
+Items source: If not provided, fetched from resolved cart
+
+Cart source: userId if logged in, cart_session_id cookie if guest
+
+Price calculation: Server-side (variant price > discount > product price)
+
+Total: sum(unitPrice * quantity) + shippingFee
+
+Transaction: Order create, stock decrement, cart clear
+
+Stock decrement: Product.stock and ProductVariant.stock
+
+Order status: PENDING
+
+Payment status: PENDING
+
+Guest order fields: guestName and guestPhone set, userId null
+
+Logged-in order fields: userId set, guestName and guestPhone null
+
+Success status: 201 Created
+
+Success message: Order placed successfully. Cash on delivery.
+
+Missing guest name: Return 400 Bad Request
+
+Missing guest phone: Return 400 Bad Request
+
+Missing guest address: Return 400 Bad Request
+
+Address not found for user: Return 404 Not Found
+
+Cart empty: Return 400 Bad Request
+
+Product not available: Return 404 Not Found
+
+Variant not found: Return 404 Not Found
+
+Not enough stock: Return 400 Bad Request
+
+Invalid item quantity: Return 400 Bad Request
+
+Failure message: Failed to place order.
+
+Get Single Order API (Public)
+API endpoint: GET /api/orders/:id
+
+Authentication: Not required
+
+Authorization: Public
+
+URL param: id is order ID
+
+Validation: Order ID must be valid positive integer
+
+Includes: Order items with product id, name, sku
+
+Response fields: id, user_id, guest, status, payment_status, total_amount, shipping_fee, shipping_address, district, advance_payment, payment_method, items, created_at, updated_at
+
+Guest order: user_id null, guest object with name and phone
+
+Item fields: id, product_id, title, sku, unit_price, quantity, subtotal
+
+Success response: success, message, data
+
+Success message: Order loaded.
+
+Invalid order ID: Return 400 Bad Request
+
+Order not found: Return 404 Not Found
+
+Failure message: Failed to load order.
+

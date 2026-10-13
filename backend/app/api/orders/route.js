@@ -31,6 +31,9 @@ function formatOrder(order) {
         total_amount: Number(order.totalAmount),
         shipping_fee: Number(order.shippingFee),
         shipping_address: order.shippingAddress,
+        district: order.district,
+        advance_payment: Number(order.advancePayment),
+        payment_method: order.paymentMethod,
 
         items: order.items.map((item) => ({
             id: item.id,
@@ -55,9 +58,12 @@ export async function POST(request) {
             guestName,
             guestPhone,
             guestAddress,
+            district,
             shippingAddressId,
             shippingAddress,
             shippingFee = 0,
+            advancePayment = 0,
+            paymentMethod = "cash",
             items: bodyItems,
         } = body;
 
@@ -270,6 +276,7 @@ export async function POST(request) {
         }
 
         const finalShippingFee = Number(shippingFee) || 0;
+        const finalAdvancePayment = Number(advancePayment) || 0;
 
         const order = await prisma.$transaction(async (tx) => {
             const createdOrder = await tx.order.create({
@@ -284,6 +291,9 @@ export async function POST(request) {
                     totalAmount: totalAmount + finalShippingFee,
                     shippingFee: finalShippingFee,
                     shippingAddress: finalShippingAddress,
+                    district: district ? String(district).trim() : null,
+                    advancePayment: finalAdvancePayment,
+                    paymentMethod: String(paymentMethod),
 
                     items: {
                         create: orderItemsData.map((item) => ({
@@ -332,47 +342,6 @@ export async function POST(request) {
 
         return Response.json(
             { success: false, message: "Failed to place order." },
-            { status: 500 }
-        );
-    }
-}
-
-export async function GET(request) {
-    try {
-        const auth = await authenticateRequest(request);
-
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
-            return Response.json(
-                { success: false, message: "Admin access required." },
-                { status: 403 }
-            );
-        }
-
-        const { searchParams } = new URL(request.url);
-        const status = searchParams.get("status")?.trim();
-
-        const orders = await prisma.order.findMany({
-            where: status
-                ? {
-                    status: status
-                        .toUpperCase()
-                        .replace("-", "_"),
-                }
-                : {},
-            orderBy: { createdAt: "desc" },
-            include: ORDER_INCLUDE,
-        });
-
-        return Response.json({
-            success: true,
-            message: "Orders loaded.",
-            data: orders.map(formatOrder),
-        });
-    } catch (error) {
-        console.error("Get orders API error:", error);
-
-        return Response.json(
-            { success: false, message: "Failed to load orders." },
             { status: 500 }
         );
     }
