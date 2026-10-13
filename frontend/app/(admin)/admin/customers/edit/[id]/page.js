@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { api, formatPhone, phoneLocal } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
@@ -35,7 +35,7 @@ function EditCustomer({ id }) {
         if (!alive) return;
         setForm({
           name: c.name || "",
-          phone: c.phone || "",
+          phone: phoneLocal(c.phone),
           email: c.email || "",
           password: "",
           badge_title: c.assigned_badge?.title || c.badge_title || "",
@@ -60,7 +60,7 @@ function EditCustomer({ id }) {
     try {
       const body = {
         name: form.name,
-        phone: form.phone,
+        phone: formatPhone(form.phone),
         email: form.email || null,
         badge_title: form.badge_title || null,
       };
@@ -99,13 +99,19 @@ function EditCustomer({ id }) {
                 />
               </div>
               <div className="mb-3">
-                <label className="form-label fw-semibold">Phone</label>
-                <input
-                  className="form-control"
-                  value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
-                  required
-                />
+                <label className="form-label fw-semibold">Phone (+880)</label>
+                <div className="input-group">
+                  <span className="input-group-text">+880</span>
+                  <input
+                    className="form-control"
+                    value={form.phone}
+                    onChange={(e) => set("phone", phoneLocal(e.target.value).slice(0, 10))}
+                    inputMode="numeric"
+                    maxLength={10}
+                    pattern="1[0-9]{9}"
+                    required
+                  />
+                </div>
               </div>
               <div className="mb-3">
                 <label className="form-label fw-semibold">Email</label>

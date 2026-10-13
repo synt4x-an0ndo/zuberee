@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, formatTk, imgUrl } from "@/lib/api";
+import { api, formatPhone, formatTk, imgUrl, phoneLocal } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import { ORDER_STATUSES } from "@/lib/orderStatuses";
@@ -254,7 +254,7 @@ function ConvertModal({ row, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: row.name || "",
-    phone: row.phone || "",
+    phone: phoneLocal(row.phone),
     payment_method: row.payment_method || "cash",
     district: row.district || "",
     address: row.address || "",
@@ -310,7 +310,7 @@ function ConvertModal({ row, onClose, onDone }) {
     try {
       const body = {
         name: form.name,
-        phone: form.phone,
+        phone: formatPhone(form.phone),
         payment_method: form.payment_method,
         district: form.district,
         address: form.address,
@@ -381,12 +381,18 @@ function ConvertModal({ row, onClose, onDone }) {
               />
             </div>
             <div className="col-md-6">
-              <label className="form-label small">Phone *</label>
-              <input
-                className="form-control"
-                value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-              />
+              <label className="form-label small">Phone (+880) *</label>
+              <div className="input-group">
+                <span className="input-group-text">+880</span>
+                <input
+                  className="form-control"
+                  value={form.phone}
+                  onChange={(e) => set("phone", phoneLocal(e.target.value).slice(0, 10))}
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="1[0-9]{9}"
+                />
+              </div>
             </div>
             <div className="col-md-4">
               <label className="form-label small">Payment Method *</label>

@@ -94,9 +94,18 @@ export function AuthProvider({ children }) {
     return updatedUser;
   }, []);
 
+  const uploadAvatar = useCallback(async (file) => {
+    const body = new FormData();
+    body.append("image", file);
+    const response = await api.upload("api/account/upload-avatar", body);
+    const updatedUser = userFromResponse(response);
+    setUser((current) => ({ ...current, ...(updatedUser || {}) }));
+    return updatedUser;
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile }),
-    [user, loading, login, register, logout, updateProfile]
+    () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile, uploadAvatar }),
+    [user, loading, login, register, logout, updateProfile, uploadAvatar]
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
