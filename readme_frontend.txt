@@ -709,8 +709,6 @@ Failure response: Return 500 Internal Server Error
 
 Failure message: Failed to delete address.
 
-
-==================================
 1. /api/products
 GET http://localhost:3001/api/products
 GET http://localhost:3001/api/products?category=t-shirts
@@ -726,3 +724,161 @@ GET http://localhost:3001/api/product-pagination?page=1&per_page=10
 GET http://localhost:3001/api/product-pagination?page=2&per_page=10
 GET http://localhost:3001/api/product-pagination?page=1&per_page=4&category=t-shirts
 GET http://localhost:3001/api/product-pagination?search=premium&page=1&per_page=10
+
+=================================================
+Login API
+API endpoint: POST /api/auth/login
+
+Authentication: Not required
+
+Request fields: email, password
+
+Response data: token, user
+
+Cart merge: Guest cart merged if cart_session_id cookie exists
+
+Cookie cleanup: Deletes cart_session_id after merge
+
+Success message: Login successful.
+
+Invalid credentials: Return 401 Unauthorized
+
+Forgot Password API
+API endpoint: POST /api/auth/forgot-password
+
+Authentication: Not required
+
+Request field: email
+
+Always returns success: Prevents email enumeration
+
+Token generated: Random 64-char hex
+
+Token expiry: 30 minutes
+
+Token delivered: Email (SMTP) or console log (dev)
+
+Reset link format: {FRONTEND_URL}/reset-password?token=xxx
+
+Success message: If that email exists, a reset link has been sent.
+
+Reset Password API
+API endpoint: POST /api/auth/reset-password
+
+Authentication: Not required
+
+Request fields: token, password, confirmPassword
+
+Validation: Token required, exists in DB, not expired
+
+Validation: Password minimum 6 chars, matches confirm
+
+Token single use: Deleted after successful reset
+
+Success message: Password reset successfully. You can now log in.
+
+Invalid token: Return 400 Bad Request
+
+Account APIs
+Get My Profile API
+API endpoint: GET /api/account/me
+
+Authentication: JWT required
+
+Data source: Database using userId from token
+
+Includes: User info, addresses, order stats
+
+Response user fields: id, name, email, phone, image, role, joined_at, updated_at
+
+Response stats fields: total_orders, pending_orders, delivered_orders, wishlist
+
+Role format: Lowercase (admin, customer)
+
+Success message: User profile loaded.
+
+Update Profile API
+API endpoint: PUT /api/account/profile
+
+Authentication: JWT required
+
+Content-Type: application/json
+
+Request fields: name (optional), phone (optional)
+
+Validation: Name non-empty string if provided
+
+Validation: Phone string or null if provided
+
+Validation: At least one field required
+
+Non-updatable fields: email, role, passwordHash
+
+Success message: Profile updated successfully.
+
+Upload Avatar API
+API endpoint: POST /api/account/upload-avatar
+
+Authentication: JWT required
+
+Content-Type: multipart/form-data
+
+Form field: image (file, required)
+
+Allowed types: JPEG, JPG, PNG, WebP
+
+Max size: 2 MB
+
+Save location: public/uploads/avatars/
+
+Filename format: avatar-{userId}-{timestamp}.{ext}
+
+Old avatar: Deleted automatically
+
+DB update: User.image = new URL
+
+Success status: 201 Created
+
+Success message: Avatar uploaded successfully.
+
+Change Password API
+API endpoint: PUT /api/account/change-password
+
+Authentication: JWT required
+
+Content-Type: application/json
+
+Request fields: currentPassword, newPassword, confirmPassword
+
+Validation: Current password required and verified with bcrypt
+
+Validation: New password min 6 chars
+
+Validation: New and confirm must match
+
+Validation: New must differ from current
+
+Success message: Password changed successfully.
+
+Wrong current password: Return 400 Bad Request
+
+Get My Orders API
+API endpoint: GET /api/account/orders
+
+Authentication: JWT required
+
+Filter: Only orders for token userId
+
+Query param: status (optional)
+
+Query param: page (optional, default 1)
+
+Query param: per_page (optional, default 10, max 50)
+
+Status values: pending, confirmed, processing, shipped, delivered, cancelled
+
+Ordering: createdAt desc
+
+Meta fields: current_page, per_page, total, total_pages, has_more
+
+Success message: Orders loaded.

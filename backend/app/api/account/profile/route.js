@@ -18,7 +18,7 @@ export async function PUT(request) {
 
         const body = await request.json();
 
-        const { name, phone, image } = body;
+        const { name, phone } = body;
 
         const updateData = {};
 
@@ -53,24 +53,6 @@ export async function PUT(request) {
                 phone === null || phone.trim() === ""
                     ? null
                     : phone.trim();
-        }
-
-        if (image !== undefined) {
-            if (image !== null && typeof image !== "string") {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "Image must be a string URL or null.",
-                        data: null,
-                    },
-                    { status: 400 }
-                );
-            }
-
-            updateData.image =
-                image === null || image.trim() === ""
-                    ? null
-                    : image.trim();
         }
 
         if (Object.keys(updateData).length === 0) {
