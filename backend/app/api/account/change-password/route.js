@@ -19,18 +19,12 @@ export async function PUT(request) {
 
         const body = await request.json();
 
-        const {
-            currentPassword,
-            current_password,
-            newPassword,
-            new_password,
-            confirmPassword,
-            confirm_password,
-        } = body;
+        // Spec request fields: currentPassword, newPassword, confirmPassword.
+        const { currentPassword, newPassword, confirmPassword } = body;
 
-        const finalCurrent = currentPassword ?? current_password;
-        const finalNew = newPassword ?? new_password;
-        const finalConfirm = confirmPassword ?? confirm_password;
+        const finalCurrent = currentPassword;
+        const finalNew = newPassword;
+        const finalConfirm = confirmPassword;
 
         if (
             !finalCurrent ||
