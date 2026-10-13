@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, formatTk } from "@/lib/api";
+import { api, formatTk, phoneLocal } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
@@ -52,7 +52,7 @@ function EditOrder({ id }) {
         setOrder(ord);
         setForm({
           name: ord.name || "",
-          phone: ord.phone || "",
+          phone: phoneLocal(ord.phone),
           email: ord.email || "",
           district: ord.district || "",
           address: ord.address || "",
@@ -180,13 +180,19 @@ function EditOrder({ id }) {
                   />
                 </div>
                 <div className="mb-2">
-                  <label className="form-label">Phone *</label>
-                  <input
-                    className="form-control"
-                    value={form.phone}
-                    onChange={(e) => setF("phone", e.target.value)}
-                    required
-                  />
+                  <label className="form-label">Phone (+880) *</label>
+                  <div className="input-group">
+                    <span className="input-group-text">+880</span>
+                    <input
+                      className="form-control"
+                      value={form.phone}
+                      onChange={(e) => setF("phone", phoneLocal(e.target.value).slice(0, 10))}
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="1[0-9]{9}"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Email</label>

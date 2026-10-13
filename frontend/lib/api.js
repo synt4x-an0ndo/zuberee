@@ -71,6 +71,21 @@ export function imgUrl(path) {
   return `${API_BASE}/${value.replace(/^\/+/, "")}`;
 }
 
+/** Return the Bangladesh mobile subscriber number without the +880 prefix. */
+export function phoneLocal(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("880")) return digits.slice(3).replace(/^0/, "");
+  if (digits.startsWith("0")) return digits.slice(1);
+  return digits;
+}
+
+/** Format a Bangladesh mobile number for documented API payloads. */
+export function formatPhone(value) {
+  const local = phoneLocal(value);
+  return local ? `+880${local}` : "";
+}
+
 export function productColors(product) {
   if (!Array.isArray(product?.colors)) return [];
   return product.colors.filter((color) => color && typeof color === "object");

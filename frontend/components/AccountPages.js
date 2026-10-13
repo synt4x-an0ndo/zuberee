@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { FaArrowRight, FaBoxOpen, FaCheck, FaUser, FaRegClock, FaLock, FaChevronRight, FaPen } from "react-icons/fa6";
+import { FaArrowRight, FaBoxOpen, FaCheck, FaUser, FaRegClock, FaChevronRight, FaPen, FaEye, FaEyeSlash } from "react-icons/fa6";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatTk, imgUrl, unwrapList, unwrapObject } from "@/lib/api";
+import { api, formatPhone, formatTk, imgUrl, phoneLocal, unwrapList, unwrapObject } from "@/lib/api";
+import { normalizeOrders } from "@/lib/order";
 import notify from "@/components/notify";
 
 function AccountFrame({ eyebrow, title, children }) {
@@ -81,16 +82,48 @@ export function LoginPage() { return <AuthPanel />; }
 export function RegisterPage() { return <AuthPanel register />; }
 
 function ProfileForm({ user, onSaved }) {
-    const { updateProfile } = useAuth();
-    const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", phone: user?.phone || "", image: user?.image || "", password: "", confirmPassword: "" });
+    const { updateProfile, uploadAvatar } = useAuth();
+    const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", phone: phoneLocal(user?.phone), image: user?.image || "", password: "", confirmPassword: "" });
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState("");
+    const [imageError, setImageError] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [phoneError, setPhoneError] = useState("");
     const [loading, setLoading] = useState(false);
-    const change = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+    const change = (event) => {
+        const { name, value } = event.target;
+        const nextValue = name === "phone" ? phoneLocal(value).slice(0, 10) : value;
+        setForm((current) => ({ ...current, [name]: nextValue }));
+        if (name === "phone") setPhoneError(nextValue && !/^1\d{9}$/.test(nextValue) ? "Use 10 digits in the format 1XXXXXXXXX." : "");
+    };
     const submit = async (event) => {
         event.preventDefault();
+        if (form.phone && !/^1\d{9}$/.test(form.phone)) {
+            setPhoneError("Use 10 digits in the format 1XXXXXXXXX.");
+            return;
+        }
         setLoading(true);
         try {
-            const saved = await updateProfile(form);
-            setForm((current) => ({ ...current, password: "", confirmPassword: "", name: saved.name, email: saved.email, phone: saved.phone || "", image: saved.image || "" }));
+            const saved = await updateProfile({
+                name: form.name,
+                phone: formatPhone(form.phone) || null,
+                image: form.image || null,
+            });
+            const uploaded = imageFile ? await uploadAvatar(imageFile) : null;
+            const profileImage = uploaded?.image ?? uploaded?.user?.image ?? saved?.image ?? form.image;
+            setForm((current) => ({
+                ...current,
+                password: "",
+                confirmPassword: "",
+                name: saved?.name ?? current.name,
+                email: saved?.email ?? current.email,
+                phone: phoneLocal(saved?.phone ?? current.phone),
+                image: profileImage,
+            }));
+            setImageFile(null);
+            setImagePreview("");
+            setImageError("");
             onSaved("Profile updated.");
         } catch (error) { notify.error(error?.message || "Could not update your profile."); }
         finally { setLoading(false); }
@@ -98,19 +131,50 @@ function ProfileForm({ user, onSaved }) {
     return <form className="account-form profile-form" onSubmit={submit}>
         <div className="profile-form-grid">
             <label>Profile image URL<input name="image" value={form.image} onChange={change} /></label>
-            <div className="avatar-preview">{form.image ? <img src={form.image} alt="preview" /> : <span className="avatar-placeholder">{user?.name?.charAt(0) || "U"}</span>}</div>
+            <label>Upload profile image<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                if (file && file.size > 2 * 1024 * 1024) {
+                    setImageFile(null);
+                    setImageError("Image must be 2 MB or smaller.");
+                    event.target.value = "";
+                    return;
+                }
+                setImageFile(file);
+                setImagePreview(file ? URL.createObjectURL(file) : "");
+                setImageError("");
+            }} /><small>JPG, PNG, or WebP. Maximum 2 MB.</small>{imageError && <small role="alert">{imageError}</small>}</label>
+            <div>
+                <div className="avatar-preview">{(imagePreview || imgUrl(form.image) || form.image) ? <img src={imagePreview || imgUrl(form.image) || form.image} alt="preview" /> : <span className="avatar-placeholder">{user?.name?.charAt(0) || "U"}</span>}</div>
+                {imageFile && <button type="button" className="image-crop-button" onClick={() => {
+                    const image = new Image();
+                    image.onload = () => {
+                        const side = Math.min(image.naturalWidth, image.naturalHeight);
+                        const canvas = document.createElement("canvas");
+                        canvas.width = 600;
+                        canvas.height = 600;
+                        canvas.getContext("2d").drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 600, 600);
+                        canvas.toBlob((blob) => {
+                            if (!blob) return;
+                            const cropped = new File([blob], imageFile.name, { type: imageFile.type });
+                            setImageFile(cropped);
+                            setImagePreview(URL.createObjectURL(cropped));
+                        }, imageFile.type, 0.9);
+                    };
+                    image.src = imagePreview;
+                }}>Crop image to square</button>}
+            </div>
         </div>
         <div className="profile-form-grid">
             <label>Full name<input name="name" value={form.name} onChange={change} required /></label>
             <label>Email address<input type="email" name="email" value={form.email} onChange={change} required /></label>
         </div>
         <div className="profile-form-grid">
-            <label>Phone number<input name="phone" value={form.phone} onChange={change} /></label>
+            <label>Phone number<div className="account-phone-input"><span className="account-phone-prefix">+880</span><input name="phone" value={form.phone} onChange={change} inputMode="numeric" maxLength={10} pattern="1[0-9]{9}" aria-describedby="profile-phone-hint" /></div><small id="profile-phone-hint">Enter 10 digits in the format 1XXXXXXXXX.</small>{phoneError && <small role="alert">{phoneError}</small>}</label>
         </div>
         <div className="profile-divider"><span>Change password</span><small>Leave blank to keep your current password.</small></div>
         <div className="profile-form-grid">
-            <label>New password<input type="password" name="password" value={form.password} onChange={change} minLength={8} /></label>
-            <label>Confirm new password<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={change} minLength={8} /></label>
+            <label>New password<div className="password-input"><input type={showPassword ? "text" : "password"} name="password" value={form.password} onChange={change} minLength={8} /><button type="button" aria-label={showPassword ? "Hide new password" : "Show new password"} onClick={() => setShowPassword((visible) => !visible)}>{showPassword ? <FaEyeSlash /> : <FaEye />}</button></div></label>
+            <label>Confirm new password<div className="password-input"><input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={form.confirmPassword} onChange={change} minLength={8} /><button type="button" aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"} onClick={() => setShowConfirmPassword((visible) => !visible)}>{showConfirmPassword ? <FaEyeSlash /> : <FaEye />}</button></div></label>
         </div>
         <button className="account-submit compact" type="submit" disabled={loading}>{loading ? "Saving..." : "Save changes"}<FaCheck /></button>
     </form>;
@@ -119,9 +183,9 @@ function ProfileForm({ user, onSaved }) {
 function Orders({ orders }) {
     if (!orders.length) return <div className="account-empty"><FaBoxOpen /><h3>No orders yet</h3><p>Your next favorite piece belongs here.</p><Link href="/shop" className="account-link">Start shopping <FaArrowRight /></Link></div>;
     return <div className="orders-list">{orders.map((order) => <article className="order-item" key={order.id}>
-        <div className="order-top"><div><span className="order-label">Order #{order.id}</span><time>{new Date(order.createdAt).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}</time></div><span className={`order-status ${String(order.status).toLowerCase()}`}>{order.status}</span></div>
-        <div className="order-products">{(order.items || []).map((item) => <div className="order-product" key={item.id}><img src={imgUrl(item.product?.images?.[0])} alt="" /><div><strong>{item.product?.title || item.product?.name || "Product"}</strong><span>Qty {item.quantity}</span></div><b>{formatTk(Number(item.unitPrice) * item.quantity)} Tk</b></div>)}</div>
-        <div className="order-total"><span>{order.shippingAddress || "Delivery address on file"}</span><strong>{formatTk(order.totalAmount)} Tk</strong></div>
+        <div className="order-top"><div><span className="order-label">Order #{order.id}</span><time>{new Date(order.created_at).toLocaleDateString("en-BD", { day: "numeric", month: "short", year: "numeric" })}</time></div><span className={`order-status ${String(order.status).toLowerCase()}`}>{order.status}</span></div>
+        <div className="order-products">{(order.items || []).map((item) => <div className="order-product" key={item.id}><div><strong>{item.title}</strong><span>Qty {item.qty}</span></div><b>{formatTk(item.totalPrice)} Tk</b></div>)}</div>
+        <div className="order-total"><span>{order.shipping_address || "Delivery address on file"}<small>Shipping: {formatTk(order.shipping_fee)} Tk · Payment: {order.payment_status || "—"}</small></span><strong>{formatTk(order.total_amount)} Tk</strong></div>
     </article>)}</div>;
 }
 
@@ -137,7 +201,16 @@ export function AccountPage() {
     }, [authLoading, isAuthenticated, router]);
     useEffect(() => {
         if (!isAuthenticated) return;
-        api.get("api/account/orders").then((response) => setOrders(unwrapList(response, ["orders"]))).catch(() => notify.error("Could not load your orders.")).finally(() => setOrdersLoading(false));
+        const loadOrders = () => {
+            setOrdersLoading(true);
+            api.get("api/account/orders")
+                .then((response) => setOrders(normalizeOrders(unwrapList(response, ["orders"]))))
+                .catch(() => notify.error("Could not load your orders."))
+                .finally(() => setOrdersLoading(false));
+        };
+        loadOrders();
+        window.addEventListener("order-created", loadOrders);
+        return () => window.removeEventListener("order-created", loadOrders);
     }, [isAuthenticated]);
 
     if (authLoading || !isAuthenticated) return <AccountFrame eyebrow="Eyara account" title="Your account"><div className="account-loading">Loading your account...</div></AccountFrame>;
@@ -294,9 +367,6 @@ export function AccountDashboard() {
                         <nav className="dash-card dash-nav-card" aria-label="Account navigation">
                             <DashNavItem href="/user" icon={<FaUser />} label="Profile Info" active={pathname === "/user"} />
                             <DashNavItem href="/user/orders" icon={<FaBoxOpen />} label="My Orders" active={pathname === "/user/orders"} />
-                            <DashNavItem icon={<FaCheck />} label="Wishlist" disabled />
-                            {/* No password/security endpoint exists in the backend yet. */}
-                            <DashNavItem icon={<FaLock />} label="Security" disabled />
                         </nav>
                     </aside>
 
@@ -376,12 +446,17 @@ export function AccountOrdersPanel() {
     const [ordersError, setOrdersError] = useState("");
     useEffect(() => {
         if (!isAuthenticated) return;
-        setOrdersLoading(true);
-        setOrdersError("");
-        api.get("api/account/orders")
-            .then((response) => setOrders(unwrapList(response, ["orders"])))
-            .catch(() => setOrdersError("Your order history is temporarily unavailable. This feature needs backend support."))
-            .finally(() => setOrdersLoading(false));
+        const loadOrders = () => {
+            setOrdersLoading(true);
+            setOrdersError("");
+            api.get("api/account/orders")
+                .then((response) => setOrders(normalizeOrders(unwrapList(response, ["orders"]))))
+                .catch(() => setOrdersError("Your order history is temporarily unavailable."))
+                .finally(() => setOrdersLoading(false));
+        };
+        loadOrders();
+        window.addEventListener("order-created", loadOrders);
+        return () => window.removeEventListener("order-created", loadOrders);
     }, [isAuthenticated]);
     return <AccountGuard>
         <section className="account-section"><div className="section-kicker">Your purchases</div><h2>Order history</h2>

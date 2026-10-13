@@ -97,6 +97,30 @@
     border-color: #47735d
 }
 
+.account-phone-input {
+    display: flex;
+    align-items: baseline;
+    border-bottom: 1px solid #bdc9be
+}
+
+.account-phone-prefix {
+    flex: 0 0 auto;
+    color: #526259;
+    font: 16px Georgia, serif;
+    padding: 11px 8px 10px 0
+}
+
+.account-form .account-phone-input input {
+    flex: 1 1 auto;
+    width: auto;
+    border-bottom: 0;
+    padding-left: 0
+}
+
+.account-phone-input:focus-within {
+    border-color: #47735d
+}
+
 .account-submit {
     display: flex;
     align-items: center;
@@ -248,6 +272,34 @@
     top: 8px;
     font-size: 11px;
     color: #87938b;
+    cursor: pointer
+}
+
+.image-crop-button {
+    border: 1px solid #bdc9be;
+    background: #fff;
+    color: #47735d;
+    padding: 7px 10px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700
+}
+
+.password-input {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #bdc9be
+}
+
+.account-form .password-input input {
+    border-bottom: 0
+}
+
+.password-input button {
+    border: 0;
+    background: transparent;
+    color: #47735d;
+    padding: 8px;
     cursor: pointer
 }
 

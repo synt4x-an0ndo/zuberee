@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FaMinus, FaPlus, FaTrash, FaXmark as FaTimes, FaArrowLeft, FaBagShopping as FaShoppingBag } from "react-icons/fa6";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatTk, imgUrl } from "@/lib/api";
+import { api, formatPhone, formatTk, imgUrl, phoneLocal } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 import notify from "@/components/notify";
 
@@ -100,12 +100,13 @@ export default function CartDrawer() {
         ? { shippingAddress: [form.address, form.district].filter(Boolean).join(", ") }
         : {
           guestName: form.name,
-          guestPhone: form.phone,
+          guestPhone: formatPhone(form.phone),
           guestAddress: [form.address, form.district].filter(Boolean).join(", "),
         }),
     };
     try {
       await api.post("api/orders", body);
+      window.dispatchEvent(new Event("order-created"));
       try {
         await refreshCart();
       } catch {
@@ -276,18 +277,25 @@ export default function CartDrawer() {
               </div>
               <div className="mb-3">
                 <label className="form-label small fw-semibold" htmlFor="checkout-phone">Phone number</label>
-                <input
-                  id="checkout-phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  className="form-control"
-                  required={!isAuthenticated}
-                  value={form.phone}
-                  onChange={(e) => setField("phone", e.target.value)}
-                  placeholder="01XXXXXXXXX"
-                />
+                <div className="input-group">
+                  <span className="input-group-text">+880</span>
+                  <input
+                    id="checkout-phone"
+                    name="phone"
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="numeric"
+                    className="form-control"
+                    required={!isAuthenticated}
+                    minLength={10}
+                    maxLength={10}
+                    pattern="1[0-9]{9}"
+                    value={form.phone}
+                    onChange={(e) => setField("phone", phoneLocal(e.target.value).slice(0, 10))}
+                    placeholder="1XXXXXXXXX"
+                  />
+                </div>
+                <small className="text-muted">+880 is included automatically. Enter 1XXXXXXXXX.</small>
               </div>
               <div className="mb-3">
                 <label className="form-label small fw-semibold" htmlFor="checkout-district">District</label>

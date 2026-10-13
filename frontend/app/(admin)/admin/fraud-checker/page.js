@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, formatPhone, phoneLocal } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import Loader from "@/components/Loader";
@@ -64,7 +64,7 @@ function FraudCheckerSettings() {
     setTesting(true);
     setResult(null);
     try {
-      const r = await api.post("api/fraud-checker/settings/test", { phone });
+      const r = await api.post("api/fraud-checker/settings/test", { phone: formatPhone(phone) });
       setResult(r?.data);
       notify.success("Courier checker connection successful.");
     } catch (e) {
@@ -152,10 +152,13 @@ function FraudCheckerSettings() {
             <div className="d-flex gap-2">
               <input
                 className="form-control"
-                placeholder="01XXXXXXXXX"
+                placeholder="1XXXXXXXXX"
+                inputMode="numeric"
+                maxLength={10}
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhone(phoneLocal(e.target.value).slice(0, 10))}
               />
+              <span className="align-self-center text-muted">+880</span>
               <button
                 type="button"
                 className="btn btn-outline-primary"

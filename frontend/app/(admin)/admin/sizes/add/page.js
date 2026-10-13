@@ -3,7 +3,7 @@
 import SizeForm from "@/components/admin/SizeForm";
 import PageGate from "@/components/admin/PageGate";
 
-/** POST api/sizes {size} */
+/** Product sizes are managed as variants in the product editor. */
 export default function SizesAddPage() {
   return (
     <PageGate permission="create sizes">

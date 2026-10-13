@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { FaPen, FaReceipt, FaTruck, FaRepeat, FaChevronDown } from "react-icons/fa6";
+import { FaPen, FaReceipt, FaTruck, FaRepeat, FaChevronDown, FaChevronUp, FaTag, FaShieldHalved } from "react-icons/fa6";
 import { api, formatTk, imgUrl } from "@/lib/api";
 import notify from "@/components/notify";
 import PageGate from "@/components/admin/PageGate";
 import { ORDER_STATUSES } from "@/lib/orderStatuses";
 import { normalizeOrders } from "@/lib/order";
 import "@/styles/css/187416aab916025b.css";
+import "@/styles/orders-reference.css";
+
+function statusClass(status) {
+  return String(status || "pending").toLowerCase().replace(/-/g, "_");
+}
 
 
 /**
@@ -165,21 +170,21 @@ function OrdersPage() {
   }, [filters]);
 
   return (
-    <div className="container-fluid py-3">
-      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div className="container-fluid py-3 orders-reference-page">
+      <div className="orders-reference-heading">
         <div>
           <h4 className="mb-0 fw-bold">Orders</h4>
           <small className="text-muted">Manage every order end to end</small>
         </div>
         <div className="d-flex gap-2">
-          <a href={csvUrl} className="btn btn-sm btn-outline-success" download>
+          <a href={csvUrl} className="orders-reference-export" download>
             Export CSV
           </a>
         </div>
       </div>
 
       {/* filters */}
-      <div className="card border-0 shadow-sm mb-3">
+      <div className="card border-0 shadow-sm mb-3 orders-reference-filters">
         <div className="card-body py-3 d-flex gap-2 flex-wrap align-items-center">
           <select
             className="form-select w-auto"
@@ -238,10 +243,10 @@ function OrdersPage() {
       </div>
 
       {/* table */}
-      <div className="card border-0 shadow-sm">
+      <div className="card border-0 shadow-sm orders-reference-table-card">
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
+            <table className="table table-hover align-middle mb-0 orders-reference-table">
               <thead className="table-light">
                 <tr>
                   <th>Order ID</th>
@@ -275,14 +280,14 @@ function OrdersPage() {
                 ) : (
                   rows.map((o) => (
                     <Fragment key={o.id}>
-                      <tr key={o.id}>
-                        <td className="fw-bold">#{o.id}</td>
+                      <tr className={expanded === o.id ? "orders-reference-row is-expanded" : "orders-reference-row"} key={o.id}>
+                        <td className="fw-bold"><span className="orders-reference-order-id">ORD-{String(o.id).padStart(5, "0")}</span><small>#{o.id}</small></td>
                         <td>
-                          <div className="fw-semibold">{o.name || o.customer?.name}</div>
-                          <small className="text-muted">{o.phone || o.customer?.phone}</small>
+                          <div className="fw-semibold orders-reference-customer">{o.name || o.customer?.name || "Guest customer"}</div>
+                          <small className="text-muted">{o.phone || o.customer?.phone || "—"} <span>{o.district}</span></small>
                           <div>
                             <button
-                              className="btn btn-link btn-sm p-0 text-decoration-none"
+                              className="btn btn-link btn-sm p-0 text-decoration-none orders-reference-intelligence"
                               onClick={() => openIntelligence(o)}
                             >
                               Customer intelligence
@@ -301,7 +306,7 @@ function OrdersPage() {
                         </td>
                         <td>
                           <select
-                            className="form-select form-select-sm"
+                            className={`form-select form-select-sm orders-reference-status-select status-${statusClass(o.status)}`}
                             value={String(o.status || "PENDING").toUpperCase().replace(/-/g, "_")}
                             onChange={(e) => updateStatus(o, e.target.value)}
                           >
@@ -313,9 +318,9 @@ function OrdersPage() {
                           </select>
                         </td>
                         <td>
-                          <div className="d-flex gap-1 flex-wrap">
+                          <div className="d-flex gap-1 flex-wrap orders-reference-actions">
                             <button
-                              className="btn btn-sm btn-outline-secondary"
+                              className="btn btn-sm btn-outline-secondary orders-reference-action"
                               title="Expand"
                               onClick={() =>
                                 setExpanded(expanded === o.id ? null : o.id)
@@ -325,14 +330,14 @@ function OrdersPage() {
                               Expand
                             </button>
                             <button
-                              className="btn btn-sm btn-outline-secondary"
+                              className="btn btn-sm btn-outline-secondary orders-reference-action"
                               title="Repeat"
                               onClick={() => createCourier(o, "repeat")}
                             >
                               <FaRepeat />
                             </button>
                             <button
-                              className="btn btn-sm btn-outline-secondary"
+                              className="btn btn-sm btn-outline-secondary orders-reference-action"
                               title="Courier entry (Pathao)"
                               disabled={courier[o.id]}
                               onClick={() => createCourier(o, "pathao")}
@@ -341,19 +346,19 @@ function OrdersPage() {
                             </button>
                             <Link
                               href={`/admin/orders/invoice/${o.id}`}
-                              className="btn btn-sm btn-outline-primary"
+                              className="btn btn-sm btn-outline-primary orders-reference-action"
                             >
                               INVOICE
                             </Link>
                             <Link
                               href={`/admin/orders/edit/${o.id}`}
-                              className="btn btn-sm btn-outline-warning"
+                              className="btn btn-sm btn-outline-warning orders-reference-action"
                               title="Edit order"
                             >
                               <FaPen />
                             </Link>
                             <button
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn btn-sm btn-outline-danger orders-reference-action"
                               title="Delete order"
                               onClick={() => deleteOrder(o)}
                             >
@@ -364,11 +369,12 @@ function OrdersPage() {
                       </tr>
                       {expanded === o.id && (
                         <tr>
-                          <td colSpan={6} className="bg-light">
+                          <td colSpan={6} className="bg-light orders-reference-expanded-cell">
                             <OrderExpand
                               order={o}
                               onBadge={() => setBadgeOrder(o)}
                               onCourier={(k) => createCourier(o, k)}
+                              onStatusChange={(value) => updateStatus(o, value)}
                               courierLoading={courier[o.id]}
                             />
                           </td>
@@ -468,86 +474,99 @@ function OrdersPage() {
 }
 
 /* ---------- expanded row content ---------- */
-function OrderExpand({ order, onBadge, onCourier, courierLoading }) {
+function OrderExpand({ order, onBadge, onCourier, onStatusChange, courierLoading }) {
   const items = order.items || order.order_items || order.cart_items || [];
+  const [productImages, setProductImages] = useState({});
   const subtotal = items.reduce(
     (s, it) => s + (Number(it.totalPrice ?? it.total ?? 0) || 0),
     0
   );
-  const shipping = Number(order.shipping_cost) || 0;
+  const shipping = Number(order.shipping_fee ?? order.shipping_cost) || 0;
   const advance = Number(order.advance_payment) || 0;
 
+  useEffect(() => {
+    let alive = true;
+    const productIds = [...new Set(items.map((item) => item.product_id).filter(Boolean))];
+    if (!productIds.length) return undefined;
+
+    Promise.all(productIds.map(async (productId) => {
+      try {
+        const response = await api.get(`api/products/${productId}`, { auth: false });
+        const product = response?.data?.data || response?.data || response;
+        const image = Array.isArray(product?.images) ? product.images[0] : null;
+        return [productId, imgUrl(image)];
+      } catch {
+        return [productId, null];
+      }
+    })).then((entries) => {
+      if (alive) setProductImages(Object.fromEntries(entries));
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [items]);
+
   return (
-    <div className="row g-3">
-      <div className="col-lg-7">
-        <div className="card border">
-          <div className="card-header bg-white py-2 fw-bold">Ordered Products</div>
-          <div className="card-body">
+    <div className="orders-reference-detail">
+      <div className="orders-reference-detail-column orders-reference-products">
+        <h6>Ordered Products</h6>
+        <div className="orders-reference-panel">
             {items.map((it, i) => (
-              <div key={i} className="d-flex justify-content-between mb-2">
-                <div>
-                  <b>{it.title}</b>
-                  <div className="small text-muted">
-                    {it.color_name || it.color ? `Color: ${it.color_name || it.color}` : ""}{" "}
-                    {it.size ? `Size: ${it.size}` : ""} × {it.qty}
-                  </div>
+              <div key={i} className="orders-reference-product">
+                {imgUrl(it.image || it.product?.images?.[0]) || productImages[it.product_id] ? (
+                  <img
+                    className="orders-reference-product-image"
+                    src={imgUrl(it.image || it.product?.images?.[0]) || productImages[it.product_id]}
+                    alt=""
+                  />
+                ) : (
+                  <span className="orders-reference-product-image orders-reference-product-placeholder" aria-hidden="true" />
+                )}
+                <div className="orders-reference-product-copy">
+                  <b>{it.title || "Product"}</b>
+                  <div>Qty: {it.qty} × {formatTk(it.unitPrice)} = <strong>{formatTk(it.totalPrice)}৳</strong></div>
+                  {(it.color_name || it.color) && <div>Color: {it.color_name || it.color}</div>}
+                  {it.size && <div>Size: {it.size}</div>}
                 </div>
-                <div className="fw-semibold">{formatTk(it.totalPrice ?? it.total)}৳</div>
+                {it.color && <span className="orders-reference-color-dot" title={it.color_name || it.color} />}
               </div>
             ))}
-            <hr />
-            <div className="d-flex justify-content-between">
-              <span>Order Summary</span>
-            </div>
-            <div className="d-flex justify-content-between small">
-              <span>Subtotal</span>
-              <span>{formatTk(subtotal)}৳</span>
-            </div>
-            <div className="d-flex justify-content-between small">
-              <span>Shipping</span>
-              <span>{formatTk(shipping)}৳</span>
-            </div>
-            <div className="d-flex justify-content-between small">
-              <span>Advance Payment</span>
-              <span>{formatTk(advance)}৳</span>
-            </div>
-            <div className="d-flex justify-content-between fw-bold">
-              <span>Total</span>
-              <span>{formatTk(subtotal + shipping - advance)}৳</span>
-            </div>
           </div>
+      </div>
+      <div className="orders-reference-detail-column">
+        <h6>Order Summary</h6>
+        <div className="orders-reference-panel orders-reference-summary">
+          <div><span>Payment Method</span><strong>{order.payment_method || "cash"}</strong></div>
+          <div><span>Shipping Cost</span><strong>{formatTk(shipping)}৳</strong></div>
+          <div><span>Advance Payment</span><strong>{formatTk(advance)}৳</strong></div>
+          <div><span>Total</span><strong>{formatTk(order.total_amount ?? subtotal + shipping)}৳</strong></div>
+          <div><span>Total Due</span><strong>{formatTk((order.total_amount ?? subtotal + shipping) - advance)}৳</strong></div>
         </div>
       </div>
-      <div className="col-lg-5">
-        <div className="card border">
-          <div className="card-header bg-white py-2 fw-bold">Manage Order</div>
-          <div className="card-body small">
-            <p className="mb-1">
-              <b>Status:</b> {order.status}
-            </p>
-            <p className="mb-1">
-              <b>Payment:</b> {order.payment_method}
-            </p>
-            <p className="mb-1">
-              <b>Address:</b> {order.address}, {order.district}
-            </p>
-            {order.delivery_notes && (
-              <p className="mb-1">
-                <b>Notes:</b> {order.delivery_notes}
-              </p>
-            )}
-            <div className="d-flex gap-2 mt-2">
-              <button className="btn btn-sm btn-outline-secondary" onClick={onBadge}>
-                Assign Customer Badge
-              </button>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                disabled={courierLoading}
-                onClick={() => onCourier("pathao")}
-              >
-                {order.pathao_order_id ? "✓ Entry Created" : "Entry Pathao"}
-              </button>
-            </div>
+      <div className="orders-reference-detail-column">
+        <h6>Manage Order</h6>
+        <div className="orders-reference-panel orders-reference-manage">
+          <label>Status
+            <select
+              className={`orders-reference-status-select status-${statusClass(order.status)}`}
+              value={String(order.status || "pending").toUpperCase().replace(/-/g, "_")}
+              onChange={(event) => onStatusChange(event.target.value)}
+            >
+              {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+          <label>Courier Entry
+            <select defaultValue="">
+              <option value="">Select Courier</option>
+              <option value="pathao">Pathao</option>
+            </select>
+          </label>
+          <div className="orders-reference-manage-actions">
+            <button type="button" onClick={onBadge}><FaTag /> Badge</button>
+            <button type="button" onClick={() => onCourier("pathao")} disabled={courierLoading}><FaShieldHalved /> Courier</button>
+            <Link href={`/admin/orders/edit/${order.id}`}><FaPen /> Edit</Link>
+            <Link href={`/admin/orders/invoice/${order.id}`}><FaReceipt /> Invoice</Link>
           </div>
         </div>
       </div>
