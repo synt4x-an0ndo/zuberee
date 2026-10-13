@@ -882,3 +882,189 @@ Ordering: createdAt desc
 Meta fields: current_page, per_page, total, total_pages, has_more
 
 Success message: Orders loaded.
+
+Inventory Summary API
+API endpoint: GET /api/admin/inventory/summary
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Response format: { message: "success", data: {...} }
+
+Field tracked_products: Unique products with track inventory on
+
+Field total_variants: Total variant count
+
+Field units_on_hand: Sum of ProductVariant.stock
+
+Field units_reserved: Sum of ProductVariant.held
+
+Field low_stock: Variants with available > 0 and ≤ threshold
+
+Field out_of_stock: Variants with available ≤ 0
+
+Field stock_value: Sum of price × stock
+
+Field low_stock_threshold: Default 3
+
+Non-admin: Return 403 Forbidden
+
+Failure message: failed
+
+Inventory Variants List API
+API endpoint: GET /api/admin/inventory/variants
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query params: search, filter, page, per_page
+
+Filter values: all, in_stock, low_stock, out_of_stock, preorder, tracked
+
+Search fields: value, product.name, product.sku
+
+Ordering: productId asc, position asc
+
+Default per_page: 30
+
+Max per_page: 100
+
+Response fields per variant: id, product_id, product_color_id, size_id, variant_key, sku, price, stock, reserved, held, available, low_stock_threshold, allow_preorder, is_active, position, label, low_stock, product, color, size
+
+Product object: id, title, sku, status, track_inventory, first_image
+
+Color object: id, name, code, image
+
+Size object: id, size
+
+Meta fields: current_page, per_page, total, total_pages, has_more
+
+Non-admin: Return 403 Forbidden
+
+Invalid filter: Return 400 Bad Request
+
+Failure message: failed
+
+Dashboard Summary API
+API endpoint: GET /api/admin/dashboard/summary
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query param: range (optional, default month)
+
+Range values: today, week, month, year, custom
+
+Query param: from (only for custom range, format YYYY-MM-DD)
+
+Query param: to (only for custom range, format YYYY-MM-DD)
+
+Query param: hot_limit (optional, default 5, max 10)
+
+Timezone: Asia/Dhaka
+
+Response format: { message: "success", data: {...} }
+
+range.from and range.to: Formatted as YYYY-MM-DD HH:mm:ss
+
+totals.gross_sales: Sum of non-cancelled orders totalAmount
+
+totals.orders: All orders count in range
+
+totals.units_sold: Sum of item quantities in non-cancelled orders
+
+totals.customers: Unique user IDs + unique guest phones
+
+totals.average_order_value: gross_sales / non-cancelled orders count
+
+totals.shipping_collected: Sum of shippingFee in non-cancelled orders
+
+changes.*: Null (future scope — comparison vs previous period)
+
+sales_trend[]: Daily sales and orders (non-cancelled only)
+
+status_breakdown[]: Order count and sales per status with percentage
+
+top_products[]: Best-selling products by sales amount
+
+Cancelled orders: Excluded from sales, units, trend, top products
+
+Cancelled orders: Included in totals.orders and status_breakdown
+
+Non-admin: Return 403 Forbidden
+
+Invalid range: Return 400 Bad Request
+
+Failure response: { message: "failed", data: null }
+
+Get All Sizes API (Public)
+API endpoint: GET /api/sizes
+
+Authentication: Not required
+
+Filter: Only isActive: true
+
+Response: Plain array [{ id, size }]
+
+Ordering: position asc, id asc
+
+Get All Sizes API (Admin)
+API endpoint: GET /api/admin/sizes
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query params: search, status (all, active, inactive)
+
+Response: { message: "success", data: [...] }
+
+Data fields: id, size, position, is_active, created_at, updated_at
+
+Create Size API
+API endpoint: POST /api/admin/sizes
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: size (required), position (optional, auto), isActive (optional, default true)
+
+Validation: Size non-empty string, unique
+
+Auto position: Max + 1 if not provided
+
+Success status: 201 Created
+
+Duplicate: Return 409 Conflict
+
+Update Size API
+API endpoint: PUT /api/admin/sizes/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: size, position, isActive (all optional)
+
+Validation: Size unique if changed
+
+Size not found: Return 404 Not Found
+
+Duplicate: Return 409 Conflict
+
+Delete Size API
+API endpoint: DELETE /api/admin/sizes/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Prevent deletion: If used by any ProductVariant.value
+
+Size not found: Return 404 Not Found
+
+In use: Return 409 Conflict
