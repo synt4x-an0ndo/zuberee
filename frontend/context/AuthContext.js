@@ -88,7 +88,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateProfile = useCallback(async (details) => {
-    const response = await api.put("api/account/profile", details);
+    // Backend spec: PUT /api/account/profile accepts only { name, phone }.
+    // email / role / passwordHash are never updatable here.
+    const payload = {};
+    if (details?.name !== undefined) payload.name = details.name;
+    if (details?.phone !== undefined) payload.phone = details.phone;
+    const response = await api.put("api/account/profile", payload);
     const updatedUser = userFromResponse(response);
     setUser((current) => ({ ...current, ...(updatedUser || {}) }));
     return updatedUser;
@@ -103,9 +108,24 @@ export function AuthProvider({ children }) {
     return updatedUser;
   }, []);
 
+  const changePassword = useCallback(
+    (details) => api.put("api/account/change-password", details),
+    []
+  );
+
+  const forgotPassword = useCallback(
+    (email) => api.post("api/auth/forgot-password", { email }, { auth: false }),
+    []
+  );
+
+  const resetPassword = useCallback(
+    (details) => api.post("api/auth/reset-password", details, { auth: false }),
+    []
+  );
+
   const value = useMemo(
-    () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile, uploadAvatar }),
-    [user, loading, login, register, logout, updateProfile, uploadAvatar]
+    () => ({ user, loading, isAuthenticated: Boolean(user), login, register, logout, updateProfile, uploadAvatar, changePassword, forgotPassword, resetPassword }),
+    [user, loading, login, register, logout, updateProfile, uploadAvatar, changePassword, forgotPassword, resetPassword]
   );
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;

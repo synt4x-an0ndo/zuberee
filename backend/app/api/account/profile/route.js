@@ -18,6 +18,8 @@ export async function PUT(request) {
 
         const body = await request.json();
 
+        // Spec: only name + phone are updatable.
+        // email / role / passwordHash are never updated here.
         const { name, phone } = body;
 
         const updateData = {};
@@ -59,7 +61,8 @@ export async function PUT(request) {
             return Response.json(
                 {
                     success: false,
-                    message: "No valid fields to update.",
+                    message:
+                        "At least one field (name or phone) is required.",
                     data: null,
                 },
                 { status: 400 }

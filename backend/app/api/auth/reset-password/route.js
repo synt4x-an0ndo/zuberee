@@ -5,20 +5,8 @@ export async function POST(request) {
     try {
         const body = await request.json();
 
-        const {
-            token,
-            password,
-            newPassword,
-            new_password,
-            confirmPassword,
-            confirm_password,
-        } = body;
-
-        const finalPassword =
-            password ?? newPassword ?? new_password;
-
-        const finalConfirm =
-            confirmPassword ?? confirm_password;
+        // Spec request fields: token, password, confirmPassword.
+        const { token, password, confirmPassword } = body;
 
         if (!token || typeof token !== "string" || !token.trim()) {
             return Response.json(
@@ -32,9 +20,9 @@ export async function POST(request) {
         }
 
         if (
-            !finalPassword ||
-            typeof finalPassword !== "string" ||
-            finalPassword.length < 6
+            !password ||
+            typeof password !== "string" ||
+            password.length < 6
         ) {
             return Response.json(
                 {
@@ -46,7 +34,7 @@ export async function POST(request) {
             );
         }
 
-        if (finalPassword !== finalConfirm) {
+        if (password !== confirmPassword) {
             return Response.json(
                 {
                     success: false,
@@ -88,8 +76,9 @@ export async function POST(request) {
             );
         }
 
-        const newHash = await bcrypt.hash(finalPassword, 10);
+        const newHash = await bcrypt.hash(password, 10);
 
+        // Spec: token is single-use — deleted after successful reset.
         await prisma.$transaction(async (tx) => {
             await tx.user.update({
                 where: { id: resetRecord.userId },
