@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
+import { NextResponse } from "next/server";
 import prisma from "../../../../directory/prisma/prisma.js";
 import { cookies } from "next/headers";
 import {
@@ -16,7 +17,7 @@ export async function POST(request) {
         const { email, password } = body;
 
         if (!email || !password) {
-            return Response.json(
+            return NextResponse.json(
                 {
                     success: false,
                     message: "Email and password are required.",
@@ -35,7 +36,7 @@ export async function POST(request) {
         });
 
         if (!user) {
-            return Response.json(
+            return NextResponse.json(
                 {
                     success: false,
                     message: "Invalid email or password.",
@@ -51,7 +52,7 @@ export async function POST(request) {
         );
 
         if (!isPasswordValid) {
-            return Response.json(
+            return NextResponse.json(
                 {
                     success: false,
                     message: "Invalid email or password.",
@@ -76,10 +77,9 @@ export async function POST(request) {
 
         if (sessionId) {
             await mergeGuestCart(sessionId, user.id);
-            cookieStore.delete(CART_COOKIE_NAME);
         }
 
-        return Response.json(
+        const response = NextResponse.json(
             {
                 success: true,
                 message: "Login successful.",
@@ -95,10 +95,19 @@ export async function POST(request) {
             },
             { status: 200 }
         );
+
+        // Delete guest cart cookie AFTER merge so the browser actually
+        // clears it (mutating cookieStore alone does not propagate
+        // Set-Cookie from a Route Handler response).
+        if (sessionId) {
+            response.cookies.delete(CART_COOKIE_NAME);
+        }
+
+        return response;
     } catch (error) {
         console.error("Login API error:", error);
 
-        return Response.json(
+        return NextResponse.json(
             {
                 success: false,
                 message: "Something went wrong while logging in.",

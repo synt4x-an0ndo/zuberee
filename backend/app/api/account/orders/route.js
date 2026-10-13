@@ -1,6 +1,15 @@
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
+const VALID_STATUSES = new Set([
+    "PENDING",
+    "CONFIRMED",
+    "PROCESSING",
+    "SHIPPED",
+    "DELIVERED",
+    "CANCELLED",
+]);
+
 const ORDER_INCLUDE = {
     items: {
         include: {
@@ -61,30 +70,39 @@ export async function GET(request) {
 
         const { searchParams } = new URL(request.url);
 
-        const status = searchParams.get("status")?.trim();
+        const rawStatus = searchParams.get("status")?.trim();
 
-        const pageParam = searchParams.get("page");
-        const perPageParam = searchParams.get("per_page");
+        // Spec: page default 1, per_page default 10, max 50.
+        const page = Math.max(Number.parseInt(searchParams.get("page"), 10) || 1, 1);
 
-        const page =
-            pageParam && Number(pageParam) > 0 ? Number(pageParam) : 1;
+        let perPage = Number.parseInt(searchParams.get("per_page"), 10);
+        if (!Number.isFinite(perPage) || perPage <= 0) perPage = 10;
+        perPage = Math.min(perPage, 50);
 
-        const perPage =
-            perPageParam &&
-            Number(perPageParam) > 0 &&
-            Number(perPageParam) <= 50
-                ? Number(perPageParam)
-                : 10;
+        if (rawStatus) {
+            const normalized = rawStatus.toUpperCase().replace(/-/g, "_");
+            if (!VALID_STATUSES.has(normalized)) {
+                return Response.json(
+                    {
+                        success: false,
+                        message:
+                            "Invalid status. Allowed: pending, confirmed, processing, shipped, delivered, cancelled.",
+                        data: null,
+                    },
+                    { status: 400 }
+                );
+            }
+        }
 
         const skip = (page - 1) * perPage;
 
         const where = {
             userId: auth.user.userId,
 
-            ...(status
+            ...(rawStatus
                 ? {
-                    status: status.toUpperCase().replace("-", "_"),
-                }
+                      status: rawStatus.toUpperCase().replace(/-/g, "_"),
+                  }
                 : {}),
         };
 
