@@ -1363,3 +1363,121 @@ Order not found: Return 404 Not Found
 
 Failure message: Failed to load order.
 
+Sales Report API
+API endpoint: GET /api/admin/sales-report
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query param start_date: Start date (YYYY-MM-DD), default 30 days ago
+
+Query param end_date: End date (YYYY-MM-DD), default today
+
+Query param status: Filter by order status (all, pending, confirmed, processing, shipped, delivered, cancelled)
+
+Query param product: Search in product title or SKU
+
+Query param sort: Sort products by (revenue, quantity, orders), default revenue
+
+Timezone: Asia/Dhaka
+
+Cancelled orders: Excluded from sales totals, daily sales, product aggregation
+
+Cancelled orders: Included in status breakdown
+
+Response format: success, message, data
+
+Response data.range: from, to, timezone
+
+Response data.summary: gross_sales, orders, units_sold, customers, average_order_value, shipping_collected, products_ordered
+
+Response data.products[]: product_id, title, sku, product_status, image, order_count, customer_count, quantity_sold, gross_sales, average_unit_price, last_ordered_at
+
+Response data.daily_sales[]: date, orders, sales, customers
+
+Response data.status_breakdown[]: status, orders, sales
+
+Default range: Last 30 days
+
+Invalid date: Ignored, default applies
+
+Non-admin: Return 403 Forbidden
+
+Failure message: Failed to load sales report.
+
+Get All Abandoned Checkouts API (Admin)
+API endpoint: GET /api/admin/abandoned-checkouts
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query params: search, status, recovered, page, per_page
+
+Search fields: name, phone, sessionId
+
+Status values: pending, cancelled, completed, converted
+
+Recovered values: true, false
+
+Default per_page: 50
+
+Max per_page: 100
+
+Ordering: createdAt desc
+
+Response fields: id, session_id, user_id, cart_items, name, phone, address, is_recovered, status, converted_order_id, converted_at, created_at, updated_at
+
+Meta fields: current_page, per_page, total, total_pages, has_more, from, to
+
+Success message: Abandoned checkouts loaded.
+
+Non-admin: Return 403 Forbidden
+
+Save Abandoned Checkout API (Public)
+API endpoint: POST /api/abandoned-checkouts
+
+Authentication: Not required
+
+Request fields: sessionId, cartItems, userId (optional), name (optional), phone (optional), address (optional)
+
+Validation: sessionId and non-empty cartItems required
+
+Upsert: Same sessionId hole update, new hole create
+
+Success status: 201 Created (new) / 200 OK (update)
+
+Success message: Abandoned checkout saved.
+
+Get Latest Shipping Cost API (Admin)
+API endpoint: GET /api/admin/shipping-costs-latest
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Response format: Direct object (no wrapper — reference API match)
+
+Fields: id, inside_dhaka, outside_dhaka, one_shipping_cost, created_at, updated_at
+
+Auto-create: Jodi kono row na thake, default (80/150) diye create hoy
+
+Non-admin: Return 403 Forbidden
+
+Create Shipping Cost API (Admin)
+API endpoint: POST /api/admin/shipping-costs
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: inside_dhaka or insideDhaka, outside_dhaka or outsideDhaka, one_shipping_cost or oneShippingCost (optional)
+
+Validation: Inside + outside dhaka required and numeric
+
+Behavior: Versioning — notun row create hoy
+
+Success status: 201 Created
+
+Success message: Shipping cost updated.
