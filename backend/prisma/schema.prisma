@@ -235,6 +235,38 @@ model ProductInventory {
   @@map("product_inventory")
 }
 
+model AbandonedCheckout {
+  id                   Int       @id @default(autoincrement())
+  sessionId            String?   @unique
+  userId               Int?
+  cartItems            Json
+  name                 String?
+  phone                String?
+  address              String?
+  isRecovered          Boolean   @default(false)
+  status               String    @default("pending")
+  convertedOrderId     Int?
+  convertedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("abandoned_checkouts")
+}
+
+model ShippingCost {
+  id                Int      @id @default(autoincrement())
+  insideDhaka       Decimal  @default(80)  @db.Decimal(10, 2)
+  outsideDhaka      Decimal  @default(150) @db.Decimal(10, 2)
+  oneShippingCost   Decimal? @db.Decimal(10, 2)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("shipping_costs")
+}
+
 model ProductImage {
   id         Int      @id @default(autoincrement())
   productId  Int
