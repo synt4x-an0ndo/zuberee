@@ -1,13 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import SizeForm from "@/components/admin/SizeForm";
-import PageGate from "@/components/admin/PageGate";
-
-/** Product sizes are managed as variants in the product editor. */
-export default function SizesAddPage() {
-  return (
-    <PageGate permission="create sizes">
-      <SizeForm />
-    </PageGate>
-  );
+export default function SizeAddAlias() {
+  redirect("/admin/sizes");
 }

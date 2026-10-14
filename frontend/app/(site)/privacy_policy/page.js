@@ -1,11 +1,7 @@
-import ContentPage from "@/components/ContentPage";
+"use client";
 
-/** Privacy Policy - content served by GET api/pages/privacy-policy */
+import InfoPage from "@/components/site/InfoPage";
+
 export default function PrivacyPage() {
-  return (
-    <ContentPage
-      endpoint="api/pages/privacy-policy"
-      headingFallback="Privacy Policy"
-    />
-  );
+  return <InfoPage eyebrow="Legal" title="Privacy policy" intro="How we collect, use and protect your information." />;
 }

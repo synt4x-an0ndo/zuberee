@@ -1,388 +1,171 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { FaArrowTrendUp, FaReceipt, FaBoxOpen, FaUsers } from "react-icons/fa6";
-import { api, formatTk } from "@/lib/api";
-import PageGate from "@/components/admin/PageGate";
+import { useState } from "react";
+import { FiAlertCircle, FiBox, FiDollarSign, FiRefreshCw, FiShoppingBag, FiUsers } from "react-icons/fi";
+import { AdminHeader } from "@/components/admin/AdminPage";
+import { Badge, Card, CardHeader, EmptyState, ErrorState, Select, Skeleton, Stat } from "@/components/ui";
+import { useAsync } from "@/lib/useAsync";
+import { api, formatMoney } from "@/lib/api";
+import { orderStatusMeta } from "@/lib/format";
 
-import "@/styles/css/2c43b43766746233.css";
-
-/* ------------------------------------------------------------------ */
-/* helpers                                                             */
-/* ------------------------------------------------------------------ */
-const STATUS_OPTIONS = [
-  "",
-  "pending",
-  "placed",
-  "processing",
-  "completed",
-  "cancelled",
-  "returned",
-  "order_confirmed",
+const RANGES = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "year", label: "This year" },
 ];
-const STATUS_LABELS = {
-  "": "All order statuses",
-  pending: "Pending",
-  placed: "Placed",
-  processing: "Processing",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  returned: "Returned",
-  order_confirmed: "Order Confirmed",
-};
 
-function prettyStatus(s) {
-  return String(s || "")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function ChangeBadge({ value }) {
-  if (value == null || value === 0)
-    return <span className="dashboard_newActivity__ZBFa4">New activity</span>;
-  const up = value > 0;
-  return (
-    <span className={up ? "dashboard_positive__FfeFx" : "dashboard_negative__Fpyhh"}>
-      {up ? "▲" : "▼"} {Math.abs(value)}%
-    </span>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* page                                                                */
-/* ------------------------------------------------------------------ */
-function Summary() {
+export default function DashboardPage() {
   const [range, setRange] = useState("month");
   const [status, setStatus] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const qs = useMemo(() => {
-    const p = new URLSearchParams({ range, hot_limit: "7" });
-    if (status) p.set("status", status);
-    if (range === "custom" && startDate && endDate) {
-      p.set("from", startDate);
-      p.set("to", endDate);
-    }
-    return p.toString();
-  }, [range, status, startDate, endDate]);
-
-  useEffect(() => {
-    if (range === "custom" && (!startDate || !endDate)) return;
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const r = await api.get(`api/admin/dashboard/summary?${qs}`);
-        if (alive) setData(r?.data ?? r);
-      } catch (e) {
-        if (alive) setError(e.message || "The dashboard data could not be loaded.");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [qs, range, startDate, endDate]);
-
-  const totals = data?.totals || {};
-  const changes = data?.changes || {};
-  const trend = data?.sales_trend || [];
-  const breakdown = data?.status_breakdown || [];
-  const topProducts = data?.top_products || [];
-
-  const cards = [
-    { title: "Gross sales", value: `৳${formatTk(totals.gross_sales)}`, change: changes.gross_sales, icon: <FaArrowTrendUp /> },
-    { title: "Orders", value: formatTk(totals.orders), change: changes.orders, icon: <FaReceipt /> },
-    { title: "Units sold", value: formatTk(totals.units_sold), change: changes.units_sold, icon: <FaBoxOpen /> },
-    { title: "Customers", value: formatTk(totals.customers), change: changes.customers, icon: <FaUsers /> },
-  ];
-
-  /* chart geometry */
-  const chart = useMemo(() => {
-    if (!trend.length) return null;
-    const W = 820, H = 250, padL = 20, padR = 20, padT = 18, padB = 32;
-    const max = Math.max(...trend.map((t) => Number(t.sales) || 0), 1);
-    const step = (W - padL - padR) / Math.max(trend.length - 1, 1);
-    const pts = trend.map((t, i) => ({
-      x: padL + i * step,
-      y: padT + (H - padT - padB) * (1 - (Number(t.sales) || 0) / max),
-      date: t.date,
-      sales: Number(t.sales) || 0,
-    }));
-    const line = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-    const area = `${line} L ${pts[pts.length - 1].x} ${H - padB} L ${pts[0].x} ${H - padB} Z`;
-    return { pts, line, area, W, H };
-  }, [trend]);
-
-  const donutTotal = breakdown.reduce((s, b) => s + (b.orders || 0), 0);
-  const donutColors = ["#741478", "#b743a6", "#e399c9", "#53245b", "#d7bfd9", "#8c6c91"];
-  const donutBg = (() => {
-    if (!donutTotal) return "#eee9ef";
-    let acc = 0;
-    const stops = breakdown.slice(0, 6).map((b, i) => {
-      const start = acc;
-      acc += ((b.orders || 0) / donutTotal) * 100;
-      return `${donutColors[i % donutColors.length]} ${start}% ${acc}%`;
-    });
-    return `conic-gradient(${stops.join(",")})`;
-  })();
+  const { data, loading, error, reload } = useAsync(
+    () => api.get("api/admin/dashboard/summary", { params: { range, status, hot_limit: 7 } }).then((b) => b.data),
+    [range, status]
+  );
 
   return (
-    <div className="dashboard_page__TZrNk">
-      {/* header */}
-      <div className="dashboard_header__IYRHh">
-        <div>
-          <h4 className="mb-1 fw-bold">Business overview</h4>
-          <p className="mb-0 text-muted">
-            <strong>Good to see you.</strong> Here is what is happening across Eyara
-            Fashion.
-          </p>
-        </div>
-        <div className="dashboard_headerActions__X_MoQ">
-          <Link href="/admin/sales-report" className="btn btn-sm btn-grad">
-            Open sales report
-          </Link>
-        </div>
-      </div>
-
-      {/* filter bar */}
-      <div className="dashboard_filterBar__cueum">
-        <div className="dashboard_rangeTabs__IPP2g">
-          {["today", "week", "month", "year", "custom"].map((r) => (
-            <button
-              key={r}
-              className={range === r ? "dashboard_active__5uIRg" : ""}
-              onClick={() => setRange(r)}
-              type="button"
-            >
-              {r === "custom"
-                ? "Custom"
-                : r === "today"
-                  ? "Today"
-                  : r === "week"
-                    ? "This week"
-                    : r === "month"
-                      ? "This month"
-                      : "This year"}
-            </button>
-          ))}
-        </div>
-
-        {range === "custom" && (
-          <div className="dashboard_dates__zvumm">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-            <span>to</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
+    <div className="stack" style={{ gap: "1.5rem" }}>
+      <AdminHeader
+        eyebrow="Overview"
+        title="Good to see you."
+        subtitle="Here is what is happening across your store."
+        actions={
+          <div className="row" style={{ gap: 8 }}>
+            <Link href="/admin/sales" className="btn btn-outline">Open sales report <span aria-hidden="true">→</span></Link>
+            <button type="button" className="icon-btn" onClick={reload} aria-label="Refresh dashboard"><FiRefreshCw aria-hidden="true" /></button>
           </div>
-        )}
+        }
+      />
 
-        <select
-          className="form-select form-select-sm w-auto"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {error && <div className="dashboard_error__7IDG0">{error}</div>}
-      {loading && (
-        <div className="dashboard_loading__zctVA">
-          <span className="spinner-border dashboard_spin__DTCTM" />
-        </div>
-      )}
-
-      {!loading && !error && data && (
+      {error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : loading || !data ? (
         <>
-          {/* stat cards */}
-          <div className="dashboard_cards__TYQD6">
-            {cards.map((c) => (
-              <div key={c.title} className="dashboard_card__yGBr4">
-                <div className="dashboard_cardTop__rp1OP">
-                  <span>{c.title}</span>
-                  <i>{c.icon}</i>
-                </div>
-                <strong>{c.value}</strong>
-                <div className="d-flex align-items-center gap-2 mt-1">
-                  <ChangeBadge value={c.change} />
-                  <small className="text-muted">vs previous period</small>
-                </div>
-              </div>
-            ))}
+          <div className="stat-grid"><Skeleton style={{ height: 120 }} /><Skeleton style={{ height: 120 }} /><Skeleton style={{ height: 120 }} /><Skeleton style={{ height: 120 }} /></div>
+          <Skeleton style={{ height: 260 }} />
+        </>
+      ) : (
+        <>
+          <div className="dashboard-filters">
+            <div className="dashboard-range-tabs" role="tablist" aria-label="Dashboard date range">
+              {RANGES.map((item) => (
+                <button key={item.value} type="button" className={range === item.value ? "is-active" : ""} onClick={() => setRange(item.value)}>{item.label}</button>
+              ))}
+            </div>
+            <Select value={status} onChange={(e) => setStatus(e.target.value)} options={[
+              { value: "", label: "All order statuses" },
+              { value: "PENDING", label: "Pending" },
+              { value: "CONFIRMED", label: "Confirmed" },
+              { value: "PROCESSING", label: "Processing" },
+              { value: "SHIPPED", label: "Shipped" },
+              { value: "DELIVERED", label: "Delivered" },
+              { value: "CANCELLED", label: "Cancelled" },
+            ]} aria-label="Order status" style={{ minWidth: 170 }} />
+          </div>
+          <div className="stat-grid stagger">
+            <Stat label="Gross sales" value={formatMoney(data.totals.gross_sales)} hint="New activity" icon={FiDollarSign} tone="brand" />
+            <Stat label="Orders" value={data.totals.orders} hint="New activity" icon={FiBox} tone="info" />
+            <Stat label="Units sold" value={data.totals.units_sold} hint="New activity" icon={FiShoppingBag} tone="success" />
+            <Stat label="Customers" value={data.totals.customers} hint="New activity" icon={FiUsers} tone="warn" />
           </div>
 
-          <div className="dashboard_grid__uxJ2l">
-            {/* sales trend */}
-            <div className="dashboard_salesPanel__ddi5Y dashboard_panel__OCvi8">
-              <div className="dashboard_panelHead__315K0">
-                <div>
-                  <strong>Revenue movement</strong>
-                  <small className="d-block text-muted">Sales trend</small>
-                </div>
-                <div className="dashboard_aov__r3aA6">
-                  Average order{" "}
-                  <b>৳{formatTk(totals.average_order_value)}</b>
-                </div>
-              </div>
-              {chart ? (
-                <div className="dashboard_chartWrap__oeE1d">
-                  <svg viewBox={`0 0 ${chart.W} ${chart.H}`} role="img" aria-label="Sales trend">
-                    <defs>
-                      <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#9b2b9c" stopOpacity="0.28" />
-                        <stop offset="10%" stopColor="#9b2b9c" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    {[0, 1, 2, 3].map((i) => (
-                      <line key={i} x1={20} x2={800} y1={18 + 56 * i} y2={18 + 56 * i} stroke="#eee8ef" strokeWidth="1" />
-                    ))}
-                    <path d={chart.area} fill="url(#salesFill)" />
-                    <path d={chart.line} fill="none" stroke="#78167e" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                    {chart.pts.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={p.y} r="4" fill="#fff" stroke="#78167e" strokeWidth="3">
-                        <title>{`${p.date}: ৳${p.sales}`}</title>
-                      </circle>
-                    ))}
-                  </svg>
-                </div>
+          <div className="grid-2" style={{ alignItems: "start" }}>
+            <Card>
+              <CardHeader title="Sales trend" subtitle="Revenue movement" />
+              <SalesChart points={data.sales_trend} />
+            </Card>
+            <Card>
+              <CardHeader title="Status distribution" subtitle="Order pipeline" />
+              {data.status_breakdown.length === 0 ? (
+                <EmptyState title="No orders in this range" text="Try a wider date range." />
               ) : (
-                <div className="dashboard_emptyChart__DFult">
-                  Sales activity will appear here.
-                </div>
+                <StatusChart rows={data.status_breakdown} />
               )}
-            </div>
-
-            {/* order pipeline */}
-            <div className="dashboard_panel__OCvi8">
-              <div className="dashboard_panelHead__315K0">
-                <div>
-                  <strong>Order pipeline</strong>
-                  <small className="d-block text-muted">Status distribution</small>
-                </div>
-              </div>
-              {breakdown.length ? (
-                <div className="dashboard_donutLayout__TtkpE">
-                  <div className="dashboard_donut__Dp3S4" style={{ background: donutBg }}>
-                    <div>
-                      <strong>{donutTotal}</strong>
-                      <span>orders</span>
-                    </div>
-                  </div>
-                  <div className="dashboard_legend__mKrpd">
-                    {breakdown.slice(0, 6).map((b, i) => (
-                      <div key={b.status}>
-                        <i style={{ background: donutColors[i % donutColors.length] }} />
-                        <span>{prettyStatus(b.status)}</span>
-                        <strong>{b.percentage}%</strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="dashboard_empty__iTzWl">0 orders</div>
-              )}
-            </div>
-
-            {/* top products */}
-            <div className="dashboard_productsPanel__dSLfX dashboard_panel__OCvi8">
-              <div className="dashboard_panelHead__315K0">
-                <div>
-                  <strong>Product momentum</strong>
-                  <small className="d-block text-muted">Top-selling products</small>
-                </div>
-                <Link href="/admin/sales-report" className="small">
-                  View full report
-                </Link>
-              </div>
-              {topProducts.length ? (
-                <div className="dashboard_productList__33bco">
-                  {topProducts.slice(0, 7).map((p, i) => (
-                    <div key={p.product_id ?? i} className="d-flex align-items-center gap-2 py-2 border-bottom">
-                      <span className="dashboard_rank__XNmCw">{i + 1}</span>
-                      <div className="flex-fill" style={{ minWidth: 0 }}>
-                        <div className="small text-truncate">{p.title}</div>
-                        <small className="text-muted">{p.sku}</small>
-                      </div>
-                      <div className="text-end small">
-                        <b>{p.order_count}</b> orders
-                        <div className="text-muted" style={{ fontSize: 11 }}>
-                          {p.customer_count} customers
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="dashboard_empty__iTzWl">
-                  No product sales in this period.
-                </div>
-              )}
-            </div>
-
-            {/* snapshot */}
-            <div className="dashboard_panel__OCvi8">
-              <div className="dashboard_panelHead__315K0">
-                <div>
-                  <strong>At a glance</strong>
-                  <small className="d-block text-muted">Sales snapshot</small>
-                </div>
-              </div>
-              <div className="dashboard_snapshot__mFCzV">
-                <div>
-                  <span>Shipping collected</span>
-                  <b>৳{formatTk(totals.shipping_collected)}</b>
-                </div>
-                <div>
-                  <span>Average units per order</span>
-                  <b>
-                    {totals.orders
-                      ? (totals.units_sold / totals.orders).toFixed(1)
-                      : "0.0"}
-                  </b>
-                </div>
-                <div>
-                  <span>Orders per customer</span>
-                  <b>
-                    {totals.customers
-                      ? (totals.orders / totals.customers).toFixed(1)
-                      : "0.0"}
-                  </b>
-                </div>
-                <Link href="/admin/orders" className="btn btn-grad btn-sm mt-2">
-                  Manage orders →
-                </Link>
-              </div>
-            </div>
+            </Card>
           </div>
+
+          <Card>
+            <CardHeader
+              title="Top products"
+              subtitle="Ranked by sales value"
+              actions={<Link href="/admin/products" className="link-arrow">All products</Link>}
+            />
+            {data.top_products.length === 0 ? (
+              <EmptyState icon={FiAlertCircle} title="No product sales yet" text="Sales for this range will appear here." />
+            ) : (
+              <ol className="rank-list">
+                {data.top_products.map((p, i) => (
+                  <li key={p.product_id}>
+                    <span className="rank-no num">{i + 1}</span>
+                    <span className="rank-name">{p.title}</span>
+                    <span className="muted num">{p.quantity_sold} sold</span>
+                    <span className="num" style={{ fontWeight: 700 }}>{formatMoney(p.sales)}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Card>
         </>
       )}
     </div>
   );
 }
 
-export default function DashboardPage() {
+function SalesChart({ points }) {
+  if (!points.length) return <EmptyState title="No sales yet" text="Sales will chart here once orders come in." />;
+  const max = Math.max(...points.map((p) => p.sales), 1);
+  const width = 720;
+  const height = 250;
+  const padX = 18;
+  const padY = 24;
+  const step = points.length > 1 ? (width - padX * 2) / (points.length - 1) : 0;
+  const coords = points.map((point, index) => ({
+    x: padX + index * step,
+    y: height - padY - (Number(point.sales || 0) / max) * (height - padY * 2),
+    point,
+  }));
+  const line = coords.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${padX},${height - padY} ${line} ${width - padX},${height - padY}`;
   return (
-    <PageGate permission="view dashboard summary">
-      <Summary />
-    </PageGate>
+    <div className="line-chart" role="img" aria-label={`Sales across ${points.length} days`}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sales-area" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((ratio) => <line key={ratio} x1={padX} x2={width - padX} y1={height - padY - ratio * (height - padY * 2)} y2={height - padY - ratio * (height - padY * 2)} className="chart-gridline" />)}
+        <polygon points={area} fill="url(#sales-area)" />
+        <polyline points={line} className="chart-line" />
+        {coords.map(({ x, y, point }) => <circle key={point.date} cx={x} cy={y} r="4" className="chart-point"><title>{`${point.date}: ${formatMoney(point.sales)} (${point.orders} orders)`}</title></circle>)}
+      </svg>
+      <div className="line-chart-axis">{points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 4) === 0).map((p) => <span key={p.date}>{p.date.slice(5)}</span>)}</div>
+    </div>
+  );
+}
+
+function StatusChart({ rows }) {
+  const total = rows.reduce((sum, row) => sum + Number(row.orders || 0), 0);
+  let offset = 0;
+  const colors = ["var(--brand)", "var(--brand-mid)", "#d99bcf", "#e2b7dc", "#a74bb0"];
+  const segments = rows.map((row, index) => {
+    const start = offset;
+    offset += Number(row.percentage || 0);
+    return `${colors[index % colors.length]} ${start}% ${offset}%`;
+  });
+  return (
+    <div className="donut-layout">
+      <div className="donut-chart" style={{ background: `conic-gradient(${segments.join(", ")})` }}>
+        <div><strong>{total}</strong><span>orders</span></div>
+      </div>
+      <ul className="donut-legend">
+        {rows.map((row, index) => {
+          const meta = orderStatusMeta(row.status);
+          return <li key={row.status}><span className="legend-dot" style={{ background: colors[index % colors.length] }} /><span>{meta.label}</span><strong>{row.percentage}%</strong></li>;
+        })}
+      </ul>
+    </div>
   );
 }

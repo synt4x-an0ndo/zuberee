@@ -1,252 +1,128 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import ProductCard from "@/components/ProductCard";
-import { api, asBoolean, imgUrl, unwrapList } from "@/lib/api";
-import Loader from "@/components/Loader";
+import { useEffect, useState } from "react";
+import { FiCreditCard, FiMessageCircle, FiTruck } from "react-icons/fi";
+import CategoryRow from "@/components/site/CategoryRow";
+import Hero from "@/components/site/Hero";
+import { ErrorState, Skeleton } from "@/components/ui";
+import { useSite } from "@/context/SiteContext";
+import { api, imgUrl, listOf } from "@/lib/api";
 
-/** API-driven storefront homepage. No sample inventory is rendered on failure. */
-export default function HomePage() {
-  const [slots, setSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [banners, setBanners] = useState([]);
-  const [bannersLoading, setBannersLoading] = useState(true);
-  const [activeBanner, setActiveBanner] = useState(0);
-
-  const loadBanners = useCallback(async () => {
-    setBannersLoading(true);
-    try {
-      const response = await api.get("api/banners", { auth: false });
-      const list = unwrapList(response, ["banners"]);
-      setBanners(list.filter((banner) =>
-        asBoolean(banner?.is_active ?? banner?.isActive, true) && imgUrl(banner?.image)
-      ));
-      setActiveBanner(0);
-    } catch {
-      setBanners([]);
-    } finally {
-      setBannersLoading(false);
-    }
-  }, []);
-
-  const loadSlots = useCallback(async () => {
-    setLoading(true);
-    setLoadError("");
-    try {
-      const perPage = 100;
-      let page = 1;
-      const allProducts = [];
-      const seenIds = new Set();
-      let hasMore = true;
-
-      while (hasMore) {
-        const response = await api.get("api/products", {
-          auth: false,
-          params: { page: String(page), per_page: String(perPage) },
-        });
-        const payload = unwrapList(response, ["products"]);
-        const pageProducts = Array.isArray(payload) ? payload : [];
-        const nextPage = pageProducts.filter((product) => {
-          if (seenIds.has(product?.id)) return false;
-          seenIds.add(product?.id);
-          return true;
-        });
-        allProducts.push(...nextPage);
-        const meta = unwrapList(response, ["meta", "pagination"]);
-        hasMore =
-          Array.isArray(meta?.products) && meta?.products?.length > 0;
-        page += 1;
-      }
-
-      const categoryTree = await api.get("api/categories", { auth: false });
-      const categoryList = unwrapList(categoryTree, ["categories"]);
-      const categories = flattenCategories(categoryList).filter((category) => {
-        const homepageFlag = category.home_category ?? category.showOnHomepage;
-        return homepageFlag == null || asBoolean(homepageFlag, false);
-      });
-
-      const eligibleProducts = allProducts.filter((product) => {
-        const status = String(product?.status || "").toLowerCase().replace(/_/g, "-");
-        if (["out-of-stock", "sold-out", "discontinued"].includes(status)) return false;
-        return true;
-      });
-
-      const grouped = categories.map((category) => ({
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        products: eligibleProducts.filter((product) =>
-          (Array.isArray(product.category) ? product.category : [product.category])
-            .filter(Boolean)
-            .some((item) => String(item.id) === String(category.id))
-        ),
-      })).filter((slot) => slot.products.length > 0);
-
-      setSlots(grouped);
-    } catch (error) {
-      setSlots([]);
-      setLoadError(error?.message || "Store collections could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadBanners();
-    loadSlots();
-  }, [loadBanners, loadSlots]);
-
-  useEffect(() => {
-    const refreshBanners = (event) => {
-      if (event.key === "banner-sync") loadBanners();
-    };
-    window.addEventListener("storage", refreshBanners);
-    return () => window.removeEventListener("storage", refreshBanners);
-  }, [loadBanners]);
-
-  useEffect(() => {
-    if (banners.length < 2) return undefined;
-    const timer = window.setInterval(() => {
-      setActiveBanner((index) => (index + 1) % banners.length);
-    }, 5500);
-    return () => window.clearInterval(timer);
-  }, [banners.length]);
-
-  const removeBrokenBanner = (banner) => {
-    setBanners((current) => current.filter((item) => item.id !== banner.id));
-    setActiveBanner(0);
+function normalizeBanner(raw) {
+  return {
+    id: raw.id,
+    image: imgUrl(raw.image),
+    link: typeof raw.link === "string" && raw.link.startsWith("/") ? raw.link : raw.link || "",
+    title: raw.title || "",
   };
+}
+
+export default function HomePage() {
+  const { siteName, categories, social, loading: siteLoading } = useSite();
+  const [banners, setBanners] = useState({ loading: true, error: "", items: [] });
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("api/banners", { auth: false })
+      .then((response) => {
+        if (!alive) return;
+        const items = listOf(response)
+          .filter((b) => b && b.is_active !== false && b.image)
+          .map(normalizeBanner)
+          .filter((b) => b.image);
+        setBanners({ loading: false, error: "", items });
+      })
+      .catch((error) => alive && setBanners({ loading: false, error: error.message, items: [] }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tiles = categories.flat
+    .filter((category) => category.homepage && (category.productCount == null || category.productCount > 0))
+    .slice(0, 8);
+  const rows = [...categories.flat].sort((a, b) => Number(b.homepage) - Number(a.homepage));
+  const hasCategoryNav = categories.flat.length > 0;
 
   return (
     <>
-      {bannersLoading ? (
-        <div className="container hero-banner-loading" aria-hidden="true">
-          <div className="hero-banner-loading__shape" />
+      <div className="container" style={{ paddingTop: "1.25rem" }}>
+        {banners.loading ? (
+          <div className="hero">
+            <Skeleton style={{ position: "absolute", inset: 0, borderRadius: 0 }} />
+          </div>
+        ) : banners.error ? (
+          <ErrorState message={`Banners could not be loaded. ${banners.error}`} />
+        ) : (
+          <Hero banners={banners.items} siteName={siteName} />
+        )}
+
+        <div className="feature-strip stagger">
+          <div className="feature">
+            <span className="feature-icon"><FiCreditCard aria-hidden="true" /></span>
+            <div>
+              <strong>Cash on delivery</strong>
+              <span>Pay when your order arrives</span>
+            </div>
+          </div>
+          <div className="feature">
+            <span className="feature-icon"><FiTruck aria-hidden="true" /></span>
+            <div>
+              <strong>Dhaka & outside Dhaka</strong>
+              <span>Delivery across Bangladesh</span>
+            </div>
+          </div>
+          <div className="feature">
+            <span className="feature-icon"><FiMessageCircle aria-hidden="true" /></span>
+            <div>
+              <strong>Order support</strong>
+              <span>
+                {social.whatsapp ? "Message us on WhatsApp" : "Reach us through the contact details below"}
+              </span>
+            </div>
+          </div>
         </div>
-      ) : banners.length > 0 ? (
-        <section className="container hero_banner" aria-label="Featured collections">
-          <div id="heroSlider" className="carousel slide">
-            <div className="carousel-inner">
-              {banners.map((banner, index) => (
-                <div
-                  key={banner.id ?? index}
-                  className={`carousel-item ${index === activeBanner ? "active" : ""}`}
-                  aria-hidden={index !== activeBanner}
-                >
-                  <BannerSlide
-                    banner={banner}
-                    priority={index === 0}
-                    onMissing={() => removeBrokenBanner(banner)}
-                  />
-                </div>
+      </div>
+
+      {tiles.length > 0 && (
+        <section className="container section" style={{ paddingBottom: 0 }}>
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Browse</p>
+              <h2>Shop by category</h2>
+            </div>
+          </div>
+          {tiles.length > 0 && (
+            <div className="cat-grid stagger">
+              {tiles.map((category) => (
+                <Link key={category.id} href={`/${category.slug}`} className="cat-tile">
+                  <strong>{category.name}</strong>
+                  <span>
+                    {category.productCount != null ? `${category.productCount} products` : "View collection"} →
+                  </span>
+                </Link>
               ))}
             </div>
-            {banners.length > 1 && (
-              <>
-                <button
-                  className="carousel-control-prev"
-                  type="button"
-                  aria-label="Previous banner"
-                  onClick={() => setActiveBanner((activeBanner - 1 + banners.length) % banners.length)}
-                >
-                  <span className="carousel-control-prev-icon" aria-hidden="true" />
-                </button>
-                <button
-                  className="carousel-control-next"
-                  type="button"
-                  aria-label="Next banner"
-                  onClick={() => setActiveBanner((activeBanner + 1) % banners.length)}
-                >
-                  <span className="carousel-control-next-icon" aria-hidden="true" />
-                </button>
-              </>
-            )}
-          </div>
+          )}
         </section>
-      ) : null}
+      )}
 
-      {loading ? (
-        <Loader />
-      ) : loadError ? (
-        <div className="container py-5">
-          <div className="home-empty-state text-center">
-            <h1 className="h4">The storefront is getting ready</h1>
-            <p className="text-muted">{loadError}</p>
-            <button type="button" className="btn btn-outline-secondary" onClick={loadSlots}>
-              Try again
-            </button>
-          </div>
+      {rows.map((category) => (
+        <div key={category.id} className="container">
+          <CategoryRow category={category} />
         </div>
-      ) : slots.length > 0 ? (
-        <div className="container home-collections py-3 py-lg-4">
-          {slots.map((slot) => (
-            <section className="home-collection" key={slot.id} aria-labelledby={`collection-${slot.id}`}>
-              <div className="home-collection-heading">
-                <div>
-                  <p className="shop-eyebrow mb-1">Discover the collection</p>
-                  <h2 id={`collection-${slot.id}`} className="featured-heading">{slot.name}</h2>
-                </div>
-                <Link href={`/${slot.slug || slot.id}`} className="home-view-all">
-                  View collection <span aria-hidden="true">→</span>
-                </Link>
-              </div>
-              <div className="row mx-0">
-                {slot.products.map((product) => (
-                  <div key={product.id} className="col-6 col-md-4 col-lg-3 px-1 px-md-2 mb-3">
-                    <ProductCard product={product} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div className="container py-5">
-          <div className="home-empty-state text-center">
-            <h1 className="h4">A new collection is on its way</h1>
-            <p className="text-muted">There are no featured products to show right now.</p>
-            <Link href="/shop" className="btn btn-grad px-4">Explore the shop</Link>
+      ))}
+
+      {!siteLoading && !hasCategoryNav && banners.items.length === 0 && (
+        <div className="container section">
+          <div className="empty">
+            <h3>The store is being set up</h3>
+            <p>Categories, banners and products will appear here as soon as they are published from the admin panel.</p>
           </div>
         </div>
       )}
     </>
   );
-}
-
-function BannerSlide({ banner, priority, onMissing }) {
-  const image = imgUrl(banner.image);
-  if (!image) return null;
-  const content = (
-    <img
-      className="hero_banner_img"
-      src={image}
-      alt={banner.title || "Featured collection"}
-      fetchPriority={priority ? "high" : "auto"}
-      loading={priority ? "eager" : "lazy"}
-      decoding="async"
-      onError={onMissing}
-    />
-  );
-  const destination = String(banner.link || "").trim();
-  if (destination.startsWith("/") && !destination.startsWith("//")) {
-    return <Link href={destination}>{content}</Link>;
-  }
-  if (/^https?:\/\//i.test(destination)) {
-    return <a href={destination} target="_blank" rel="noopener noreferrer">{content}</a>;
-  }
-  return content;
-}
-
-function flattenCategories(categories) {
-  const output = [];
-  const visit = (items) => {
-    (items || []).forEach((item) => {
-      output.push(item);
-      visit(item.all_children || item.children);
-    });
-  };
-  visit(categories);
-  return output;
 }

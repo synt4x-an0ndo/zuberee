@@ -1,119 +1,93 @@
 /**
- * =========================================================================
- * Eyara Fashion - API client
- * =========================================================================
- * Every piece of data rendered by this frontend comes from the backend API.
- * The base URL comes from NEXT_PUBLIC_API_BASE_URL (see .env.local).
+ * API client for the Eyara Fashion backend (Next.js route handlers in /backend).
  *
- * Auth model:
- *  - Login           -> POST {API}/api/auth/login  -> { success, message, data }
- *  - Token is stored in localStorage("token") AND a `token` cookie
- *  - All authenticated calls send:  Authorization: Bearer <token>
- *  - GET {API}/api/account/me returns the current user
- *  - POST {API}/api/auth/logout invalidates the token
- * =========================================================================
+ * - Base URL comes from NEXT_PUBLIC_API_BASE_URL. It is never guessed: when it is
+ *   empty, every request fails fast with ApiError code API_NOT_CONFIGURED.
+ * - Auth is a bearer token returned by POST api/auth/login. It is kept in
+ *   localStorage (and mirrored in a cookie) and sent as `Authorization: Bearer`.
+ * - Guest carts are identified by the backend's httpOnly `cart_session_id`
+ *   cookie, so every request is sent with credentials: "include".
  */
 
-const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "";
-
-/** Empty means deliberately unconfigured: never silently call localhost. */
-export const API_BASE = configuredApiBase.replace(/\/+$/, "");
+const rawBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
+export const API_BASE = rawBase.replace(/\/+$/, "");
 export const API_CONFIGURED = Boolean(API_BASE);
 
+export const AUTH_EXPIRED_EVENT = "eyara:auth-expired";
+const TOKEN_KEY = "token";
+
 /* ------------------------------------------------------------------ */
-/* Token helpers                                                       */
+/* Token storage                                                       */
 /* ------------------------------------------------------------------ */
 export function getToken() {
   if (typeof window === "undefined") return null;
   try {
-    const stored = window.localStorage.getItem("token");
+    const stored = window.localStorage.getItem(TOKEN_KEY);
     if (stored) return stored;
   } catch {
-    // Continue to the cookie fallback if local storage is disabled.
+    /* storage blocked – fall through to cookie */
   }
-  try {
-    const cookie = (document.cookie.match(/(?:^|;\s*)token=([^;]*)/) || [])[1];
-    return cookie ? decodeURIComponent(cookie) : null;
-  } catch {
-    return null;
-  }
+  const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 export function setToken(token) {
   if (typeof window === "undefined" || !token) return;
   try {
-    window.localStorage.setItem("token", token);
+    window.localStorage.setItem(TOKEN_KEY, token);
   } catch {
-    // The Authorization header remains the source of truth if storage is blocked.
+    /* ignore */
   }
-  const exp = new Date(Date.now() + 864e5 * 7).toUTCString();
+  const expires = new Date(Date.now() + 7 * 864e5).toUTCString();
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `token=${encodeURIComponent(token)}; expires=${exp}; path=/; SameSite=Lax${secure}`;
+  document.cookie = `token=${encodeURIComponent(token)}; expires=${expires}; path=/; SameSite=Lax${secure}`;
 }
 
 export function clearToken() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem("token");
+    window.localStorage.removeItem(TOKEN_KEY);
   } catch {
-    // Ignore storage restrictions while still expiring the cookie.
+    /* ignore */
   }
   document.cookie = "token=; Max-Age=0; path=/; SameSite=Lax";
 }
 
-/** Build an absolute URL for backend-relative media paths (uploads/..., /storage/...). */
-export function imgUrl(path) {
-  const raw = typeof path === "string" ? path : path?.image || path?.imageUrl;
+/* ------------------------------------------------------------------ */
+/* Helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+/** Resolve a backend-relative media path (/storage/..., /api/banners/1/image) to an absolute URL. */
+export function imgUrl(input) {
+  const raw =
+    typeof input === "string"
+      ? input
+      : input?.image ?? input?.imageUrl ?? input?.logo_path ?? input?.company_logo ?? null;
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value || /^(javascript|vbscript):/i.test(value)) return null;
-  if (/^(https?:)?\/\//i.test(value) || /^(data|blob):/i.test(value)) return value;
+  if (/^(data|blob):/i.test(value)) return value;
+  if (value.startsWith("//")) return `https:${value}`;
+  if (/^https?:\/\//i.test(value)) return value;
   if (!API_BASE) return null;
   return `${API_BASE}/${value.replace(/^\/+/, "")}`;
 }
 
-/** Return the Bangladesh mobile subscriber number without the +880 prefix. */
-export function phoneLocal(value) {
-  const digits = String(value ?? "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("880")) return digits.slice(3).replace(/^0/, "");
-  if (digits.startsWith("0")) return digits.slice(1);
-  return digits;
+/** Return the payload of `{ success, message, data }` (or the bare response when there is no envelope). */
+export function unwrap(response) {
+  if (response && typeof response === "object" && "data" in response) return response.data;
+  return response;
 }
 
-/** Format a Bangladesh mobile number for documented API payloads. */
-export function formatPhone(value) {
-  const local = phoneLocal(value);
-  return local ? `+880${local}` : "";
+/** Return an array from either a bare array or a `{ data: [] }` envelope. */
+export function listOf(response) {
+  const value = unwrap(response);
+  return Array.isArray(value) ? value : [];
 }
 
-export function productColors(product) {
-  if (!Array.isArray(product?.colors)) return [];
-  return product.colors.filter((color) => color && typeof color === "object");
-}
-
-export function asBoolean(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
-    if (normalized === "false" || normalized === "0" || normalized === "no") return false;
-  }
-  return fallback;
-}
-
-export function unwrapObject(response) {
-  const value = response?.data ?? response;
-  return value?.data && !Array.isArray(value.data) ? value.data : value;
-}
-
-export function unwrapList(response, keys = []) {
-  const candidates = [response, response?.data, response?.data?.data, ...keys.flatMap((key) => [
-    response?.[key],
-    response?.data?.[key],
-    response?.data?.data?.[key],
-  ])];
-  return candidates.find(Array.isArray) || [];
+/** Money formatting without locale APIs, so server and client markup match. */
+export function formatMoney(value) {
+  const number = Math.round(Number(value) || 0);
+  return `৳${number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,90 +96,86 @@ export function unwrapList(response, keys = []) {
 export class ApiError extends Error {
   constructor(message, status, data) {
     super(message);
+    this.name = "ApiError";
     this.status = status;
     this.data = data;
   }
 }
 
-/**
- * Join the base URL, a path (which may already contain a query string) and
- * extra params without ever emitting a stray/duplicate "?".
- * e.g. buildUrl("api/products?page=1", empty) -> ".../api/products?page=1"
- */
-function buildUrl(path, params) {
-  const normalizedPath = String(path).replace(/^\/+/, "");
-  const query = params.toString();
-  const hasQueryInPath = normalizedPath.includes("?");
-  if (!query) return `${API_BASE}/${normalizedPath}`;
-  return `${API_BASE}/${normalizedPath}${hasQueryInPath ? "&" : "?"}${query}`;
+function errorMessage(status, data) {
+  if (data && typeof data === "object") {
+    if (typeof data.message === "string" && data.message) return data.message;
+    if (typeof data.error === "string" && data.error) return data.error;
+    if (typeof data.data === "string" && data.data) return data.data;
+    if (data.errors && typeof data.errors === "object") {
+      const flat = Object.values(data.errors).flat().filter(Boolean).join(" ");
+      if (flat) return flat;
+    }
+  }
+  if (typeof data === "string" && data.trim() && data.length < 200) return data.trim();
+  if (status === 401) return "Your session has expired. Please sign in again.";
+  if (status === 403) return "You do not have permission to do that.";
+  if (status === 404) return "The requested item could not be found.";
+  if (status === 422) return "Please check the highlighted fields.";
+  if (status >= 500) return "The server ran into a problem. Please try again.";
+  return `Request failed (${status}).`;
 }
 
-/**
- * @param {string} path  e.g. "api/products?page=1"
- * @param {object} opts  { method, body, auth, formData, signal, headers }
- */
-export async function request(path, opts = {}) {
-  const {
-    method = "GET",
-    body,
-    auth = true,
-    formData = false,
-    signal,
-    credentials = "include",
-    headers: extraHeaders = {},
-  } = opts;
+export async function request(path, options = {}) {
+  const { method = "GET", body, auth = true, params, signal, headers: extra = {} } = options;
 
-  const headers = { Accept: "application/json", ...extraHeaders };
-  const token = getToken();
-  if (auth && token) headers.Authorization = `Bearer ${token}`;
-
-  if (!API_BASE) {
-    throw new ApiError(
-      "The storefront API is not configured. Set NEXT_PUBLIC_API_BASE_URL to connect the backend.",
-      0,
-      { code: "API_NOT_CONFIGURED" }
-    );
+  if (!API_CONFIGURED) {
+    throw new ApiError("The storefront API is not configured yet.", 0, { code: "API_NOT_CONFIGURED" });
   }
 
-  const params = new URLSearchParams();
-  if (opts.params) {
-    for (const [key, value] of Object.entries(opts.params)) {
-      if (value === null || value === undefined) continue;
-      params.append(key, String(value));
+  const url = new URL(`${API_BASE}/${String(path).replace(/^\/+/, "")}`);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined || value === null || value === "") continue;
+      if (Array.isArray(value)) value.forEach((item) => url.searchParams.append(key, String(item)));
+      else url.searchParams.set(key, String(value));
     }
   }
 
-  let payload = body;
-  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
-  if (body != null && !isFormData && !formData) {
+  const headers = { Accept: "application/json", ...extra };
+  const token = auth ? getToken() : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let payload;
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    payload = body;
+  } else if (body !== undefined && body !== null) {
     headers["Content-Type"] = "application/json";
     payload = JSON.stringify(body);
   }
 
-  const res = await fetch(buildUrl(path, params), {
+  let response;
+  try {
+    response = await fetch(url.toString(), {
       method,
       headers,
       body: payload,
       signal,
-      credentials,
+      credentials: "include",
       cache: "no-store",
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw new ApiError("We could not reach the server. Check your connection and try again.", 0, {
+      code: "NETWORK",
+    });
+  }
+
+  const type = response.headers.get("content-type") || "";
+  const data = type.includes("application/json")
+    ? await response.json().catch(() => null)
+    : await response.text().catch(() => null);
+
+  if (!response.ok) {
+    if (response.status === 401 && token && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     }
-  );
-
-  const ct = res.headers.get("content-type") || "";
-  const isJson = ct.includes("application/json");
-  const data = isJson ? await res.json().catch(() => null) : await res.text();
-
-  if (!res.ok) {
-    const validationMessage = data?.errors && typeof data.errors === "object"
-      ? Object.values(data.errors).flat().filter(Boolean).join(" ")
-      : "";
-    const msg =
-      (data && (data.message || data.error)) ||
-      validationMessage ||
-      (typeof data === "string" && data.slice(0, 160)) ||
-      `Request failed (${res.status})`;
-    throw new ApiError(msg, res.status, data);
+    throw new ApiError(errorMessage(response.status, data), response.status, data);
   }
   return data;
 }
@@ -214,59 +184,22 @@ export const api = {
   get: (path, opts) => request(path, { ...opts, method: "GET" }),
   post: (path, body, opts) => request(path, { ...opts, method: "POST", body }),
   put: (path, body, opts) => request(path, { ...opts, method: "PUT", body }),
-  patch: (path, body, opts) => request(path, { ...opts, method: "PATCH", body }),
   delete: (path, opts) => request(path, { ...opts, method: "DELETE" }),
-  /** multipart/form-data (File uploads). `body` must be a FormData instance. */
-  upload: (path, formData, opts) =>
-    request(path, { ...opts, method: opts?.method || "POST", body: formData, formData: true }),
+  upload: (path, formData, opts = {}) =>
+    request(path, { ...opts, method: opts.method || "POST", body: formData }),
 };
 
 /* ------------------------------------------------------------------ */
-/* Small domain helpers used across pages                              */
+/* Domain helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-/** Effective sale price of a product (discount wins when present). */
-export function salePrice(p) {
-  if (!p) return 0;
-  const d = Number(p.discount);
-  return Number.isFinite(d) && p.discount !== null && p.discount !== "" ? d : Number(p.price) || 0;
+/** Turn a Bangladeshi mobile number into a 01XXXXXXXXX string where possible. */
+export function normalizePhone(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (digits.startsWith("880")) return `0${digits.slice(3)}`;
+  return digits;
 }
 
-export function normalizedProductStatus(product) {
-  return String(product?.status || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_\s]+/g, "-");
-}
-
-export function isPreorderStatus(productOrStatus) {
-  const status = typeof productOrStatus === "string"
-    ? productOrStatus.trim().toLowerCase().replace(/[_\s]+/g, "-")
-    : normalizedProductStatus(productOrStatus);
-  return ["prebook", "pre-book", "pre-order", "preorder"].includes(status);
-}
-
-/** Stock badge key: 'prebook' | 'in-stock' | 'sold-out' | null. */
-export function statusBadge(product) {
-  if (!product) return null;
-  const status = normalizedProductStatus(product);
-  if (isPreorderStatus(status)) return "prebook";
-  if (["out-of-stock", "sold-out", "discontinued"].includes(status)) return "sold-out";
-
-  const summary = product.inventory_summary || product.inventory || {};
-  const tracked = asBoolean(summary.track_inventory ?? product.track_inventory, false);
-  const inStock = typeof summary.in_stock === "boolean"
-    ? summary.in_stock
-    : typeof summary.total_available === "number"
-      ? summary.total_available > 0
-      : status === "in-stock" || status === "available";
-  if (status === "in-stock" || status === "available" || (tracked && inStock)) {
-    return "in-stock";
-  }
-  return null;
-}
-
-export function formatTk(n) {
-  const v = Number(n);
-  return Number.isFinite(v) ? v.toLocaleString("en-BD") : "0";
+export function isValidBdPhone(value) {
+  return /^01[3-9]\d{8}$/.test(normalizePhone(value));
 }

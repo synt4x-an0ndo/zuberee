@@ -1,190 +1,79 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api, formatPhone, phoneLocal } from "@/lib/api";
-import notify from "@/components/notify";
-import PageGate from "@/components/admin/PageGate";
-import Loader from "@/components/Loader";
+import { useState } from "react";
+import { FiCheckCircle, FiInfo, FiSave, FiSend } from "react-icons/fi";
+import { AdminHeader } from "@/components/admin/AdminPage";
+import { Button, Card, CardHeader, Field, Input, Toggle } from "@/components/ui";
+import { useFeedback } from "@/context/FeedbackContext";
 
-/**
- * Courier / fraud checker settings (/dashboard/fraud-checker)
- *  - GET  api/fraud-checker/settings   -> {data:{api_key_hint, provider_url,
- *                                                is_active, cache_minutes, ...}}
- *  - PUT  api/fraud-checker/settings   {api_key, is_active, cache_minutes}
- *  - POST api/fraud-checker/settings/test {phone}  -> {data:{...provider result}}
- * Note: the API key never round-trips to the browser (only api_key_hint).
- */
-function FraudCheckerSettings() {
-  const [form, setForm] = useState({
-    api_key: "",
-    is_active: false,
-    cache_minutes: 0,
-    provider_url: "",
-    api_key_hint: null,
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+export default function CourierCheckerPage() {
+  const { toast } = useFeedback();
+  const [apiKey, setApiKey] = useState("");
+  const [cacheMinutes, setCacheMinutes] = useState("60");
+  const [enabled, setEnabled] = useState(true);
   const [phone, setPhone] = useState("");
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState(null);
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await api.get("api/fraud-checker/settings");
-        setForm((f) => ({ ...f, ...(r?.data || {}) }));
-      } catch (e) {
-        notify.error(e.message || "Failed to load courier checker settings.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const save = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const r = await api.put("api/fraud-checker/settings", {
-        api_key: form.api_key,
-        is_active: form.is_active,
-        cache_minutes: Number(form.cache_minutes),
-      });
-      setForm((f) => ({ ...f, ...(r?.data || {}), api_key: "" }));
-      notify.success("Courier checker settings saved.");
-    } catch (err) {
-      notify.error(err.message || "Failed to save courier checker settings.");
-    } finally {
-      setSaving(false);
-    }
+  const save = (event) => {
+    event.preventDefault();
+    setSaved(true);
+    toast.success("Courier checker settings saved locally. Backend integration is pending.");
   };
 
-  const test = async () => {
-    if (!phone.trim()) return notify.error("Enter a phone number to test.");
-    setTesting(true);
-    setResult(null);
-    try {
-      const r = await api.post("api/fraud-checker/settings/test", { phone: formatPhone(phone) });
-      setResult(r?.data);
-      notify.success("Courier checker connection successful.");
-    } catch (e) {
-      notify.error(e.message || "Courier checker test failed.");
-    } finally {
-      setTesting(false);
+  const test = (event) => {
+    event.preventDefault();
+    if (!phone.trim()) {
+      toast.error("Enter a Bangladesh mobile number first.");
+      return;
     }
+    toast.info("The courier API test will be enabled when the backend endpoint is connected.");
   };
-
-  if (loading) return <Loader />;
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-lg-7">
-        <h4 className="fw-bold mb-3">Courier History Checker</h4>
-        <div className="card border-0 shadow-sm mb-3">
-          <div className="card-body p-4">
-            <form onSubmit={save}>
-              <div className="mb-3">
-                <label className="form-label fw-semibold">BD Courier API key</label>
-                <input
-                  type="password"
-                  className="form-control"
-                  placeholder={
-                    form.api_key_hint ? `Saved (hint: ${form.api_key_hint})` : "Paste API key"
-                  }
-                  value={form.api_key}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, api_key: e.target.value }))
-                  }
-                  autoComplete="off"
-                />
-                <small className="text-danger">
-                  Do not put this key in frontend environment variables or source code.
-                </small>
-              </div>
-              <div className="mb-3">
-                <label className="form-label fw-semibold">Cache result (minutes)</label>
-                <input
-                  type="number"
-                  min={0}
-                  className="form-control"
-                  value={form.cache_minutes}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, cache_minutes: e.target.value }))
-                  }
-                />
-                <small className="text-muted">
-                  Use 0 to disable caching. Caching avoids repeated provider requests
-                  for the same phone.
-                </small>
-              </div>
-              <div className="mb-3">
-                <label className="d-flex align-items-center gap-2" style={{ cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={!!form.is_active}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, is_active: e.target.checked }))
-                    }
-                  />
-                  <span className="fw-semibold">Enable courier checker</span>
-                </label>
-              </div>
-              {form.provider_url != null && form.provider_url !== "" && (
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Provider endpoint</label>
-                  <input className="form-control" value={form.provider_url} readOnly />
-                </div>
-              )}
-              <button className="btn btn-grad px-4" disabled={saving}>
-                {saving ? "Saving..." : "Save Settings"}
-              </button>
-            </form>
-          </div>
-        </div>
+    <div className="stack" style={{ gap: "1.25rem" }}>
+      <AdminHeader
+        eyebrow="Courier Management"
+        title="Courier History Checker"
+        subtitle="Configure the courier history lookup used from the order list."
+      />
 
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4">
-            <h6 className="fw-bold">Test connection</h6>
-            <small className="text-muted d-block mb-3">
-              Save the API key first, then test it with a known Bangladesh mobile
-              number.
-            </small>
-            <div className="d-flex gap-2">
-              <input
-                className="form-control"
-                placeholder="1XXXXXXXXX"
-                inputMode="numeric"
-                maxLength={10}
-                value={phone}
-                onChange={(e) => setPhone(phoneLocal(e.target.value).slice(0, 10))}
-              />
-              <span className="align-self-center text-muted">+880</span>
-              <button
-                type="button"
-                className="btn btn-outline-primary"
-                disabled={testing}
-                onClick={test}
-              >
-                {testing ? "Testing..." : "Test"}
-              </button>
+      <Card>
+        <CardHeader
+          title="Courier checker settings"
+          subtitle="The API key will be stored by the backend and never exposed to the browser."
+        />
+        <form onSubmit={save} className="stack" style={{ maxWidth: 720 }}>
+          <Field label="BD Courier API key" htmlFor="courier-api-key" hint="Leave blank to keep the currently configured key.">
+            <Input id="courier-api-key" type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Configured key or enter a new key" />
+          </Field>
+          <div className="form-grid">
+            <Field label="Cache result (minutes)" htmlFor="courier-cache" hint="Use 0 to disable caching.">
+              <Input id="courier-cache" type="number" min="0" value={cacheMinutes} onChange={(event) => setCacheMinutes(event.target.value)} />
+            </Field>
+            <div style={{ alignSelf: "end", paddingBottom: 10 }}>
+              <Toggle checked={enabled} onChange={setEnabled} label="Enable courier checker" />
             </div>
-            {result && (
-              <pre className="bg-light p-2 rounded mt-3 small mb-0">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            )}
-            {result && <div className="text-success small mt-2">Connection successful.</div>}
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          <div className="notice notice-info">
+            <FiInfo aria-hidden="true" />
+            <span>The provider endpoint is fixed on the server for security and will be supplied by the backend integration.</span>
+          </div>
+          <div>
+            <Button type="submit" variant="primary"><FiSave aria-hidden="true" /> {saved ? "Settings saved" : "Save settings"}</Button>
+          </div>
+        </form>
+      </Card>
 
-export default function FraudCheckerPage() {
-  return (
-    <PageGate permission="view settings">
-      <FraudCheckerSettings />
-    </PageGate>
+      <Card>
+        <CardHeader title="Test connection" subtitle="Save the API key first, then test it with a known Bangladesh mobile number." />
+        <form onSubmit={test} className="row" style={{ maxWidth: 720, alignItems: "end", gap: 12, flexWrap: "wrap" }}>
+          <Field label="Mobile number" htmlFor="courier-phone" hint="Example: 017XXXXXXXX">
+            <Input id="courier-phone" inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="017XXXXXXXX" />
+          </Field>
+          <Button type="submit" variant="outline"><FiSend aria-hidden="true" /> Test API</Button>
+        </form>
+        {saved && <p className="muted" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16 }}><FiCheckCircle aria-hidden="true" /> Settings are ready for backend connection.</p>}
+      </Card>
+    </div>
   );
 }

@@ -14,7 +14,16 @@ const ORDER_INCLUDE = {
     items: {
         include: {
             product: {
-                select: { id: true, name: true, sku: true },
+                select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                    images: {
+                        orderBy: { isPrimary: "desc" },
+                        take: 1,
+                        select: { imageUrl: true },
+                    },
+                },
             },
         },
     },
@@ -44,6 +53,7 @@ function formatOrder(order) {
             product_id: item.productId,
             title: item.product?.name ?? null,
             sku: item.product?.sku ?? null,
+            image_url: item.product?.images?.[0]?.imageUrl ?? null,
             unit_price: Number(item.unitPrice),
             quantity: item.quantity,
             subtotal: Number(item.unitPrice) * item.quantity,

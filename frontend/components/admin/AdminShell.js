@@ -1,364 +1,176 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  FaBars,
-  FaChevronDown,
-  FaGauge,
-  FaBox,
-  FaTags,
-  FaWarehouse,
-  FaRuler,
-  FaReceipt,
-  FaChartLine,
-  FaClockRotateLeft,
-  FaUsers,
-  FaTrophy,
-  FaTruck,
-  FaImages,
-  FaShieldHalved,
-  FaGear,
-  FaFileLines,
-  FaPalette,
-  FaShareNodes,
-  FaFacebook,
-  FaUserShield,
-  FaUserGroup,
-  FaArrowUpRightFromSquare as FaExternalLink,
-  FaRightFromBracket,
-} from "react-icons/fa6";
-import { useAdminAuth } from "@/lib/adminAuth";
+import { FiBox, FiGrid, FiImage, FiLayers, FiLogOut, FiMenu, FiPackage, FiSettings, FiShoppingBag, FiTag, FiTruck, FiX, FiBarChart2, FiExternalLink, FiUsers, FiUserCheck, FiFileText, FiSliders, FiLink, FiShield, FiActivity } from "react-icons/fi";
+import Img from "@/components/Img";
+import { cx } from "@/components/ui";
+import { useAuth } from "@/context/AuthContext";
+import { useFeedback } from "@/context/FeedbackContext";
+import { useSite } from "@/context/SiteContext";
 
-/* ------------------------------------------------------------------ */
-/* Sidebar menu definition - identical to the original admin panel,    */
-/* every item gated by API permissions (super-admin sees everything).  */
-/* ------------------------------------------------------------------ */
-function useMenuDef(auth) {
-  const { hasPermission, hasRole } = auth;
-  const can = (p) => hasPermission(p);
-  const all = (arr) => hasRole("super-admin") || arr.some(can);
-
-  const P = [];
-
-  P.push({
-    type: "single",
-    href: "/admin",
-    Icon: FaGauge,
-    label: "Dashboard Summary",
-    show: can("view dashboard summary") || can("view dashboard"),
-  });
-
-  const productsMenu = {
-    type: "menu",
-    label: "Products Management",
-    Icon: FaBox,
-    show: all(["view categories", "view products", "manage inventory"]),
-    submenus: [
-      { href: "/admin/category", label: "Category", Icon: FaTags, show: can("view categories") },
-      { href: "/admin/products", label: "Products", Icon: FaBox, show: can("view products") },
-      { href: "/admin/inventory", label: "Inventory", Icon: FaWarehouse, show: can("manage inventory") },
+const NAV = [
+  { label: "Overview", items: [{ href: "/admin", label: "Dashboard", icon: FiGrid, exact: true }] },
+  {
+    label: "Catalogue",
+    items: [
+      { href: "/admin/products", label: "Products", icon: FiShoppingBag },
+      { href: "/admin/categories", label: "Categories", icon: FiTag },
+      { href: "/admin/sizes", label: "Sizes", icon: FiLayers },
+      { href: "/admin/inventory", label: "Inventory", icon: FiPackage },
     ],
-  };
-  P.push(productsMenu);
-
-  P.push({
-    type: "single",
-    href: "/admin/sizes",
-    Icon: FaRuler,
-    label: "Sizes",
-    show: can("view sizes"),
-  });
-
-  P.push({
-    type: "menu",
-    label: "Orders",
-    Icon: FaReceipt,
-    show: can("view orders"),
-    submenus: [
-      { href: "/admin/orders", label: "All Orders", Icon: FaReceipt, show: can("view orders") },
-      { href: "/admin/sales-report", label: "Sales Report", Icon: FaChartLine, show: can("view orders") },
-      { href: "/admin/incomplete_orders", label: "Incomplete Orders", Icon: FaClockRotateLeft, show: can("incomplete_order") || can("view orders") },
+  },
+  {
+    label: "Sales",
+    items: [
+      { href: "/admin/orders", label: "Orders", icon: FiBox },
+      { href: "/admin/sales", label: "Sales report", icon: FiBarChart2 },
+      { href: "/admin/customers", label: "Customers", icon: FiUsers },
+      { href: "/admin/customer_leaderboard", label: "Customer leaderboard", icon: FiUserCheck },
+      { href: "/admin/incomplete_orders", label: "Incomplete orders", icon: FiFileText },
+      { href: "/admin/shipping", label: "Shipping costs", icon: FiTruck },
     ],
-  });
-
-  P.push({
-    type: "single",
-    href: "/admin/customers",
-    Icon: FaUsers,
-    label: "Customers",
-    show: can("view customers") || can("view customer details") || can("view leaderboard"),
-  });
-
-  P.push({
-    type: "single",
-    href: "/admin/customer_leaderboard",
-    Icon: FaTrophy,
-    label: "Customer Leaderboard",
-    show: can("view leaderboard"),
-  });
-
-  P.push({
-    type: "single",
-    href: "/admin/shipping",
-    Icon: FaTruck,
-    label: "Shipping Cost",
-    show: can("view settings"),
-  });
-
-  P.push({
-    type: "single",
-    href: "/admin/banners",
-    Icon: FaImages,
-    label: "Banners",
-    show: can("view banners"),
-  });
-
-  P.push({
-    type: "menu",
+  },
+  {
     label: "Courier Management",
-    Icon: FaTruck,
-    show: can("view settings"),
-    submenus: [
-      { href: "/admin/fraud-checker", label: "Courier Checker", Icon: FaShieldHalved, show: can("view settings") },
-      { href: "/admin/fraud-checker/plan", label: "Courier Plan & Usage", Icon: FaChartLine, show: can("view settings") },
+    items: [
+      { href: "/admin/fraud-checker", label: "Courier Checker", icon: FiShield },
+      { href: "/admin/fraud-checker/plan", label: "Courier Plan & Usage", icon: FiActivity },
     ],
-  });
-
-  P.push({
-    type: "menu",
-    label: "Settings",
-    Icon: FaGear,
-    show: can("view settings"),
-    submenus: [
-      { href: "/admin/about_us", label: "About Us", Icon: FaFileLines, show: can("view settings") },
-      { href: "/admin/footerSettings", label: "Web Settings", Icon: FaGear, show: can("view settings") },
-      { href: "/admin/theme-settings", label: "Website Color", Icon: FaPalette, show: can("view settings") },
-      { href: "/admin/socialLinks", label: "Social Links", Icon: FaShareNodes, show: can("view settings") },
-      { href: "/admin/facebook_conversion_api", label: "Facebook Api Settings", Icon: FaFacebook, show: can("view settings") },
+  },
+  {
+    label: "Management",
+    items: [
+      { href: "/admin/users", label: "Users", icon: FiUsers },
+      { href: "/admin/roles", label: "Roles", icon: FiShield },
+      { href: "/admin/inventory/movements", label: "Inventory movements", icon: FiActivity },
     ],
-  });
-
-  P.push({
-    type: "menu",
-    label: "User Management",
-    Icon: FaUserShield,
-    roleOnly: true,
-    show: hasRole("super-admin"),
-    submenus: [
-      { href: "/admin/users", label: "Users", Icon: FaUserGroup, show: hasRole("super-admin") },
-      { href: "/admin/roles", label: "Roles & Permissions", Icon: FaUserShield, show: hasRole("super-admin") },
+  },
+  {
+    label: "Storefront",
+    items: [
+      { href: "/admin/banners", label: "Banners", icon: FiImage },
+      { href: "/admin/about_us", label: "About us", icon: FiFileText },
+      { href: "/admin/footerSettings", label: "Footer settings", icon: FiSliders },
+      { href: "/admin/socialLinks", label: "Social links", icon: FiLink },
+      { href: "/admin/settings", label: "Settings & theme", icon: FiSettings },
+      { href: "/admin/facebook_conversion_api", label: "Facebook conversion API", icon: FiActivity },
     ],
-  });
+  },
+];
 
-  P.push({
-    type: "single",
-    href: "/",
-    Icon: FaExternalLink,
-    label: "View Website",
-    show: true,
-  });
-
-  return P.filter((m) =>
-    m.type === "single" ? m.show : m.show && m.submenus.some((s) => s.show)
+function NavList({ pathname, onNavigate }) {
+  return (
+    <nav aria-label="Admin">
+      {NAV.map((group) => (
+        <div key={group.label} className="nav-section">
+          <p>{group.label}</p>
+          {group.items.map((item) => {
+            const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+            <Link key={item.href} href={item.href} className={cx("side-link", active && "is-active")} aria-current={active ? "page" : undefined} title={item.label} onClick={onNavigate}>
+                <item.icon aria-hidden="true" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+    </nav>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Admin shell: fixed sidebar (colour = API primary) + content        */
-/* ------------------------------------------------------------------ */
 export default function AdminShell({ children }) {
-  const auth = useAdminAuth();
   const pathname = usePathname();
-  const [open, setOpen] = useState(true);
-  const [mobile, setMobile] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [expanded, setExpanded] = useState(null);
-  const menu = useMenuDef(auth);
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const { toast } = useFeedback();
+  const { siteName, company } = useSite();
+  const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 768px)");
-    const on = () => {
-      setIsMobile(mq.matches);
-      if (mq.matches) setOpen(false);
-    };
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    setOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem("zuberee-admin-sidebar-collapsed") === "true");
   }, []);
 
   useEffect(() => {
-    setMobile(false);
-    for (const m of menu) {
-      if (m.submenus?.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))) {
-        setExpanded(m.label);
-        break;
-      }
+    window.localStorage.setItem("zuberee-admin-sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  const signOut = async () => {
+    await logout();
+    toast.info("Signed out of the admin panel.");
+    router.replace("/login/admin/login_eyara_xyz");
+  };
+
+  const initials = (user?.name || user?.email || "A").trim().charAt(0).toUpperCase();
+  const toggleSidebar = () => {
+    if (window.matchMedia("(max-width: 1024px)").matches) {
+      setOpen(true);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
-
-  if (!auth.ready || auth.refreshing) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "100vh" }}>
-        <span className="spinner-border" style={{ color: "var(--primary-color)" }} />
-      </div>
-    );
-  }
-  if (!auth.allowed) {
-    return (
-      <div className="text-center py-5">
-        <h5>Access denied</h5>
-        <p className="text-muted">You don&apos;t have permission to view this page.</p>
-        <Link href="/admin" className="btn btn-grad px-4">
-          Back to Dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  const isActive = (href) => pathname === href || pathname.startsWith(href + "/");
+    setCollapsed((value) => !value);
+  };
 
   return (
-    <div className="Dashboard_layout">
-      {/* overlay (mobile) */}
-      {isMobile && mobile && (
-        <div
-          className="sidebar-overlay"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.45)",
-            zIndex: 999,
-          }}
-          onClick={() => setMobile(false)}
-        />
-      )}
+    <div className={cx("admin-shell", collapsed && "is-sidebar-collapsed")}>
+      <aside className="admin-sidebar" aria-label="Admin navigation">
+        <Link href="/admin" className="admin-brand" aria-label="Admin dashboard">
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={76} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
+        </Link>
+        <NavList pathname={pathname} />
+        <div className="side-foot">
+          <Link href="/" className="side-link" target="_blank" rel="noopener">
+            <FiExternalLink aria-hidden="true" /> <span>View storefront</span>
+          </Link>
+          <button type="button" className="side-link" onClick={signOut}>
+            <FiLogOut aria-hidden="true" /> <span>Sign out</span>
+          </button>
+        </div>
+      </aside>
 
-      {/* ------------- SIDEBAR ------------- */}
-      <div
-        className={`sideBarDiv d-flex flex-column ${(isMobile ? mobile : open) ? "sidebar-open" : "sidebar-closed"
-          } ${isMobile ? "mobile-sidebar" : ""}`}
-      >
-        <div className="d-flex justify-content-between align-items-center sideBar_icon_siteName">
-          <div style={{ display: open || mobile ? "block" : "none", minWidth: 0 }}>
-            <Link href="/admin" className="sidebar-brand-link" aria-label="Eyara administration dashboard">
-              <span className="sidebar-brand-logo" aria-hidden="true">Eyara<span>Admin</span></span>
-            </Link>
+      <div className={cx("admin-mobile-overlay", open && "is-open")} onClick={() => setOpen(false)} aria-hidden="true" />
+      <aside className={cx("admin-mobile-drawer", open && "is-open")} aria-label="Admin navigation" aria-hidden={!open}>
+        <div className="admin-mobile-head">
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={180} height={62} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
+          <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close menu"><FiX aria-hidden="true" /></button>
+        </div>
+        <NavList pathname={pathname} onNavigate={() => setOpen(false)} />
+      </aside>
+
+      <div className="admin-main">
+        <header className="admin-topbar">
+          <button type="button" className="icon-btn admin-menu-btn" onClick={toggleSidebar} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed}>
+            <FiMenu aria-hidden="true" />
+          </button>
+          <div className="admin-topbar-title">
+            <span className="muted" style={{ fontSize: "0.82rem" }}>{siteName || "Store administration"}</span>
           </div>
-          <button
-            type="button"
-            className="sidebar-toggle-btn"
-            onClick={() =>
-              isMobile ? setMobile((v) => !v) : setOpen((v) => !v)
-            }
-            aria-label="Toggle sidebar"
-            aria-expanded={isMobile ? mobile : open}
-          >
-            <FaBars className="sideBarIcon" />
-          </button>
-        </div>
-
-        <div className="sideBar_list mt-4" style={{ overflowY: "auto", flex: 1 }}>
-          {menu.length === 0 ? (
-            <div className="text-white text-center mt-5 px-3">
-              <p className="small">No menu items available</p>
-              <p className="small text-muted">Contact administrator</p>
-            </div>
-          ) : (
-            menu.map((item) => {
-              if (item.type === "single") {
-                const labelVisible = open || mobile;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`d-flex align-items-center gap-2 mb-3 text-white sidebar-item ${isActive(item.href) ? "active" : ""
-                      }`}
-                    style={{ textDecoration: "none" }}
-                    onClick={() => setMobile(false)}
-                  >
-                    <item.Icon className="text-white sidebar-nav-icon" aria-hidden="true" />
-                    {labelVisible && <span className="sidebar-label">{item.label}</span>}
-                  </Link>
-                );
-              }
-              const labelVisible = open || mobile;
-              const isOpen = expanded === item.label;
-              return (
-                <div key={item.label} className="mb-2">
-                  <button
-                    type="button"
-                    className={`sidebar-menu-header d-flex align-items-center justify-content-between gap-2 text-white ${isOpen ? "active" : ""}`}
-                    aria-expanded={isOpen}
-                    onClick={() => setExpanded(isOpen ? null : item.label)}
-                  >
-                    <span className="d-flex align-items-center gap-2">
-                      <item.Icon className="text-white sidebar-nav-icon" aria-hidden="true" />
-                      {labelVisible && <span className="sidebar-label">{item.label}</span>}
-                    </span>
-                    {labelVisible && (
-                      <FaChevronDown
-                        size={10}
-                        aria-hidden="true"
-                        style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: ".2s" }}
-                      />
-                    )}
-                  </button>
-                  {isOpen && labelVisible && (
-                    <div className="sidebar-submenu">
-                      {item.submenus
-                        .filter((s) => s.show)
-                        .map((s) => (
-                          <Link
-                            key={s.href}
-                            href={s.href}
-                            className={`sidebar-item sidebar-subitem d-flex align-items-center gap-2 mb-2 text-white ${isActive(s.href) ? "active" : ""
-                              }`}
-                            style={{ textDecoration: "none" }}
-                            onClick={() => setMobile(false)}
-                          >
-                            <s.Icon className="text-white sidebar-nav-icon sidebar-nav-icon-small" aria-hidden="true" />
-                            <span className="sidebar-label">{s.label}</span>
-                          </Link>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ------------- CONTENT ------------- */}
-      <div
-        className="dashboard_content"
-        style={{ marginLeft: isMobile ? 0 : open ? "15rem" : "4rem" }}
-      >
-        {/* top bar */}
-        <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary d-md-none"
-            onClick={() => setMobile(true)}
-            aria-label="Open admin navigation"
-          >
-            <FaBars />
-          </button>
-          <div />
-          <div className="d-flex align-items-center gap-3">
-            <span className="small text-muted d-none d-sm-inline">
-              {auth.userName}
+          <div className="admin-user">
+            <span className="admin-avatar" aria-hidden="true">{initials}</span>
+            <span className="admin-user-meta">
+              <strong>{user?.name || "Admin"}</strong>
+              <span className="muted">{user?.email}</span>
             </span>
-            <button type="button" className="btn btn-sm btn-outline-danger" onClick={auth.logout}>
-              <FaRightFromBracket className="me-1" /> Logout
-            </button>
           </div>
-        </div>
-
-        {children}
+        </header>
+        <main className="admin-content page-enter" key={pathname}>{children}</main>
       </div>
     </div>
   );

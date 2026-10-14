@@ -1,6 +1,7 @@
-import ContentPage from "@/components/ContentPage";
+"use client";
 
-/** Size guide - content served by GET api/pages/size-guide */
+import InfoPage from "@/components/site/InfoPage";
+
 export default function SizeGuidePage() {
-  return <ContentPage endpoint="api/pages/size-guide" headingFallback="Size Guide" />;
+  return <InfoPage eyebrow="Fit" title="Size guide" intro="Find the right fit before you order." />;
 }

@@ -1,3 +1,5 @@
+import { imgUrl } from "@/lib/api";
+
 /**
  * =========================================================================
  * Order response adapter
@@ -24,21 +26,44 @@
 const asArray = (value) =>
   Array.isArray(value) ? value : Array.isArray(value?.data) ? value.data : [];
 
+function orderNumber(o) {
+  const value = o.order_number ?? o.orderNumber ?? o.id;
+  if (value === null || value === undefined || value === "") return "ORD-00000";
+  const text = String(value);
+  return /^ORD-/i.test(text) ? text.toUpperCase() : `ORD-${text.padStart(5, "0")}`;
+}
+
 /** Normalize a single order line item to the shape the UI expects. */
 export function normalizeOrderItem(it = {}) {
   const unitPrice = Number(it.unit_price ?? it.unitPrice ?? it.price ?? 0) || 0;
   const qty = Number(it.quantity ?? it.qty ?? 1) || 0;
   const total = Number(it.subtotal ?? it.totalPrice ?? it.total ?? unitPrice * qty) || 0;
   const color = it.color_name ?? it.color ?? null;
+  const imageSource =
+    it.image ??
+    it.image_url ??
+    it.imageUrl ??
+    it.product_image ??
+    it.productImage ??
+    it.colorImage ??
+    it.product?.images?.[0]?.imageUrl ??
+    it.product?.images?.[0]?.url ??
+    it.product?.image ??
+    null;
+  const image = imgUrl(imageSource);
   return {
     id: it.id,
     product_id: it.product_id ?? it.productId ?? null,
     title: it.title ?? it.product?.name ?? it.name ?? "Product",
+    image,
     sku: it.sku ?? null,
     // Money / qty under the legacy names the UI reads:
     unitPrice,
+    unit_price: unitPrice,
     price: unitPrice,
     qty,
+    quantity: qty,
+    subtotal: total,
     totalPrice: total,
     total,
     // Variant / colour are NOT returned by the documented order API;
@@ -64,6 +89,7 @@ export function normalizeOrder(o = {}) {
   return {
     ...o, // preserve any additional fields the API may include
     id: o.id,
+    order_number: orderNumber(o),
 
     // Customer — only guest orders carry name/phone in this response.
     name: o.name ?? guest?.name ?? "",
