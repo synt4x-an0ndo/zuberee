@@ -28,15 +28,15 @@ function IncompleteOrders() {
     try {
       const p = new URLSearchParams({ page: String(page) });
       Object.entries(filters).forEach(([k, v]) => v && p.append(k, v));
-      const r = await api.get(`api/abandoned-checkouts?${p.toString()}`);
-      const inner = r?.data?.data || r?.data || [];
+      const r = await api.get(`api/admin/abandoned-checkouts?${p.toString()}`);
+      const inner = r?.data || [];
       const list = (Array.isArray(inner) ? inner : inner.data || []).filter(
         (c) => !c.is_recovered && !c.converted_order_id
       );
       setRows(list);
       setPager({
-        current_page: r?.data?.data?.current_page || r?.data?.current_page || 1,
-        last_page: r?.data?.data?.last_page || r?.data?.last_page || 1,
+        current_page: r?.meta?.current_page || 1,
+        last_page: r?.meta?.total_pages || 1,
       });
     } catch (e) {
       notify.error(e.message || "Failed to load checkouts");
@@ -281,14 +281,14 @@ function ConvertModal({ row, onClose, onDone }) {
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.get("api/shipping-costs-latest", { auth: false });
-        setShipping(r?.data || r);
-        if (!form.district && r?.data) {
+        const r = await api.get("api/admin/shipping-costs-latest");
+        setShipping(r || {});
+        if (!form.district && r) {
           const d = (row.district || "").toLowerCase();
           const cost =
             d === "dhaka"
-              ? r.data.inside_dhaka ?? r.data.one_shipping_cost
-              : r.data.outside_dhaka ?? r.data.one_shipping_cost;
+              ? r.inside_dhaka ?? r.one_shipping_cost
+              : r.outside_dhaka ?? r.one_shipping_cost;
           if (cost != null && form.shipping_cost === "")
             setForm((f) => ({ ...f, shipping_cost: cost }));
         }

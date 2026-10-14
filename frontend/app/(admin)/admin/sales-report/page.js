@@ -10,7 +10,7 @@ import "@/styles/css/0f46ebbf2f2136d2.css";
 
 /**
  * Sales report (/dashboard/sales-report)
- *  - GET api/sales-report?from=&to=&status=&search=&sort=revenue
+ *  - GET api/admin/sales-report?start_date=&end_date=&status=&product=&sort=revenue
  *    -> { summary:{gross_sales,orders,units_sold,customers,average_order_value,shipping_collected},
  *         products:[{product_id,title,sku,product_status,quantity_sold,order_count,
  *                    customer_count,average_unit_price,gross_sales,last_ordered_at}],
@@ -28,9 +28,12 @@ function SalesReport() {
     setError("");
     try {
       const p = new URLSearchParams();
-      Object.entries(applied).forEach(([k, v]) => v && p.set(k, v));
+      if (applied.from) p.set("start_date", applied.from);
+      if (applied.to) p.set("end_date", applied.to);
+      if (applied.status) p.set("status", applied.status);
+      if (applied.search) p.set("product", applied.search);
       p.set("sort", "revenue");
-      const r = await api.get(`api/sales-report?${p.toString()}`);
+      const r = await api.get(`api/admin/sales-report?${p.toString()}`);
       setData(r?.data || {});
     } catch (e) {
       setError(e.message || "Could not load the sales report.");

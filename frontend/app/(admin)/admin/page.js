@@ -65,8 +65,8 @@ function Summary() {
     const p = new URLSearchParams({ range, hot_limit: "7" });
     if (status) p.set("status", status);
     if (range === "custom" && startDate && endDate) {
-      p.set("start_date", startDate);
-      p.set("end_date", endDate);
+      p.set("from", startDate);
+      p.set("to", endDate);
     }
     return p.toString();
   }, [range, status, startDate, endDate]);
@@ -78,7 +78,7 @@ function Summary() {
       setLoading(true);
       setError("");
       try {
-        const r = await api.get(`api/dashboard/summary?${qs}`);
+        const r = await api.get(`api/admin/dashboard/summary?${qs}`);
         if (alive) setData(r?.data ?? r);
       } catch (e) {
         if (alive) setError(e.message || "The dashboard data could not be loaded.");

@@ -10,7 +10,7 @@ import Loader from "@/components/Loader";
 
 /**
  * Printable invoice (/dashboard/orders/invoice/{orderId})
- *  - GET api/orders/{orderId}
+ *  - GET api/admin/orders/{orderId}
  *  - GET api/footer-settings/1   (shop contact block shown on the invoice)
  */
 function Invoice({ id }) {
@@ -24,7 +24,7 @@ function Invoice({ id }) {
     (async () => {
       try {
         const [o, f] = await Promise.all([
-          api.get(`api/orders/${id}`),
+          api.get(`api/admin/orders/${id}`),
           api.get("api/footer-settings/1", { auth: false }).catch(() => null),
         ]);
         if (!alive) return;
