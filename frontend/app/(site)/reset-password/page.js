@@ -1,10 +1,12 @@
 import { Suspense } from "react";
-import { ResetPasswordPage } from "@/components/AccountPages";
+import ResetForm from "./ResetForm";
 
-export default function Page() {
+export const metadata = { title: "Set a new password" };
+
+export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="account-loading">Loading...</div>}>
-      <ResetPasswordPage />
+    <Suspense fallback={<div className="container section" />}>
+      <ResetForm />
     </Suspense>
   );
 }

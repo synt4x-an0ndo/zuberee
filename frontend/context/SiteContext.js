@@ -1,138 +1,162 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api, API_BASE, unwrapList, unwrapObject } from "@/lib/api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api, API_CONFIGURED, imgUrl, listOf, unwrap } from "@/lib/api";
+import { applyPalette, buildPalette, DEFAULT_BRAND, normalizeHex, THEME_STORAGE_KEY } from "@/lib/theme";
 
-const SiteCtx = createContext(null);
+const SiteContext = createContext(null);
 
-function normalizeCategories(categories) {
-  const source = Array.isArray(categories) ? categories : [];
-  const hasNestedChildren = source.some((category) =>
-    (Array.isArray(category.all_children) && category.all_children.length > 0) ||
-    (Array.isArray(category.children) && category.children.length > 0)
-  );
+/** Flat category rows (camelCase from Prisma) -> tree with stable keys. */
+function buildCategoryTree(rows) {
+  const items = rows
+    .filter((row) => row && row.id !== undefined)
+    .map((row) => ({
+      id: row.id,
+      name: row.name || "Untitled",
+      slug: row.slug || String(row.id),
+      parentId: row.parentId ?? row.parent_id ?? row.parent?.id ?? null,
+      priority: Number(row.displayPriority ?? row.priority ?? 0) || 0,
+      homepage: Boolean(row.showOnHomepage ?? row.home_category),
+      sizeGuideType: row.sizeGuideType ?? row.size_guide_type ?? "NONE",
+      productCount: row._count?.products ?? null,
+      children: [],
+    }));
 
-  if (hasNestedChildren) {
-    const normalizeNode = (category) => ({
-      ...category,
-      all_children: (category.all_children || category.children || []).map(normalizeNode),
-    });
-    return source.filter((category) => category.parent_id == null && category.parentId == null && !category.parent)
-      .map(normalizeNode);
-  }
-
-  const nodes = new Map(source.map((category) => [String(category.id), { ...category, all_children: [] }]));
+  const byId = new Map(items.map((item) => [String(item.id), item]));
   const roots = [];
-  for (const category of source) {
-    const node = nodes.get(String(category.id));
-    const parentId = category.parent_id ?? category.parentId ?? category.parent?.id ?? null;
-    const parent = parentId == null ? null : nodes.get(String(parentId));
-    if (parent && parent !== node) parent.all_children.push(node);
-    else roots.push(node);
+  for (const item of items) {
+    const parent = item.parentId == null ? null : byId.get(String(item.parentId));
+    if (parent && parent !== item) parent.children.push(item);
+    else roots.push(item);
   }
-  return roots;
-}
 
-function isSafeThemeColor(value) {
-  return typeof value === "string" && /^#[\da-f]{3}(?:[\da-f]{3})?(?:[\da-f]{2})?$/i.test(value.trim());
-}
+  const sortNodes = (nodes) => {
+    nodes.sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+    nodes.forEach((node) => sortNodes(node.children));
+    return nodes;
+  };
+  sortNodes(roots);
 
-function hexToRgb(hex) {
-  if (!isSafeThemeColor(hex)) return null;
-  let value = hex.slice(1);
-  if (value.length === 3) value = [...value].map((character) => character + character).join("");
-  if (value.length === 8) value = value.slice(0, 6);
-  const number = Number.parseInt(value, 16);
-  return `${(number >> 16) & 255}, ${(number >> 8) & 255}, ${number & 255}`;
-}
+  const flat = [];
+  const visit = (nodes, depth, parentName) => {
+    nodes.forEach((node) => {
+      flat.push({ ...node, depth, parentName });
+      visit(node.children, depth + 1, node.name);
+    });
+  };
+  visit(roots, 0, null);
 
-function firstRecord(response) {
-  const list = unwrapList(response);
-  return list[0] || unwrapObject(response) || null;
+  return { tree: roots, flat, bySlug: new Map(flat.map((node) => [node.slug, node])) };
 }
 
 export function SiteProvider({ children }) {
-  const [settings, setSettings] = useState(null);
-  const [footer, setFooter] = useState(null);
-  const [social, setSocial] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [backendAvailable, setBackendAvailable] = useState(false);
+  const [state, setState] = useState({
+    loading: API_CONFIGURED,
+    error: "",
+    settings: null,
+    footer: null,
+    social: null,
+    categories: { tree: [], flat: [], bySlug: new Map() },
+  });
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const results = await Promise.allSettled([
-        api.get("api/site-settings", { auth: false }),
-        api.get("api/footer-settings", { auth: false }),
-        api.get("api/social-links-first", { auth: false }),
-        api.get("api/categories", { auth: false }),
-      ]);
-      if (!alive) return;
+  const load = useCallback(async () => {
+    if (!API_CONFIGURED) {
+      setState((s) => ({ ...s, loading: false, error: "API not configured" }));
+      return;
+    }
+    setState((s) => ({ ...s, loading: true }));
+    const [settings, footer, social, categories] = await Promise.allSettled([
+      api.get("api/site-settings", { auth: false }),
+      api.get("api/footer-settings", { auth: false }),
+      api.get("api/social-links-first", { auth: false }),
+      api.get("api/categories", { auth: false }),
+    ]);
 
-      const [settingsResult, footerResult, socialResult, categoriesResult] = results;
-      if (settingsResult.status === "fulfilled") setSettings(unwrapObject(settingsResult.value));
-      if (footerResult.status === "fulfilled") setFooter(firstRecord(footerResult.value));
-      if (socialResult.status === "fulfilled") setSocial(firstRecord(socialResult.value));
-      if (categoriesResult.status === "fulfilled") {
-        setCategories(normalizeCategories(unwrapList(categoriesResult.value, ["categories"])));
-      }
-      setBackendAvailable(results.some((result) => result.status === "fulfilled"));
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
+    const failed = [settings, footer, social, categories].every((r) => r.status === "rejected");
+    setState({
+      loading: false,
+      error: failed ? "The storefront could not reach the server." : "",
+      settings: settings.status === "fulfilled" ? unwrap(settings.value) || null : null,
+      footer: footer.status === "fulfilled" ? unwrap(footer.value) || null : null,
+      social: social.status === "fulfilled" ? unwrap(social.value) || null : null,
+      categories:
+        categories.status === "fulfilled"
+          ? buildCategoryTree(listOf(categories.value.data?.categories ? categories.value.data.categories : categories.value))
+          : { tree: [], flat: [], bySlug: new Map() },
+    });
   }, []);
 
-  const primary = isSafeThemeColor(settings?.primary_color) ? settings.primary_color.trim() : "";
   useEffect(() => {
-    if (!primary) return;
-    const root = document.documentElement;
-    root.style.setProperty("--primary-color", primary);
-    const rgb = hexToRgb(primary);
-    if (rgb) root.style.setProperty("--primary-rgb", rgb);
+    load();
+  }, [load]);
+
+  // Theme: derived from the admin-chosen primary colour.
+  const primary = normalizeHex(state.settings?.primary_color);
+  useEffect(() => {
+    const hex = primary || DEFAULT_BRAND;
+    applyPalette(buildPalette(hex));
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, hex);
+    } catch {
+      /* storage unavailable */
+    }
   }, [primary]);
 
-  const flatCategories = useMemo(() => {
-    const output = [];
-    const visit = (nodes, level = 0) => {
-      (nodes || []).forEach((node) => {
-        output.push({ ...node, level });
-        visit(node.all_children, level + 1);
-      });
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const name = (state.settings?.site_name || "").trim() || "Store";
+    document.title = name;
+    if (state.footer?.company_logo || state.footer?.logo_path) {
+      const href = imgUrl(state.footer.company_logo || state.footer.logo_path);
+      if (href) {
+        let icon = document.querySelector('link[rel="icon"]');
+        if (!icon) {
+          icon = document.createElement("link");
+          icon.rel = "icon";
+          document.head.appendChild(icon);
+        }
+        icon.href = href;
+      }
+    }
+  }, [state.settings, state.footer]);
+
+  const value = useMemo(() => {
+    const footer = state.footer || {};
+    const social = state.social || {};
+    const settings = state.settings || {};
+    return {
+      loading: state.loading,
+      error: state.error,
+      backendAvailable: API_CONFIGURED && !state.error && !state.loading,
+      settings,
+      siteName: (settings.site_name || "").trim(),
+      primaryColor: primary || DEFAULT_BRAND,
+      inventoryEnforced: Boolean(settings.inventory_enforcement_enabled),
+      company: {
+        logo: imgUrl(footer.logo_path || footer.company_logo),
+        description: footer.company_description || "",
+        address: footer.company_address || "",
+        email: footer.company_email || "",
+        phone: footer.company_phone || "",
+      },
+      social: {
+        facebook: social.facebook || "",
+        instagram: social.instagram || "",
+        youtube: social.youtube || "",
+        twitter: social.twitter || social.tweeter || "",
+        pinterest: social.pinterest || "",
+        whatsapp: social.whatsapp_number || "",
+      },
+      categories: state.categories,
+      reload: load,
     };
-    visit(categories);
-    return output;
-  }, [categories]);
+  }, [state, primary, load]);
 
-  const company = useMemo(() => ({
-    name: settings?.site_name || settings?.company_name || footer?.shop_name || "",
-    phone: footer?.company_phone || social?.whatsapp_number || "",
-    email: footer?.company_email || "",
-    address: footer?.company_address || "",
-    description: footer?.company_description || "",
-    logo: footer?.logo_path || footer?.company_logo || null,
-  }), [settings, footer, social]);
-
-  const value = useMemo(() => ({
-    apiBase: API_BASE,
-    settings,
-    footer,
-    social,
-    categories,
-    flatCategories,
-    loading,
-    backendAvailable,
-    primaryColor: primary,
-    company,
-  }), [settings, footer, social, categories, flatCategories, loading, backendAvailable, primary, company]);
-
-  return <SiteCtx.Provider value={value}>{children}</SiteCtx.Provider>;
+  return <SiteContext.Provider value={value}>{children}</SiteContext.Provider>;
 }
 
 export function useSite() {
-  const context = useContext(SiteCtx);
+  const context = useContext(SiteContext);
   if (!context) throw new Error("useSite must be used inside <SiteProvider>");
   return context;
 }

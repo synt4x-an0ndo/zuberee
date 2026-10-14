@@ -1,195 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import notify from "@/components/notify";
-import PageGate from "@/components/admin/PageGate";
-import Loader from "@/components/Loader";
+import { useState } from "react";
+import { FiInfo } from "react-icons/fi";
+import { AdminHeader } from "@/components/admin/AdminPage";
+import { Button, Card, CardHeader, ErrorState, Field, Input, Skeleton, Stat } from "@/components/ui";
+import { useFeedback } from "@/context/FeedbackContext";
+import { api, formatMoney } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
+import { useAsync } from "@/lib/useAsync";
 
-/**
- * Shipping cost settings (/dashboard/shipping)
- *  - GET  api/admin/shipping-costs-latest   (current rule — direct object)
- *  - POST api/admin/shipping-costs          {inside_dhaka, outside_dhaka,
- *                                            one_shipping_cost} (creates a new
- *                                            versioned row)
- * The latest endpoint is admin-only, so it is called with the JWT.
- */
-function ShippingSettings() {
-  const [type, setType] = useState("");
-  const [form, setForm] = useState({
-    inside_dhaka: "",
-    outside_dhaka: "",
-    one_shipping_cost: "",
-  });
-  const [current, setCurrent] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+export default function ShippingPage() {
+  const { toast } = useFeedback();
+  const { data, loading, error, reload } = useAsync(() => api.get("api/admin/shipping-costs-latest").then((b) => b.data || b), []);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const latest = await api.get("api/admin/shipping-costs-latest").catch(() => null);
-        if (!alive) return;
-        const cur = latest || null;
-        setCurrent(cur);
-        if (cur) {
-          setType(cur.one_shipping_cost != null ? "one" : "inside_outside");
-          setForm({
-            inside_dhaka: cur.inside_dhaka ?? "",
-            outside_dhaka: cur.outside_dhaka ?? "",
-            one_shipping_cost: cur.one_shipping_cost ?? "",
-          });
-        }
-      } catch {
-        notify.error("Failed to load shipping settings");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const current = form ?? { inside: data?.inside_dhaka ?? "", outside: data?.outside_dhaka ?? "", one: data?.one_shipping_cost ?? "" };
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!type) return notify.error("Please select shipping type");
-    if (type === "inside_outside" && (!form.inside_dhaka || !form.outside_dhaka))
-      return notify.error("Inside/Outside Dhaka costs are required");
-    if (type === "one" && !form.one_shipping_cost)
-      return notify.error("Shipping cost is required");
-    setSaving(true);
+  const save = async (event) => {
+    event.preventDefault();
+    setErr("");
+    const inside = Number(current.inside);
+    const outside = Number(current.outside);
+    if (current.inside === "" || current.outside === "" || !Number.isFinite(inside) || !Number.isFinite(outside) || inside < 0 || outside < 0) {
+      return setErr("Enter delivery costs for inside and outside Dhaka.");
+    }
+    setBusy(true);
     try {
-      await api.post("api/admin/shipping-costs", {
-        ...(type === "inside_outside"
-          ? {
-              inside_dhaka: Number(form.inside_dhaka),
-              outside_dhaka: Number(form.outside_dhaka),
-            }
-          : {
-              inside_dhaka: Number(current?.inside_dhaka ?? 0),
-              outside_dhaka: Number(current?.outside_dhaka ?? 0),
-              one_shipping_cost: Number(form.one_shipping_cost),
-            }),
-      });
-      notify.success("Shipping settings saved");
-    } catch (err) {
-      notify.error(err.message || "Failed to save");
+      await api.post("api/admin/shipping-costs", { inside_dhaka: inside, outside_dhaka: outside, one_shipping_cost: current.one === "" ? null : Number(current.one) });
+      toast.success("Shipping costs saved.");
+      setForm(null);
+      reload();
+    } catch (e) {
+      toast.error(e.message || "Shipping costs could not be saved.");
+      setErr(e.message);
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  if (loading) return <Loader />;
-
   return (
-    <div className="row justify-content-center">
-      <div className="col-lg-7">
-        <h4 className="fw-bold mb-3">Shipping Cost</h4>
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-4">
-            <form onSubmit={submit}>
-              <div className="mb-3">
-                <label className="form-label fw-semibold">Shipping Type:</label>
-                <select
-                  className="form-select"
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                >
-                  <option value="">Select Type</option>
-                  <option value="inside_outside">Inside/Outside Dhaka</option>
-                  <option value="one">One Shipping Cost</option>
-                </select>
-              </div>
+    <div className="stack" style={{ gap: "1.25rem", maxWidth: 980 }}>
+      <AdminHeader eyebrow="Sales" title="Shipping costs" subtitle="Default delivery charges for inside and outside Dhaka." />
 
-              {type === "inside_outside" && (
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label fw-semibold">
-                      Inside Dhaka Cost (৳):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-control"
-                      value={form.inside_dhaka}
-                      onChange={(e) => set("inside_dhaka", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-6 mb-3">
-                    <label className="form-label fw-semibold">
-                      Outside Dhaka Cost (৳):
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-control"
-                      value={form.outside_dhaka}
-                      onChange={(e) => set("outside_dhaka", e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {type === "one" && (
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">
-                    Shipping Cost (৳) - Applicable For All Districts:
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-control"
-                    value={form.one_shipping_cost}
-                    onChange={(e) => set("one_shipping_cost", e.target.value)}
-                  />
-                </div>
-              )}
-
-              <button className="btn btn-grad px-4 fw-semibold" disabled={saving}>
-                {saving ? "Saving..." : "Save Settings"}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {current && (
-          <div className="card border-0 shadow-sm mt-3">
-            <div className="card-header bg-white fw-bold">Current rule</div>
-            <div className="card-body p-0">
-              <table className="table mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Type</th>
-                    <th>Inside Dhaka</th>
-                    <th>Outside Dhaka</th>
-                    <th>One cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>{current.one_shipping_cost != null ? "One cost" : "Inside/Outside Dhaka"}</td>
-                    <td>{current.inside_dhaka != null ? `৳${current.inside_dhaka}` : "—"}</td>
-                    <td>{current.outside_dhaka != null ? `৳${current.outside_dhaka}` : "—"}</td>
-                    <td>{current.one_shipping_cost != null ? `৳${current.one_shipping_cost}` : "—"}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+      <div className="notice notice-info" role="note" style={{ display: "flex", gap: 10 }}>
+        <FiInfo aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
+        <span>
+          Saved here for your records and order admin. The storefront checkout cannot read these figures yet because the backend has no public shipping endpoint, so customers see delivery as confirmed on call.
+        </span>
       </div>
-    </div>
-  );
-}
 
-export default function ShippingAdminPage() {
-  return (
-    <PageGate permission="view settings">
-      <ShippingSettings />
-    </PageGate>
+      {error ? <ErrorState message={error} onRetry={reload} /> : loading ? <Skeleton style={{ height: 200 }} /> : (
+        <div className="grid-2" style={{ alignItems: "start" }}>
+          <Card>
+            <CardHeader title="Current rates" subtitle={data?.created_at ? `Saved ${formatDateTime(data.created_at)}` : "Not set yet"} />
+            <div className="stat-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <Stat label="Inside Dhaka" value={data?.inside_dhaka != null ? formatMoney(data.inside_dhaka) : "—"} tone="brand" />
+              <Stat label="Outside Dhaka" value={data?.outside_dhaka != null ? formatMoney(data.outside_dhaka) : "—"} tone="info" />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Update rates" />
+            <form onSubmit={save} className="stack" noValidate>
+              {err && <p className="notice notice-danger" role="alert">{err}</p>}
+              <Field label="Inside Dhaka (৳)" htmlFor="sh-in" required>
+                <Input id="sh-in" type="number" min="0" value={current.inside} onChange={(e) => setForm({ ...current, inside: e.target.value })} />
+              </Field>
+              <Field label="Outside Dhaka (৳)" htmlFor="sh-out" required>
+                <Input id="sh-out" type="number" min="0" value={current.outside} onChange={(e) => setForm({ ...current, outside: e.target.value })} />
+              </Field>
+              <Field label="Flat rate (৳, optional)" htmlFor="sh-one">
+                <Input id="sh-one" type="number" min="0" value={current.one} onChange={(e) => setForm({ ...current, one: e.target.value })} />
+              </Field>
+              <div><Button type="submit" variant="primary" loading={busy} disabled={busy}>Save rates</Button></div>
+            </form>
+          </Card>
+        </div>
+      )}
+    </div>
   );
 }

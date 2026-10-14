@@ -1,639 +1,381 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { FaPen, FaReceipt, FaTruck, FaRepeat, FaChevronDown, FaChevronUp, FaTag, FaShieldHalved } from "react-icons/fa6";
-import { api, formatTk, imgUrl } from "@/lib/api";
-import notify from "@/components/notify";
-import PageGate from "@/components/admin/PageGate";
-import { ORDER_STATUSES } from "@/lib/orderStatuses";
-import { normalizeOrders } from "@/lib/order";
-import "@/styles/css/187416aab916025b.css";
-import "@/styles/orders-reference.css";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { FiDownload, FiSearch, FiTag, FiTruck, FiX } from "react-icons/fi";
+import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
+import { Badge, Button, EmptyState, ErrorState, Input, Pagination, Select, Skeleton } from "@/components/ui";
+import { api, formatMoney } from "@/lib/api";
+import { DISTRICTS } from "@/lib/districts";
+import { ORDER_STATUS_OPTIONS, formatDateTime, formatOrderNumber, orderStatusMeta } from "@/lib/format";
+import { useAsync } from "@/lib/useAsync";
 
-function statusClass(status) {
-  return String(status || "pending").toLowerCase().replace(/-/g, "_");
+const EMPTY = { search: "", status: "", district: "", from: "", to: "" };
+const BADGE_OPTIONS = ["VIP", "Repeat Customer", "Priority", "High Value"];
+
+function customerKey(order) {
+  return String(order?.user_id ?? order?.phone ?? order?.id ?? "");
 }
 
+function apiBadgeValue(order) {
+  const badge = order?.customer_badge ?? order?.customerBadge ?? order?.badge;
+  if (typeof badge === "string") return badge;
+  return badge?.label ?? badge?.name ?? "";
+}
 
-/**
- * Orders (/dashboard/orders)
- *  - GET    api/admin/orders?status=   -> { success, message, data:[order], meta }
- *                                   (admin only; paginated, so search/date are
- *                                    also done client-side over the batch)
- *  - PATCH  api/admin/orders/{id}           {status, paymentStatus}
- *  - DELETE api/admin/orders/{id}
- *  - POST   api/orders/{id}/courier-check  {} | {force_refresh:true}
- *  - POST   api/pathao/orders/{id}/create  {}
- *  - POST   api/customer-profiles/assign-badge {phone,name,badge_title}
- *  - GET    api/order-product-options (product picker)
- *  - GET    api/orders-download-csv?<filters>
- *  - GET    api/footer-settings/1 (invoice branding)
- */
-function OrdersPage() {
-  const [allRows, setAllRows] = useState([]);
-  const [pager, setPager] = useState({ current_page: 1, last_page: 1 });
+export default function AdminOrdersPage() {
+  const router = useRouter();
+  const [filters, setFilters] = useState(EMPTY);
+  const [applied, setApplied] = useState(EMPTY);
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ status: "", from: "", to: "", search: "" });
-  const [expanded, setExpanded] = useState(null); // order id
-  const [courier, setCourier] = useState({}); // id -> loading
-  const [badgeOrder, setBadgeOrder] = useState(null);
-
-  // The admin list endpoint (GET /api/admin/orders) is paginated and honours
-  // `status`. Search + date range + paging are handled here so the existing
-  // Prev/Next controls keep working over the fetched batch.
-  const qs = useCallback(() => {
-    const p = new URLSearchParams();
-    if (filters.status) p.append("status", filters.status);
-    // The admin list endpoint paginates (max 100); request the largest batch so
-    // the existing client-side search/date/paging keeps working over the set.
-    p.append("per_page", "100");
-    return p.toString();
-  }, [filters.status]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const r = await api.get(`api/admin/orders?${qs()}`);
-      const d = r?.data?.data || r?.data || [];
-      setAllRows(normalizeOrders(Array.isArray(d) ? d : []));
-    } catch (e) {
-      setError(e.message || "Failed to load orders");
-    } finally {
-      setLoading(false);
-    }
-  }, [qs]);
+  const [selectedOrders, setSelectedOrders] = useState([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [activeDialog, setActiveDialog] = useState(null);
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [badgeDraft, setBadgeDraft] = useState("");
+  const [badgeAssignments, setBadgeAssignments] = useState({});
+  const selectAllRef = useRef(null);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const t = setTimeout(() => setApplied((prev) => ({ ...prev, search: filters.search })), 350);
+    return () => clearTimeout(t);
+  }, [filters.search]);
 
-  /* ---- client-side search + date filtering over the full result set ---- */
-  const filtered = useMemo(() => {
-    const q = filters.search.trim().toLowerCase();
-    const from = filters.from ? new Date(`${filters.from}T00:00:00`) : null;
-    const to = filters.to ? new Date(`${filters.to}T23:59:59`) : null;
-    return allRows.filter((o) => {
-      if (q) {
-        const haystack = `${o.name || o.customer?.name || ""} ${o.phone || o.customer?.phone || ""} #${o.id}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (from || to) {
-        const created = o.created_at ? new Date(o.created_at) : null;
-        if (!created) return false;
-        if (from && created < from) return false;
-        if (to && created > to) return false;
-      }
-      return true;
-    });
-  }, [allRows, filters.search, filters.from, filters.to]);
-
-  /* ---- client-side pagination of the filtered set ---- */
-  const PER_PAGE = 20;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-  const safePage = Math.min(page, totalPages);
-  const rows = useMemo(
-    () => filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE),
-    [filtered, safePage]
+  const { data, loading, error, reload } = useAsync(async () => {
+    const params = { page, per_page: 15 };
+    if (applied.search.trim()) params.search = applied.search.trim();
+    if (applied.status) params.status = applied.status;
+    if (applied.district) params.district = applied.district;
+    if (applied.from) params.from = applied.from;
+    if (applied.to) params.to = applied.to;
+    const body = await api.get("api/admin/orders", { params });
+    return { orders: Array.isArray(body.data) ? body.data : [], meta: body.meta || {} };
+  }, [page, applied]);
+  const visibleOrders = data?.orders || [];
+  const allVisibleSelected = visibleOrders.length > 0 && visibleOrders.every((order) =>
+    selectedOrders.some((selected) => String(selected.id) === String(order.id))
+  );
+  const someVisibleSelected = visibleOrders.some((order) =>
+    selectedOrders.some((selected) => String(selected.id) === String(order.id))
   );
 
-  // Keep the pager label in sync with the filtered result count.
   useEffect(() => {
-    setPager({ current_page: safePage, last_page: totalPages });
-  }, [safePage, totalPages]);
-
-  const updateStatus = async (order, value) => {
-    if (!value) return;
-    try {
-      await api.patch(`api/admin/orders/${order.id}`, { status: value });
-      notify.success("Order updated successfully.", "Order Updated");
-      load();
-    } catch (e) {
-      notify.error(e.message || "Failed to update status", "Could not update order");
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
     }
-  };
+  }, [someVisibleSelected, allVisibleSelected]);
 
-  const deleteOrder = async (order) => {
-    if (!window.confirm(`Delete order #${order.id}?`)) return;
-    try {
-      await api.delete(`api/admin/orders/${order.id}`);
-      notify.success("Order deleted.");
-      load();
-    } catch (e) {
-      notify.error(e.message || "Failed to delete order");
-    }
-  };
-
-  const createCourier = async (order, courierKey) => {
-    setCourier((c) => ({ ...c, [order.id]: true }));
-    try {
-      if (courierKey === "pathao") {
-        const r = await api.post(`api/pathao/orders/${order.id}/create`, {});
-        if (r?.success) {
-          notify.success("Pathao courier entry created successfully!");
-          load();
-        } else {
-          notify.error(r?.message || "Failed to create courier entry");
-        }
-      } else {
-        notify.info("Steadfast integration coming soon");
+  useEffect(() => {
+    if (!activeDialog) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setActiveDialog(null);
+        setActiveOrder(null);
       }
-    } catch (e) {
-      notify.error(e.message || "Courier entry failed");
-    } finally {
-      setCourier((c) => ({ ...c, [order.id]: false }));
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeDialog]);
+
+  const set = (key) => (e) => {
+    setFilters((f) => ({ ...f, [key]: e.target.value }));
+    if (key !== "search") {
+      setApplied((a) => ({ ...a, [key]: e.target.value }));
+      setPage(1);
     }
   };
 
-  const [intel, setIntel] = useState(null); // {order, data, loading, error}
+  const isSelected = (order) => selectedOrders.some((selected) => String(selected.id) === String(order.id));
 
-  const openIntelligence = async (order) => {
-    setIntel({ order, data: null, loading: true, error: "" });
+  const toggleOrderSelection = (order) => {
+    const orderId = String(order.id);
+    setSelectedOrders((current) => current.some((selected) => String(selected.id) === orderId)
+      ? current.filter((selected) => String(selected.id) !== orderId)
+      : [...current, order]
+    );
+  };
+
+  const toggleVisibleSelection = () => {
+    const visibleIds = new Set(visibleOrders.map((order) => String(order.id)));
+    setSelectedOrders((current) => {
+      if (allVisibleSelected) return current.filter((order) => !visibleIds.has(String(order.id)));
+      const next = [...current];
+      for (const order of visibleOrders) {
+        if (!next.some((selected) => String(selected.id) === String(order.id))) next.push(order);
+      }
+      return next;
+    });
+  };
+
+  const assignedBadge = (order) => {
+    const key = customerKey(order);
+    return Object.prototype.hasOwnProperty.call(badgeAssignments, key)
+      ? badgeAssignments[key]
+      : apiBadgeValue(order);
+  };
+
+  const openBadgeDialog = (order) => {
+    const key = customerKey(order);
+    setBadgeDraft(Object.prototype.hasOwnProperty.call(badgeAssignments, key)
+      ? badgeAssignments[key]
+      : apiBadgeValue(order)
+    );
+    setActiveOrder(order);
+    setActiveDialog("badge");
+  };
+
+  const openCourierDialog = (order) => {
+    setActiveOrder(order);
+    setActiveDialog("courier");
+  };
+
+  const closeActionDialog = () => {
+    setActiveDialog(null);
+    setActiveOrder(null);
+  };
+
+  const saveBadge = () => {
+    if (!activeOrder) return;
+    setBadgeAssignments((current) => ({ ...current, [customerKey(activeOrder)]: badgeDraft }));
+    closeActionDialog();
+  };
+
+  const downloadCsv = async () => {
+    setExportError("");
+    setExporting(true);
     try {
-      const r = await api.post(`api/orders/${order.id}/courier-check`, {});
-      setIntel({ order, data: r?.data || r, loading: false, error: "" });
-    } catch (e) {
-      setIntel({
-        order,
-        data: null,
-        loading: false,
-        error: e.message || "Courier check failed.",
+      let rows = selectedOrders;
+      if (rows.length === 0) {
+        const params = { page: 1, per_page: 50 };
+        if (applied.search.trim()) params.search = applied.search.trim();
+        if (applied.status) params.status = applied.status;
+        if (applied.district) params.district = applied.district;
+        if (applied.from) params.from = applied.from;
+        if (applied.to) params.to = applied.to;
+
+        const firstPage = await api.get("api/admin/orders", { params });
+        rows = Array.isArray(firstPage.data) ? [...firstPage.data] : [];
+        const totalPages = Math.max(1, Number(firstPage.meta?.total_pages) || 1);
+        for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
+          const nextPage = await api.get("api/admin/orders", { params: { ...params, page: currentPage } });
+          if (Array.isArray(nextPage.data)) rows.push(...nextPage.data);
+        }
+      }
+
+      if (rows.length === 0) {
+        setExportError("There are no orders to export for these filters.");
+        return;
+      }
+
+      const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+      const headers = ["Order ID", "Customer", "Phone", "District", "Address", "Total", "Status", "Payment Status", "Placed At", "Products"];
+      const csvRows = rows.map((order) => {
+        const items = Array.isArray(order.order_items) ? order.order_items : Array.isArray(order.items) ? order.items : [];
+        const products = items.map((item) => `${item.title || item.name || "Product"} x ${item.qty ?? item.quantity ?? 1}`).join("; ");
+        return [
+          formatOrderNumber(order),
+          order.name || "Guest",
+          order.phone || "",
+          order.district || "",
+          order.address || order.shipping_address || "",
+          order.total ?? order.total_amount ?? "",
+          order.status || "",
+          order.payment_status || "",
+          order.created_at || "",
+          products,
+        ];
       });
+      const csv = [headers, ...csvRows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setExportError(err.message || "CSV export failed. Please try again.");
+    } finally {
+      setExporting(false);
     }
   };
-
-  const [csvUrl, setCsvUrl] = useState("");
-  useEffect(() => {
-    const p = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => v && p.append(k, v));
-    setCsvUrl(`api/orders-download-csv${p.toString() ? `?${p}` : ""}`);
-  }, [filters]);
+  const reset = () => {
+    setFilters(EMPTY);
+    setApplied(EMPTY);
+    setPage(1);
+  };
 
   return (
-    <div className="container-fluid py-3 orders-reference-page">
-      <div className="orders-reference-heading">
-        <div>
-          <h4 className="mb-0 fw-bold">Orders</h4>
-          <small className="text-muted">Manage every order end to end</small>
+    <div className="stack" style={{ gap: "1.25rem" }}>
+      <AdminHeader eyebrow="Sales" title="Orders" subtitle="Review, confirm and fulfil customer orders." />
+
+      <div className="orders-export-toolbar">
+        <div className="orders-export-copy">
+          <strong>{selectedOrders.length ? `${selectedOrders.length} selected` : "Orders CSV"}</strong>
+          <span className="muted">{selectedOrders.length ? "Only selected orders will be exported." : "With no selection, exports every order matching the current filters."}</span>
         </div>
-        <div className="d-flex gap-2">
-          <a href={csvUrl} className="orders-reference-export" download>
-            Export CSV
-          </a>
+        <div className="orders-export-actions">
+          {selectedOrders.length > 0 && <Button variant="ghost" onClick={() => setSelectedOrders([])}>Clear selection</Button>}
+          <Button variant="primary" onClick={downloadCsv} disabled={exporting || (!selectedOrders.length && !visibleOrders.length)}>
+            <FiDownload aria-hidden="true" /> {exporting ? "Preparing CSV..." : "Download CSV"}
+          </Button>
         </div>
       </div>
+      {exportError && <p className="orders-export-error" role="alert">{exportError}</p>}
 
-      {/* filters */}
-      <div className="card border-0 shadow-sm mb-3 orders-reference-filters">
-        <div className="card-body py-3 d-flex gap-2 flex-wrap align-items-center">
-          <select
-            className="form-select w-auto"
-            value={filters.status}
-            onChange={(e) => {
-              setPage(1);
-              setFilters((f) => ({ ...f, status: e.target.value }));
-            }}
-          >
-            <option value="">All Statuses</option>
-            {ORDER_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            className="form-control w-auto"
-            value={filters.from}
-            onChange={(e) => {
-              setPage(1);
-              setFilters((f) => ({ ...f, from: e.target.value }));
-            }}
-          />
-          <span className="text-muted">to</span>
-          <input
-            type="date"
-            className="form-control w-auto"
-            value={filters.to}
-            onChange={(e) => {
-              setPage(1);
-              setFilters((f) => ({ ...f, to: e.target.value }));
-            }}
-          />
-          <input
-            className="form-control w-auto"
-            style={{ maxWidth: 240 }}
-            placeholder="Search name / phone"
-            value={filters.search}
-            onChange={(e) => {
-              setPage(1);
-              setFilters((f) => ({ ...f, search: e.target.value }));
-            }}
-          />
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => {
-              setPage(1);
-              setFilters({ status: "", from: "", to: "", search: "" });
-            }}
-          >
-            Clear
-          </button>
+      <div className="card card-pad toolbar" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ position: "relative", flex: "1 1 240px" }}>
+          <FiSearch aria-hidden="true" style={{ position: "absolute", left: 12, top: 14, color: "var(--muted)" }} />
+          <Input aria-label="Search orders" placeholder="Search by name, phone or order number" value={filters.search} onChange={set("search")} style={{ paddingLeft: 36 }} />
         </div>
+        <Select aria-label="Status" value={filters.status} onChange={set("status")} placeholder="All statuses" options={ORDER_STATUS_OPTIONS} style={{ flex: "0 1 170px" }} />
+        <Select aria-label="District" value={filters.district} onChange={set("district")} placeholder="All districts" options={DISTRICTS} style={{ flex: "0 1 170px" }} />
+        <Input aria-label="From date" type="date" value={filters.from} onChange={set("from")} style={{ flex: "0 1 160px" }} />
+        <Input aria-label="To date" type="date" value={filters.to} onChange={set("to")} style={{ flex: "0 1 160px" }} />
+        <Button variant="ghost" onClick={reset}>Clear</Button>
       </div>
 
-      {/* table */}
-      <div className="card border-0 shadow-sm orders-reference-table-card">
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0 orders-reference-table">
-              <thead className="table-light">
-                <tr>
-                  <th>Order ID</th>
-                  <th>Customer</th>
-                  <th>District</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-4">
-                      <span className="spinner-border spinner-border-sm me-2" />
-                      Loading...
-                    </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-4 text-danger">
-                      {error}
-                    </td>
-                  </tr>
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-4 text-muted">
-                      No orders found
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((o) => (
-                    <Fragment key={o.id}>
-                      <tr className={expanded === o.id ? "orders-reference-row is-expanded" : "orders-reference-row"} key={o.id}>
-                        <td className="fw-bold"><span className="orders-reference-order-id">ORD-{String(o.id).padStart(5, "0")}</span><small>#{o.id}</small></td>
-                        <td>
-                          <div className="fw-semibold orders-reference-customer">{o.name || o.customer?.name || "Guest customer"}</div>
-                          <small className="text-muted">{o.phone || o.customer?.phone || "—"} <span>{o.district}</span></small>
-                          <div>
-                            <button
-                              className="btn btn-link btn-sm p-0 text-decoration-none orders-reference-intelligence"
-                              onClick={() => openIntelligence(o)}
-                            >
-                              Customer intelligence
-                            </button>
-                          </div>
-                        </td>
-                        <td>{o.district}</td>
-                        <td>
-                          <small>
-                            {o.created_at
-                              ? new Date(o.created_at).toLocaleDateString("en-GB", {
-                                timeZone: "Asia/Dhaka",
-                              })
-                              : "—"}
-                          </small>
-                        </td>
-                        <td>
-                          <select
-                            className={`form-select form-select-sm orders-reference-status-select status-${statusClass(o.status)}`}
-                            value={String(o.status || "PENDING").toUpperCase().replace(/-/g, "_")}
-                            onChange={(e) => updateStatus(o, e.target.value)}
-                          >
-                            {ORDER_STATUSES.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <div className="d-flex gap-1 flex-wrap orders-reference-actions">
-                            <button
-                              className="btn btn-sm btn-outline-secondary orders-reference-action"
-                              title="Expand"
-                              onClick={() =>
-                                setExpanded(expanded === o.id ? null : o.id)
-                              }
-                            >
-                              <FaChevronDown />
-                              Expand
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-secondary orders-reference-action"
-                              title="Repeat"
-                              onClick={() => createCourier(o, "repeat")}
-                            >
-                              <FaRepeat />
-                            </button>
-                            <button
-                              className="btn btn-sm btn-outline-secondary orders-reference-action"
-                              title="Courier entry (Pathao)"
-                              disabled={courier[o.id]}
-                              onClick={() => createCourier(o, "pathao")}
-                            >
-                              <FaTruck />
-                            </button>
-                            <Link
-                              href={`/admin/orders/invoice/${o.id}`}
-                              className="btn btn-sm btn-outline-primary orders-reference-action"
-                            >
-                              INVOICE
-                            </Link>
-                            <Link
-                              href={`/admin/orders/edit/${o.id}`}
-                              className="btn btn-sm btn-outline-warning orders-reference-action"
-                              title="Edit order"
-                            >
-                              <FaPen />
-                            </Link>
-                            <button
-                              className="btn btn-sm btn-outline-danger orders-reference-action"
-                              title="Delete order"
-                              onClick={() => deleteOrder(o)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expanded === o.id && (
-                        <tr>
-                          <td colSpan={6} className="bg-light orders-reference-expanded-cell">
-                            <OrderExpand
-                              order={o}
-                              onBadge={() => setBadgeOrder(o)}
-                              onCourier={(k) => createCourier(o, k)}
-                              onStatusChange={(value) => updateStatus(o, value)}
-                              courierLoading={courier[o.id]}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-          <small className="text-muted">
-            Page {pager.current_page} of {pager.last_page}
-          </small>
-          <div className="btn-group">
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Prev
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              disabled={page >= pager.last_page}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* expanded order details */}
-      {/* courier intelligence modal */}
-      {intel && (
+      {error ? (
+        <ErrorState message={error} onRetry={reload} />
+      ) : loading || !data ? (
+        <Skeleton style={{ height: 360 }} />
+      ) : data.orders.length === 0 ? (
+        <EmptyState title="No orders match these filters" text="Try clearing the filters or widening the dates." action={<Button variant="outline" onClick={reset}>Clear filters</Button>} />
+      ) : (
         <>
-          <div
-            className="position-fixed top-0 start-0 w-100 h-100"
-            style={{ background: "rgba(0,0,0,.5)", zIndex: 1040 }}
-            onClick={() => setIntel(null)}
-          />
-          <div
-            className="position-fixed start-50 top-50 translate-middle bg-white rounded shadow p-4"
-            style={{ zIndex: 1050, width: "min(560px, 92vw)", maxHeight: "80vh", overflowY: "auto" }}
-          >
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="mb-0 fw-bold">Courier delivery profile</h5>
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setIntel(null)}>
-                Done
-              </button>
-            </div>
-            {intel.loading ? (
-              <p className="text-muted">
-                <span className="spinner-border spinner-border-sm me-2" />
-                We’re securely retrieving this customer’s courier records.
-              </p>
-            ) : intel.error ? (
-              <div className="alert alert-warning mb-0">
-                We couldn’t complete the check — {intel.error}
-              </div>
-            ) : (
-              <div>
-                <h6>Network view</h6>
-                <p className="small text-muted mb-1">
-                  Customer: {intel.order.name} • {intel.order.phone}
-                </p>
-                <h6 className="mt-3">Courier breakdown</h6>
-                <pre className="small bg-light p-2 rounded" style={{ maxHeight: 220, overflow: "auto" }}>
-                  {JSON.stringify(intel.data, null, 2)}
-                </pre>
-                <small className="text-muted">
-                  No courier-specific history was returned. / Risk signals / Merchant
-                  reports as provided by the API.
-                </small>
-              </div>
-            )}
-          </div>
+          <DataTable>
+            <thead>
+              <tr>
+                <th className="orders-select-col">
+                  <input ref={selectAllRef} type="checkbox" className="orders-select-input" aria-label="Select all visible orders" checked={allVisibleSelected} onChange={toggleVisibleSelection} disabled={visibleOrders.length === 0} />
+                </th>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Address</th>
+                <th className="text-right">Total</th>
+                <th>Status</th>
+                <th>Placed</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.orders.map((o) => {
+                const st = orderStatusMeta(o.status);
+                const rowBadge = assignedBadge(o);
+                return (
+                  <tr
+                    key={o.id}
+                    className="clickable"
+                    tabIndex={0}
+                    onClick={() => router.push(`/admin/orders/${o.id}`)}
+                    onKeyDown={(e) => e.target === e.currentTarget && e.key === "Enter" && router.push(`/admin/orders/${o.id}`)}
+                  >
+                    <td className="orders-select-col" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" className="orders-select-input" aria-label={`Select ${formatOrderNumber(o)}`} checked={isSelected(o)} onChange={() => toggleOrderSelection(o)} />
+                    </td>
+                    <td><Link href={`/admin/orders/${o.id}`} className="num" style={{ fontWeight: 700 }} onClick={(e) => e.stopPropagation()}>{formatOrderNumber(o)}</Link></td>
+                    <td>
+                      <strong>{o.name || "Guest"}</strong>
+                      <span className="muted num" style={{ display: "block", fontSize: "0.84rem" }}>{o.phone || "—"}</span>
+                    </td>
+                    <td className="muted" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.address}</td>
+                    <td className="text-right num">{formatMoney(o.total)}</td>
+                    <td><Badge tone={st.tone}>{st.label}</Badge></td>
+                    <td className="muted" style={{ whiteSpace: "nowrap" }}>{formatDateTime(o.created_at)}</td>
+                    <td>
+                      <div className="orders-row-actions">
+                        <button type="button" className="order-action-button order-action-badge" aria-label={`Assign badge to ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openBadgeDialog(o); }}>
+                          <FiTag aria-hidden="true" /> <span>Badge</span>
+                          {rowBadge && <span className="orders-assigned-badge">{rowBadge}</span>}
+                        </button>
+                        <button type="button" className="order-action-button order-action-courier" aria-label={`Open courier profile for ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openCourierDialog(o); }}>
+                          <FiTruck aria-hidden="true" /> <span>Courier</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
+          <Pagination page={data.meta.current_page || page} totalPages={data.meta.total_pages || 1} onChange={setPage} />
         </>
       )}
-
-      {/* badge modal */}
-      {badgeOrder && (
-        <BadgeModal
-          order={badgeOrder}
-          onClose={() => setBadgeOrder(null)}
-          onSaved={() => {
-            setBadgeOrder(null);
-            load();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ---------- expanded row content ---------- */
-function OrderExpand({ order, onBadge, onCourier, onStatusChange, courierLoading }) {
-  const items = order.items || order.order_items || order.cart_items || [];
-  const [productImages, setProductImages] = useState({});
-  const subtotal = items.reduce(
-    (s, it) => s + (Number(it.totalPrice ?? it.total ?? 0) || 0),
-    0
-  );
-  const shipping = Number(order.shipping_fee ?? order.shipping_cost) || 0;
-  const advance = Number(order.advance_payment) || 0;
-
-  useEffect(() => {
-    let alive = true;
-    const productIds = [...new Set(items.map((item) => item.product_id).filter(Boolean))];
-    if (!productIds.length) return undefined;
-
-    Promise.all(productIds.map(async (productId) => {
-      try {
-        const response = await api.get(`api/products/${productId}`, { auth: false });
-        const product = response?.data?.data || response?.data || response;
-        const image = Array.isArray(product?.images) ? product.images[0] : null;
-        return [productId, imgUrl(image)];
-      } catch {
-        return [productId, null];
-      }
-    })).then((entries) => {
-      if (alive) setProductImages(Object.fromEntries(entries));
-    });
-
-    return () => {
-      alive = false;
-    };
-  }, [items]);
-
-  return (
-    <div className="orders-reference-detail">
-      <div className="orders-reference-detail-column orders-reference-products">
-        <h6>Ordered Products</h6>
-        <div className="orders-reference-panel">
-            {items.map((it, i) => (
-              <div key={i} className="orders-reference-product">
-                {imgUrl(it.image || it.product?.images?.[0]) || productImages[it.product_id] ? (
-                  <img
-                    className="orders-reference-product-image"
-                    src={imgUrl(it.image || it.product?.images?.[0]) || productImages[it.product_id]}
-                    alt=""
-                  />
-                ) : (
-                  <span className="orders-reference-product-image orders-reference-product-placeholder" aria-hidden="true" />
-                )}
-                <div className="orders-reference-product-copy">
-                  <b>{it.title || "Product"}</b>
-                  <div>Qty: {it.qty} × {formatTk(it.unitPrice)} = <strong>{formatTk(it.totalPrice)}৳</strong></div>
-                  {(it.color_name || it.color) && <div>Color: {it.color_name || it.color}</div>}
-                  {it.size && <div>Size: {it.size}</div>}
-                </div>
-                {it.color && <span className="orders-reference-color-dot" title={it.color_name || it.color} />}
+    {activeDialog && activeOrder && (
+      <div className="orders-modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeActionDialog()}>
+        <section className={`orders-modal ${activeDialog === "courier" ? "orders-modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="orders-action-modal-title">
+          <header className="orders-modal-header">
+            <div className="orders-modal-heading">
+              <div className="orders-modal-icon">{activeDialog === "badge" ? <FiTag aria-hidden="true" /> : <FiTruck aria-hidden="true" />}</div>
+              <div>
+                <p className="eyebrow">{activeDialog === "badge" ? "Customer" : "Customer intelligence"}</p>
+                <h2 id="orders-action-modal-title">{activeDialog === "badge" ? "Assign Customer Badge" : "Courier delivery profile"}</h2>
+                <p className="orders-modal-customer"><strong>{activeOrder.name || "Guest"}</strong><span>{activeOrder.phone || "No phone number"}</span></p>
               </div>
-            ))}
-          </div>
+            </div>
+            <button type="button" className="orders-modal-close" onClick={closeActionDialog} aria-label="Close dialog"><FiX aria-hidden="true" /></button>
+          </header>
+
+          {activeDialog === "badge" ? (
+            <>
+              <div className="orders-modal-content">
+                <div className="orders-modal-field">
+                  <label htmlFor="order-customer-badge">Badge</label>
+                  <select id="order-customer-badge" className="orders-modal-select" value={badgeDraft} onChange={(event) => setBadgeDraft(event.target.value)}>
+                    <option value="">No badge</option>
+                    {badgeDraft && !BADGE_OPTIONS.includes(badgeDraft) && <option value={badgeDraft}>{badgeDraft}</option>}
+                    {BADGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </div>
+                <p className="orders-modal-note">This frontend preview saves the selection for this page only. It can be connected to the badge API when it is ready.</p>
+              </div>
+              <footer className="orders-modal-footer">
+                <button type="button" className="orders-modal-button orders-modal-button-secondary" onClick={closeActionDialog}>Cancel</button>
+                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={saveBadge}>Save Badge</button>
+              </footer>
+            </>
+          ) : (
+            <>
+              <div className="orders-courier-content">
+                <section className="orders-courier-overview">
+                  <div className="orders-courier-ring"><strong>&mdash;</strong><span>SUCCESS</span></div>
+                  <div>
+                    <p className="eyebrow">Overall delivery success</p>
+                    <h3>Courier history will appear here</h3>
+                    <p>Delivery outcomes and success rate will populate when the courier-history API is connected.</p>
+                  </div>
+                </section>
+                <div className="orders-courier-stats">
+                  <div><strong>&mdash;</strong><span>Total parcels</span></div>
+                  <div><strong>&mdash;</strong><span>Delivered</span></div>
+                  <div><strong>&mdash;</strong><span>Cancelled</span></div>
+                </div>
+                <section className="orders-courier-breakdown">
+                  <div className="orders-courier-breakdown-head">
+                    <div><p className="eyebrow">Network view</p><h3>Courier breakdown</h3></div>
+                    <span className="orders-api-status">API pending</span>
+                  </div>
+                  <p>Courier-wise parcel totals and delivery outcomes for {activeOrder.name || "this customer"} will appear here.</p>
+                </section>
+              </div>
+              <footer className="orders-modal-footer">
+                <span className="muted">Order {formatOrderNumber(activeOrder)}</span>
+                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={closeActionDialog}>Close</button>
+              </footer>
+            </>
+          )}
+        </section>
       </div>
-      <div className="orders-reference-detail-column">
-        <h6>Order Summary</h6>
-        <div className="orders-reference-panel orders-reference-summary">
-          <div><span>Payment Method</span><strong>{order.payment_method || "cash"}</strong></div>
-          <div><span>Shipping Cost</span><strong>{formatTk(shipping)}৳</strong></div>
-          <div><span>Advance Payment</span><strong>{formatTk(advance)}৳</strong></div>
-          <div><span>Total</span><strong>{formatTk(order.total_amount ?? subtotal + shipping)}৳</strong></div>
-          <div><span>Total Due</span><strong>{formatTk((order.total_amount ?? subtotal + shipping) - advance)}৳</strong></div>
-        </div>
-      </div>
-      <div className="orders-reference-detail-column">
-        <h6>Manage Order</h6>
-        <div className="orders-reference-panel orders-reference-manage">
-          <label>Status
-            <select
-              className={`orders-reference-status-select status-${statusClass(order.status)}`}
-              value={String(order.status || "pending").toUpperCase().replace(/-/g, "_")}
-              onChange={(event) => onStatusChange(event.target.value)}
-            >
-              {ORDER_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
-          </label>
-          <label>Courier Entry
-            <select defaultValue="">
-              <option value="">Select Courier</option>
-              <option value="pathao">Pathao</option>
-            </select>
-          </label>
-          <div className="orders-reference-manage-actions">
-            <button type="button" onClick={onBadge}><FaTag /> Badge</button>
-            <button type="button" onClick={() => onCourier("pathao")} disabled={courierLoading}><FaShieldHalved /> Courier</button>
-            <Link href={`/admin/orders/edit/${order.id}`}><FaPen /> Edit</Link>
-            <Link href={`/admin/orders/invoice/${order.id}`}><FaReceipt /> Invoice</Link>
-          </div>
-        </div>
-      </div>
+    )}
     </div>
-  );
-}
-
-/* ---------- badge modal ---------- */
-function BadgeModal({ order, onClose, onSaved }) {
-  const [title, setTitle] = useState(order.assigned_badge?.title || "");
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await api.post("api/customer-profiles/assign-badge", {
-        phone: order.phone,
-        name: order.name,
-        badge_title: title || null,
-      });
-      notify.success("Badge saved successfully");
-      onSaved();
-    } catch (e) {
-      notify.error(e.message || "Failed to save badge");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div
-        className="position-fixed top-0 start-0 w-100 h-100"
-        style={{ background: "rgba(0,0,0,.5)", zIndex: 1040 }}
-        onClick={onClose}
-      />
-      <div
-        className="position-fixed start-50 top-50 translate-middle bg-white rounded shadow p-4"
-        style={{ zIndex: 1050, width: "min(420px, 92vw)" }}
-      >
-        <h5 className="fw-bold mb-3">Badge</h5>
-        <input
-          className="form-control mb-3"
-          placeholder="Badge title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <div className="d-flex justify-content-end gap-2">
-          <button className="btn btn-outline-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-grad" disabled={saving} onClick={save}>
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-export default function OrdersAdminPage() {
-  return (
-    <PageGate permission="view orders">
-      <OrdersPage />
-    </PageGate>
   );
 }

@@ -1,324 +1,140 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FaTrash, FaPlus } from "react-icons/fa6";
-import Swal from "sweetalert2";
-import { api, asBoolean, imgUrl, unwrapList } from "@/lib/api";
-import notify from "@/components/notify";
-import PageGate from "@/components/admin/PageGate";
-import Loader from "@/components/Loader";
+import Link from "next/link";
+import { useRef, useState } from "react";
+import { FiEdit2, FiImage, FiPlus, FiTrash2 } from "react-icons/fi";
+import Img from "@/components/Img";
+import { AdminHeader } from "@/components/admin/AdminPage";
+import { Badge, Button, EmptyState, ErrorState, Field, Input, Modal, Skeleton, Toggle } from "@/components/ui";
+import { useFeedback } from "@/context/FeedbackContext";
+import { api, imgUrl, listOf } from "@/lib/api";
+import { useAsync } from "@/lib/useAsync";
 
-function broadcastBannerChange() {
-  try {
-    window.localStorage.setItem("banner-sync", String(Date.now()));
-  } catch {
-    // Local storage may be unavailable; the next navigation will reload banners.
-  }
-}
+const EMPTY = { id: null, link: "", display_priority: 0, is_active: true, file: null, preview: null, existing: null };
 
-/**
- * Homepage banners (/dashboard/banners)
- *  - GET    api/banners
- *  - POST   api/banners        (multipart: image, link, display_priority, is_active)
- *  - PUT    api/banners/{id}   (multipart: image, link, display_priority, is_active)
- *  - DELETE api/banners/{id}
- */
-function BannersPage() {
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [drafts, setDrafts] = useState([
-    { image: null, link: "", display_priority: "0", is_active: "true" },
-  ]);
-  const [edits, setEdits] = useState({});
-  const [saving, setSaving] = useState(false);
-  const fileRefs = useRef({});
+export default function BannersPage() {
+  const { toast, confirm } = useFeedback();
+  const fileRef = useRef(null);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(EMPTY);
+  const [error, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failedImages, setFailedImages] = useState({});
+  const { data, loading, error: loadError, reload } = useAsync(() => api.get("api/banners", { auth: false }).then(listOf), []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await api.get("api/banners");
-      const list = unwrapList(r);
-      setRows(list);
-      const nextEdits = {};
-      list.forEach((b) => {
-        nextEdits[b.id] = {
-          link: b.link || "",
-          display_priority: String(b.display_priority ?? 0),
-          is_active: String(asBoolean(b.is_active, true)),
-        };
-      });
-      setEdits(nextEdits);
-    } catch (e) {
-      notify.error(e.message || "Failed to load banners");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const requests = [];
-      drafts.forEach((d) => {
-        if (d.image instanceof File) {
-          const fd = new FormData();
-          fd.append("image", d.image);
-          fd.append("link", d.link || "");
-          fd.append("display_priority", d.display_priority || "0");
-          fd.append("is_active", d.is_active || "true");
-          requests.push(api.upload("api/banners", fd));
-        }
-      });
-      Object.entries(edits).forEach(([id, edit]) => {
-        const fd = new FormData();
-        fd.append("link", edit.link || "");
-        fd.append("display_priority", edit.display_priority || "0");
-        fd.append("is_active", edit.is_active || "false");
-        requests.push(api.upload(`api/banners/${id}`, fd, { method: "PUT" }));
-      });
-      if (!requests.length) {
-        notify.warn("Nothing to save");
-        setSaving(false);
-        return;
-      }
-      await Promise.all(requests);
-      notify.success("Banners saved successfully", "Banners Saved");
-      setDrafts([{ image: null, link: "", display_priority: "0", is_active: "true" }]);
-      await load();
-      broadcastBannerChange();
-    } catch (err) {
-      notify.error(err.message || "Failed", "Could not save banners");
-    } finally {
-      setSaving(false);
-    }
+  const open = (row) => {
+    setFormError("");
+    setEditing(row || {});
+    setForm(row ? { ...EMPTY, id: row.id, link: row.link || "", display_priority: row.display_priority ?? 0, is_active: row.is_active !== false, existing: imgUrl(row.image) } : EMPTY);
   };
 
-  const remove = async (id) => {
-    const res = await Swal.fire({
-      title: "Delete banner?",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      confirmButtonText: "Delete",
-    });
-    if (!res.isConfirmed) return;
-    try {
-      await api.delete(`api/banners/${id}`);
-      setRows((rs) => rs.filter((b) => b.id !== id));
-      setEdits((all) => {
-        const next = { ...all };
-        delete next[id];
-        return next;
-      });
-      notify.success("Banner deleted", "Banner Deleted");
-      broadcastBannerChange();
-    } catch (e) {
-      notify.error(e.message || "Failed to delete", "Could not delete banner");
-    }
-  };
-
-  /* Replace an existing banner image using the backend's direct PUT contract. */
-  const replaceImage = async (id, file) => {
+  const pickFile = (file) => {
     if (!file) return;
-    const fd = new FormData();
-    const edit = edits[id] || {};
-    fd.append("image", file);
-    fd.append("link", edit.link || "");
-    fd.append("display_priority", edit.display_priority || "0");
-    fd.append("is_active", edit.is_active || "false");
+    if (!file.type.startsWith("image/")) return setFormError("Choose an image file.");
+    if (file.size > 5 * 1024 * 1024) return setFormError("Images must be under 5 MB.");
+    setFormError("");
+    setFailedImages((current) => {
+      if (!form.id || !current[form.id]) return current;
+      const next = { ...current };
+      delete next[form.id];
+      return next;
+    });
+    setForm((f) => ({ ...f, file, preview: URL.createObjectURL(file) }));
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (!form.id && !form.file) return setFormError("Choose a banner image.");
+    const data = new FormData();
+    if (form.file) data.append("image", form.file);
+    data.append("link", form.link.trim());
+    data.append("display_priority", String(Number(form.display_priority) || 0));
+    data.append("is_active", String(form.is_active));
+    if (form.id) data.append("_method", "PUT");
+    setBusy(true);
     try {
-      await api.upload(`api/banners/${id}`, fd, { method: "PUT" });
-      notify.success("Banner updated successfully", "Banner Updated");
-      await load();
-      broadcastBannerChange();
-    } catch (e) {
-      notify.error(e.message || "Failed to update banner", "Could not update banner");
+      if (form.id) await api.upload(`api/banners/${form.id}`, data);
+      else await api.upload("api/banners", data);
+      toast.success(form.id ? "Banner updated." : "Banner added.");
+      setEditing(null);
+      reload();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setBusy(false);
     }
   };
 
-  if (loading) return <Loader />;
+  const remove = async (row) => {
+    const ok = await confirm({ title: "Delete this banner?", message: "It will disappear from the homepage.", confirmText: "Delete", danger: true });
+    if (!ok) return;
+    try {
+      await api.delete(`api/banners/${row.id}`);
+      toast.success("Banner deleted.");
+      reload();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const shown = form.preview || form.existing;
 
   return (
-    <div className="container-fluid py-3">
-      <h4 className="fw-bold mb-3">Banners</h4>
+    <div className="stack" style={{ gap: "1.25rem" }}>
+      <AdminHeader eyebrow="Storefront" title="Banners" subtitle="Hero slides on the homepage, shown in priority order." actions={<Button variant="primary" onClick={() => open(null)}><FiPlus aria-hidden="true" /> New banner</Button>} />
 
-      {/* existing */}
-      <div className="row g-3 mb-4">
-        {rows.map((b) => (
-          <div key={b.id} className="col-md-3">
-            <div className="card border-0 shadow-sm h-100">
-              <img
-                src={`${imgUrl(b.image || `/api/banners/${b.id}/image`)}?v=${encodeURIComponent(b.updated_at || b.id)}`}
-                alt=""
-                style={{ height: 150, objectFit: "cover" }}
-                onError={(event) => {
-                  event.currentTarget.style.display = "none";
-                }}
-              />
-              <div className="card-body">
-                <label className="form-label small mb-1">Link</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="form-control form-control-sm mb-2"
-                  onChange={(e) => replaceImage(b.id, e.target.files?.[0])}
-                />
-                <div className="input-group input-group-sm">
-                  <input
-                    className="form-control"
-                    value={edits[b.id]?.link ?? ""}
-                    onChange={(e) =>
-                      setEdits((all) => ({
-                        ...all,
-                        [b.id]: { ...all[b.id], link: e.target.value },
-                      }))
-                    }
-                  />
-                  <button
-                    className="btn btn-outline-danger"
-                    onClick={() => remove(b.id)}
-                    title="Delete"
-                  >
-                    <FaTrash />
-                  </button>
+      {loadError ? <ErrorState message={loadError} onRetry={reload} /> : loading || !data ? <Skeleton style={{ height: 260 }} /> : data.length === 0 ? (
+        <EmptyState icon={FiImage} title="No banners yet" text="Upload a wide image to feature on the homepage." action={<Button variant="primary" onClick={() => open(null)}>Add banner</Button>} />
+      ) : (
+        <div className="grid-3 stagger" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          {[...data].sort((a, b) => (a.display_priority ?? 0) - (b.display_priority ?? 0)).map((b) => (
+            <article key={b.id} className="card" style={{ overflow: "hidden" }}>
+              <div style={{ position: "relative", aspectRatio: "16 / 8", background: "var(--brand-tint)" }}>
+                {failedImages[b.id] ? <div className="empty" style={{ height: "100%", display: "grid", placeItems: "center" }}><FiImage aria-hidden="true" /> Image unavailable</div> : <Img src={imgUrl(b.image)} alt="" fill sizes="320px" onError={() => setFailedImages((current) => ({ ...current, [b.id]: true }))} />}
+              </div>
+              <div style={{ padding: 14, display: "grid", gap: 8 }}>
+                <div className="between">
+                  <span className="num muted">Position {b.display_priority ?? 0}</span>
+                  {b.is_active === false ? <Badge tone="neutral">Hidden</Badge> : <Badge tone="success">Live</Badge>}
                 </div>
-                <div className="row g-2 mt-2">
-                  <div className="col-6">
-                    <label className="form-label small mb-1">Priority</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="form-control form-control-sm"
-                      value={edits[b.id]?.display_priority ?? "0"}
-                      onChange={(e) =>
-                        setEdits((all) => ({
-                          ...all,
-                          [b.id]: { ...all[b.id], display_priority: e.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="col-6 d-flex align-items-end">
-                    <label className="form-check small">
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        checked={edits[b.id]?.is_active === "true"}
-                        onChange={(e) =>
-                          setEdits((all) => ({
-                            ...all,
-                            [b.id]: { ...all[b.id], is_active: String(e.target.checked) },
-                          }))
-                        }
-                      />
-                      Active
-                    </label>
-                  </div>
+                <span className="muted" style={{ fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {b.link ? <Link href={b.link} target="_blank" rel="noopener">{b.link}</Link> : "No link"}
+                </span>
+                <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                  <button type="button" className="icon-btn" aria-label="Edit banner" onClick={() => open(b)}><FiEdit2 aria-hidden="true" /></button>
+                  <button type="button" className="icon-btn" aria-label="Delete banner" onClick={() => remove(b)}><FiTrash2 aria-hidden="true" /></button>
                 </div>
               </div>
-            </div>
-          </div>
-        ))}
-        {rows.length === 0 && (
-          <div className="col-12 text-muted">No banners yet — add the first below.</div>
-        )}
-      </div>
-
-      {/* add new */}
-      <form onSubmit={submit}>
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white fw-bold">Add More</div>
-          <div className="card-body">
-            {drafts.map((d, i) => (
-              <div key={i} className="row g-2 mb-2 align-items-center">
-                <div className="col-md-5">
-                  <input
-                    ref={(el) => (fileRefs.current[i] = el)}
-                    type="file"
-                    accept="image/*"
-                    className="form-control"
-                    onChange={(e) =>
-                      setDrafts((list) => {
-                        const n = [...list];
-                        n[i] = { ...n[i], image: e.target.files?.[0] || null };
-                        return n;
-                      })
-                    }
-                  />
-                </div>
-                <div className="col-md-2">
-                  <input
-                    type="number"
-                    className="form-control"
-                    placeholder="Priority"
-                    value={d.display_priority}
-                    onChange={(e) =>
-                      setDrafts((list) => list.map((item, j) => j === i
-                        ? { ...item, display_priority: e.target.value }
-                        : item))
-                    }
-                  />
-                </div>
-                <div className="col-md-5">
-                  <input
-                    className="form-control"
-                    placeholder="Link (optional)"
-                    value={d.link}
-                    onChange={(e) =>
-                      setDrafts((list) => {
-                        const n = [...list];
-                        n[i] = { ...n[i], link: e.target.value };
-                        return n;
-                      })
-                    }
-                  />
-                </div>
-                <div className="col-md-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger w-100"
-                    onClick={() =>
-                      setDrafts((list) => list.filter((_, j) => j !== i))
-                    }
-                  >
-                    <FaTrash />
-                  </button>
-                </div>
-              </div>
-            ))}
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-primary mb-3"
-              onClick={() => setDrafts((l) => [...l, {
-                image: null,
-                link: "",
-                display_priority: "0",
-                is_active: "true",
-              }])}
-            >
-              <FaPlus /> Add More
-            </button>
-            <div>
-              <button className="btn btn-grad" disabled={saving}>
-                {saving ? "Saving..." : "Save Banners"}
-              </button>
-            </div>
-          </div>
+            </article>
+          ))}
         </div>
-      </form>
-    </div>
-  );
-}
+      )}
 
-export default function BannersAdminPage() {
-  return (
-    <PageGate permission="view banners">
-      <BannersPage />
-    </PageGate>
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={form.id ? "Edit banner" : "New banner"}
+        width="620px"
+        footer={<><Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button><Button variant="primary" loading={busy} onClick={save}>Save banner</Button></>}
+      >
+        <form onSubmit={save} className="stack" noValidate>
+          {error && <p className="notice notice-danger" role="alert">{error}</p>}
+          <div>
+            <div style={{ position: "relative", aspectRatio: "16 / 8", borderRadius: 12, overflow: "hidden", background: "var(--brand-tint)", marginBottom: 10 }}>
+              {shown && !failedImages[form.id] ? <Img src={shown} alt="" fill sizes="560px" onError={() => form.id && setFailedImages((current) => ({ ...current, [form.id]: true }))} /> : <div className="empty" style={{ height: "100%", display: "grid", placeItems: "center" }}><FiImage aria-hidden="true" /> {form.file ? "Preview unavailable" : "Image unavailable"}</div>}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickFile(e.target.files?.[0])} />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>{form.id ? "Replace image" : "Choose image"}</Button>
+          </div>
+          <Field label="Link (optional)" htmlFor="b-link" hint="Where the banner goes when tapped, e.g. /shop">
+            <Input id="b-link" value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} />
+          </Field>
+          <Field label="Display order" htmlFor="b-order" hint="Lower numbers show first.">
+            <Input id="b-order" type="number" min="0" value={form.display_priority} onChange={(e) => setForm({ ...form, display_priority: e.target.value })} />
+          </Field>
+          <Toggle checked={form.is_active} onChange={(v) => setForm({ ...form, is_active: v })} label="Show on the homepage" />
+        </form>
+      </Modal>
+    </div>
   );
 }

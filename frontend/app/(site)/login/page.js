@@ -1,5 +1,12 @@
-import { LoginPage } from "@/components/AccountPages";
+import { Suspense } from "react";
+import LoginForm from "./LoginForm";
 
-export default function Page() {
-  return <LoginPage />;
+export const metadata = { title: "Sign in" };
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="container section" />}>
+      <LoginForm />
+    </Suspense>
+  );
 }

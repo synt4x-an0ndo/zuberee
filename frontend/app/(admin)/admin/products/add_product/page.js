@@ -1,13 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import ProductForm from "@/components/admin/ProductForm";
-import PageGate from "@/components/admin/PageGate";
-
-/** Create product - POST api/products (JSON). */
-export default function ProductAddPage() {
-  return (
-    <PageGate permission="create products">
-      <ProductForm />
-    </PageGate>
-  );
+export default function ProductAddAlias() {
+  redirect("/admin/products/new");
 }

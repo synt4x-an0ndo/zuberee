@@ -68,6 +68,7 @@ export async function GET(request) {
 
         const search = searchParams.get("search")?.trim();
         const category = searchParams.get("category")?.trim();
+        const size = searchParams.get("size")?.trim();
         const status = searchParams.get("status")?.trim();
 
         const minPrice = toFiniteNumber(searchParams.get("min_price"));
@@ -130,6 +131,17 @@ export async function GET(request) {
                 }
                 : {}),
 
+            ...(size
+                ? {
+                    variants: {
+                        some: {
+                            value: size,
+                            isActive: true,
+                        },
+                    },
+                }
+                : {}),
+
             ...(status
                 ? {
                     status: status.toUpperCase().replace("-", "_"),
@@ -169,7 +181,9 @@ export async function GET(request) {
                             isPrimary: "desc",
                         },
                     },
-                    variants: true,
+                    variants: {
+                        where: { isActive: true },
+                    },
                     colors: true,
                     inventory: true,
                 },

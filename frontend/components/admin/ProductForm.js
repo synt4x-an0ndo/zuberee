@@ -1,693 +1,338 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { FaPlus, FaTrash } from "react-icons/fa6";
-import { api, imgUrl, unwrapList } from "@/lib/api";
-import notify from "@/components/notify";
-import Loader from "@/components/Loader";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiImage, FiPlus, FiTrash2, FiUploadCloud, FiX } from "react-icons/fi";
+import Img from "@/components/Img";
+import { Button, Card, CardHeader, Field, Input, Select, Textarea, Toggle, cx } from "@/components/ui";
+import { useFeedback } from "@/context/FeedbackContext";
+import { useSite } from "@/context/SiteContext";
+import { api, listOf } from "@/lib/api";
 
-/**
- * Shared product create/edit form.
- * create: POST  api/products                 (JSON)
- * edit:   PUT   api/products/{id}             (JSON)
- * lists : GET   api/categories
- *
- * Array fields follow the JSON contract implemented by the backend route.
- */
-export default function ProductForm({ id, initial }) {
-  const fileRef = useRef(null);
-  const [catList, setCatList] = useState([]);
-  const [loading, setLoading] = useState(true);
+const STATUS_OPTIONS = [
+  { value: "in-stock", label: "In stock" },
+  { value: "out-of-stock", label: "Out of stock" },
+  { value: "pre-order", label: "Pre-order" },
+  { value: "discontinued", label: "Discontinued" },
+];
+
+const blankForm = () => ({
+  title: "",
+  sku: "",
+  price: "",
+  discount: "",
+  status: "in-stock",
+  categoryId: "",
+  shortDescription: "",
+  description: "",
+  videoUrl: "",
+  trackInventory: false,
+  sizes: [], // { label, stock, price }
+  colors: [], // { name, code, image }
+  specifications: [], // { key, value }
+  faqs: [], // { question, answer }
+  images: [], // { id?, path, url, isNew?, file? }
+});
+
+/** Convert a raw product detail (from api/products/:id) into editable form state. */
+export function productToForm(raw) {
+  const f = blankForm();
+  f.title = raw.title || raw.name || "";
+  f.sku = raw.sku || "";
+  f.price = raw.price ?? "";
+  f.discount = raw.discount ?? "";
+  f.status = String(raw.status || "in-stock").toLowerCase();
+  f.categoryId = Array.isArray(raw.category) ? raw.category[0]?.id ?? "" : raw.category?.id ?? "";
+  f.shortDescription = raw.short_description || "";
+  f.description = raw.description || "";
+  f.videoUrl = raw.video_url || "";
+  f.trackInventory = Boolean(raw.inventory?.track_inventory ?? raw.track_inventory);
+  f.sizes = (raw.sizes || []).map((s) => ({
+    label: s.size ?? s.value ?? "",
+    stock: s.pivot?.stock ?? s.stock ?? 0,
+    price: s.pivot?.price != null && Number(s.pivot.price) !== Number(raw.price) ? s.pivot.price : "",
+  }));
+  f.colors = (raw.colors || []).map((c) => ({ name: c.name || "", code: c.code || "#000000", image: c.image || "" }));
+  f.specifications = (raw.specifications || []).map((s) => ({ key: s.key || "", value: s.value || "" }));
+  f.faqs = (raw.faqs || []).map((q) => ({ question: q.question || "", answer: q.answer || "" }));
+  f.images = (raw.images || []).map((img) => ({ id: img.id, path: img.image || img.imageUrl || "", url: img.image_url || img.url || null }));
+  return f;
+}
+
+export default function ProductForm({ mode, productId, initial }) {
+  const router = useRouter();
+  const { toast, confirm } = useFeedback();
+  const { categories } = useSite();
+  const [form, setForm] = useState(() => initial || blankForm());
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-
-  const empty = {
-    title: "",
-    sku: "",
-    price: "",
-    discount: "",
-    status: "IN_STOCK",
-    short_description: "",
-    description: "",
-    video_url: "",
-    stock: "",
-    isActive: true,
-    track_inventory: false,
-    categoryId: "",
-  };
-
-  const [form, setForm] = useState({ ...empty, ...(initial || {}) });
-  const [categories, setCategories] = useState(initial?.categories || []);
-  const [colors, setColors] = useState(initial?.colors || []);
-  const [sizes, setSizes] = useState(initial?.sizes || []);
-  const [faqs, setFaqs] = useState(initial?.faqs || []);
-  const [specs, setSpecs] = useState(initial?.specifications || []);
-  const [images, setImages] = useState(initial?.images || []); // strings + Files
-  const [imageUrl, setImageUrl] = useState("");
-
-  useEffect(() => {
-    if (!initial) return;
-    setForm((f) => ({ ...f, ...initial }));
-  }, [initial]);
+  const [sizeMaster, setSizeMaster] = useState([]);
+  const [newFiles, setNewFiles] = useState([]); // { file, preview }
+  const fileRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const c = await api.get("api/categories").catch(() => ({ data: [] }));
-        if (!alive) return;
-        setCatList(unwrapList(c, ["categories"]));
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
+    api
+      .get("api/sizes", { auth: false })
+      .then((body) => alive && setSizeMaster(listOf(body).filter((s) => s.is_active !== false && s.isActive !== false)))
+      .catch(() => alive && setSizeMaster([]));
     return () => {
       alive = false;
     };
   }, []);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  useEffect(() => () => newFiles.forEach((f) => URL.revokeObjectURL(f.preview)), [newFiles]);
 
-  /* row helpers */
-  const rowSet = (setter) => (i, k, v) =>
-    setter((list) => {
-      const next = [...list];
-      next[i] = { ...next[i], [k]: v };
-      return next;
-    });
+  const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+  const setList = (key, updater) => setForm((f) => ({ ...f, [key]: updater(f[key]) }));
 
-  const toggleCat = (catId) => {
-    const selected = categories.some((c) => c.id === catId) ? [] : [{ id: catId }];
-    setCategories(selected);
-    set("categoryId", selected[0]?.id || "");
+  const sizeLabels = useMemo(() => {
+    const names = sizeMaster.map((s) => s.size ?? s.name ?? s.value).filter(Boolean);
+    return [...new Set([...names, ...form.sizes.map((s) => s.label)])];
+  }, [sizeMaster, form.sizes]);
+
+  const toggleSize = (label) => {
+    setList("sizes", (list) =>
+      list.some((s) => s.label === label) ? list.filter((s) => s.label !== label) : [...list, { label, stock: 0, price: "" }]
+    );
   };
 
-  const fileToDataUrl = (file) =>
-    new Promise((resolve, reject) => {
-      if (!(file instanceof File)) {
-        resolve(null);
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        reject(new Error("Only image files can be added"));
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("Could not read the selected image"));
-      reader.readAsDataURL(file);
-    });
-
-  const imageValue = async (value) =>
-    typeof value === "string" ? value.trim() : await fileToDataUrl(value);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (saving) return;
-    if (!form.title?.trim()) {
-      notify.error("Product title is required");
-      return;
-    }
-    const categoryId = Number(form.categoryId || categories[0]?.id);
+  const validate = () => {
+    const next = {};
+    if (!form.title.trim()) next.title = "Enter a product title.";
     const price = Number(form.price);
-    const discount = form.discount === "" || form.discount == null
-      ? null
-      : Number(form.discount);
-    const stock = form.stock === "" || form.stock == null
-      ? undefined
-      : Number(form.stock);
-    if (!Number.isInteger(categoryId) || categoryId <= 0) {
-      notify.error("A valid product category is required");
-      return;
+    if (form.price === "" || !Number.isFinite(price) || price < 0) next.price = "Enter a valid price.";
+    if (form.discount !== "" && (!Number.isFinite(Number(form.discount)) || Number(form.discount) < 0)) next.discount = "Enter a valid sale price.";
+    if (form.discount !== "" && Number(form.discount) >= price) next.discount = "The sale price must be lower than the regular price.";
+    if (categories.flat.length && !form.categoryId) next.categoryId = "Choose a category.";
+    if (form.videoUrl && !/^https?:\/\//i.test(form.videoUrl)) next.videoUrl = "Use a full link starting with https://";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const buildPayload = (images) => ({
+    title: form.title.trim(),
+    sku: form.sku.trim() || undefined,
+    price: Number(form.price),
+    discount: form.discount === "" ? null : Number(form.discount),
+    status: form.status,
+    category_id: form.categoryId ? Number(form.categoryId) : null,
+    short_description: form.shortDescription.trim(),
+    description: form.description,
+    video_url: form.videoUrl.trim(),
+    inventory: { track_inventory: form.trackInventory },
+    sizes: form.sizes.map((s) => ({ size: s.label, stock: Number(s.stock) || 0, price: s.price === "" ? null : Number(s.price) })),
+    colors: form.colors.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), code: c.code, image: c.image.trim() || null })),
+    specifications: form.specifications.filter((s) => s.key.trim()).map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
+    faqs: form.faqs.filter((q) => q.question.trim()).map((q) => ({ question: q.question.trim(), answer: q.answer.trim() })),
+    images,
+  });
+
+  const uploadFiles = async (id) => {
+    for (const item of newFiles) {
+      const data = new FormData();
+      data.append("image", item.file);
+      await api.upload(`api/products/${id}/images`, data);
     }
-    if (!Number.isFinite(price) || price < 0) {
-      notify.error("A valid product price is required");
-      return;
-    }
-    if (discount !== null && (!Number.isFinite(discount) || discount < 0)) {
-      notify.error("Discount must be a valid non-negative number");
-      return;
-    }
-    if (stock !== undefined && (!Number.isInteger(stock) || stock < 0)) {
-      notify.error("Stock must be a non-negative whole number");
+  };
+
+  const save = async (event) => {
+    event?.preventDefault();
+    if (!validate()) {
+      toast.error("Please fix the highlighted fields.");
       return;
     }
     setSaving(true);
     try {
-      const uploadedImages = images.filter((image) => image instanceof File);
-      const savedImages = images
-        .filter((image) => typeof image === "string" && image.trim())
-        .map((image) => image.trim());
-      const savedColors = await Promise.all(
-        colors
-          .filter((color) => color.name?.trim() || color.code?.trim() || color.image)
-          .map(async (color) => ({
-            name: color.name?.trim() || "",
-            code: color.code?.trim() || "",
-            image: (await imageValue(color.image)) || null,
-          }))
-      );
-      const payload = {
-        name: form.title.trim(),
-        sku: form.sku?.trim() || "",
-        price,
-        discount,
-        status: form.status || "IN_STOCK",
-        shortDescription: form.short_description || "",
-        description: form.description || "",
-        videoUrl: form.video_url || null,
-        ...(stock === undefined ? {} : { stock }),
-        ...(typeof form.isActive === "boolean" ? { isActive: form.isActive } : {}),
-        categoryId,
-        images: savedImages.map((image, index) => ({ image, isPrimary: index === 0 })),
-        colors: savedColors,
-        sizes: sizes
-          .filter((size) => (size.value || size.size || size.size_id)?.toString().trim())
-          .map((size) => ({
-            value: (size.value || size.size || size.size_id).toString().trim(),
-            price: size.price === "" || size.price == null ? null : Number(size.price),
-            stock: Number(size.stock) || 0,
-          })),
-        specifications: specs
-          .filter((specification) => specification.key?.trim() || specification.value?.trim())
-          .map((specification) => ({
-            key: specification.key?.trim() || "",
-            value: specification.value?.trim() || "",
-          })),
-        faqs: faqs
-          .filter((faq) => faq.question?.trim() || faq.answer?.trim())
-          .map((faq) => ({
-            question: faq.question?.trim() || "",
-            answer: faq.answer?.trim() || "",
-          })),
-        inventory: { track_inventory: Boolean(form.track_inventory) },
-      };
-
-      let savedProduct;
-      if (id) {
-        savedProduct = await api.put(`api/products/${id}`, payload);
-      } else {
-        savedProduct = await api.post("api/products", payload);
+      if (mode === "create") {
+        const body = await api.post("api/products", buildPayload([]));
+        const created = body?.data;
+        const id = created?.id ?? body?.id;
+        if (!id) throw new Error("The product was saved but no id was returned.");
+        await uploadFiles(id);
+        toast.success("Product created.");
+        router.replace(`/admin/products/${id}`);
+        return;
       }
-      const productId = id || savedProduct?.data?.id;
-      if (productId && uploadedImages.length > 0) {
-        await Promise.all(
-          uploadedImages.map((file) => {
-            const formData = new FormData();
-            formData.append("image", file);
-            return api.upload(`api/products/${productId}/images`, formData);
-          })
-        );
-      }
-      notify.success(id ? "Product Updated Successfully" : "Product Created Successfully", "Product Saved");
-      window.location.href = "/admin/products";
+      // Edit: keep existing images that are still listed, then upload any new ones.
+      const keep = form.images.filter((img) => img.path).map((img, i) => ({ image: img.path, isPrimary: i === 0 }));
+      await api.put(`api/products/${productId}`, buildPayload(keep));
+      await uploadFiles(productId);
+      setNewFiles([]);
+      toast.success("Product saved.");
+      router.refresh();
     } catch (err) {
-      const validationErrors = err.data?.errors;
-      const detail = validationErrors && typeof validationErrors === "object"
-        ? Object.values(validationErrors).flat().join(" ")
-        : "";
-      notify.error(detail || err.message || "Failed to save product", "Could not save product");
+      toast.error(err.message || "The product could not be saved.");
     } finally {
       setSaving(false);
     }
   };
 
-  const colorImg = (i, file) =>
-    setColors((list) => {
-      const next = [...list];
-      next[i] = { ...next[i], image: file };
-      return next;
-    });
-
-  const addImageUrl = () => {
-    const value = imageUrl.trim();
-    if (!value) return;
-    setImages((list) => [...list, value]);
-    setImageUrl("");
+  const onFiles = (fileList) => {
+    const picked = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024);
+    if (picked.length < (fileList?.length || 0)) toast.info("Some files were skipped. Use images under 5 MB.");
+    setNewFiles((prev) => [...prev, ...picked.map((file) => ({ file, preview: URL.createObjectURL(file) }))]);
   };
 
-  if (loading) return <Loader />;
+  const removeExisting = async (img) => {
+    const ok = await confirm({ title: "Remove this photo?", message: "It will be removed when you save the product.", confirmText: "Remove", danger: true });
+    if (ok) setList("images", (list) => list.filter((i) => i !== img));
+  };
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-lg-10">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h4 className="mb-0 fw-bold">{id ? "Edit Product" : "Add Product"}</h4>
-          <Link href="/admin/products" className="btn btn-sm btn-outline-secondary">
-            ← Back to Products
-          </Link>
+    <form onSubmit={save} noValidate className="stack" style={{ gap: "1.25rem" }}>
+      <div className="grid-2" style={{ alignItems: "start" }}>
+        <div className="stack" style={{ gap: "1.25rem" }}>
+          <Card>
+            <CardHeader title="Basics" />
+            <div className="stack">
+              <Field label="Product title" htmlFor="p-title" required error={errors.title}>
+                <Input id="p-title" value={form.title} onChange={(e) => set("title", e.target.value)} aria-invalid={!!errors.title} />
+              </Field>
+              <div className="form-grid">
+                <Field label="SKU" htmlFor="p-sku" hint="Optional. Keep it unique.">
+                  <Input id="p-sku" value={form.sku} onChange={(e) => set("sku", e.target.value)} />
+                </Field>
+                <Field label="Category" htmlFor="p-cat" required={categories.flat.length > 0} error={errors.categoryId}>
+                  <Select id="p-cat" placeholder="Choose a category" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)} aria-invalid={!!errors.categoryId}
+                    options={categories.flat.map((c) => ({ value: String(c.id), label: `${"— ".repeat(c.depth || 0)}${c.name}` }))} />
+                </Field>
+              </div>
+              <div className="form-grid">
+                <Field label="Regular price (৳)" htmlFor="p-price" required error={errors.price}>
+                  <Input id="p-price" type="number" min="0" step="1" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} aria-invalid={!!errors.price} />
+                </Field>
+                <Field label="Sale price (৳)" htmlFor="p-discount" error={errors.discount} hint="Leave empty for no sale.">
+                  <Input id="p-discount" type="number" min="0" step="1" inputMode="decimal" value={form.discount} onChange={(e) => set("discount", e.target.value)} aria-invalid={!!errors.discount} />
+                </Field>
+              </div>
+              <Field label="Availability" htmlFor="p-status">
+                <Select id="p-status" options={STATUS_OPTIONS} value={form.status} onChange={(e) => set("status", e.target.value)} />
+              </Field>
+              <Field label="Short description" htmlFor="p-short">
+                <Input id="p-short" value={form.shortDescription} onChange={(e) => set("shortDescription", e.target.value)} />
+              </Field>
+              <Field label="Description" htmlFor="p-desc" hint="Basic HTML is allowed (paragraphs, lists, bold).">
+                <Textarea id="p-desc" rows={7} value={form.description} onChange={(e) => set("description", e.target.value)} />
+              </Field>
+              <Field label="Video link" htmlFor="p-video" error={errors.videoUrl}>
+                <Input id="p-video" placeholder="https://" value={form.videoUrl} onChange={(e) => set("videoUrl", e.target.value)} aria-invalid={!!errors.videoUrl} />
+              </Field>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Specifications" subtitle="Shown in the product's Specifications tab." actions={<Button size="sm" variant="ghost" onClick={() => setList("specifications", (l) => [...l, { key: "", value: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            <RowList rows={form.specifications} onChange={(rows) => set("specifications", rows)} fields={[{ key: "key", placeholder: "Fabric" }, { key: "value", placeholder: "Cotton" }]} empty="No specifications yet." />
+          </Card>
+
+          <Card>
+            <CardHeader title="Questions & answers" actions={<Button size="sm" variant="ghost" onClick={() => setList("faqs", (l) => [...l, { question: "", answer: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            <RowList rows={form.faqs} onChange={(rows) => set("faqs", rows)} fields={[{ key: "question", placeholder: "Question" }, { key: "answer", placeholder: "Answer", textarea: true }]} empty="No questions yet." />
+          </Card>
         </div>
 
-        <form onSubmit={submit}>
-          {/* ===== basics ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label fw-semibold">Product Title *</label>
-                  <input
-                    className="form-control"
-                    value={form.title}
-                    onChange={(e) => set("title", e.target.value)}
-                  />
+        <div className="stack" style={{ gap: "1.25rem" }}>
+          <Card>
+            <CardHeader title="Photos" subtitle="The first photo is the main image." />
+            <div className="photo-grid">
+              {form.images.map((img, i) => (
+                <div key={`${img.path}-${i}`} className="photo-tile">
+                  {img.url ? <Img src={img.url} alt="" fill sizes="120px" /> : <FiImage aria-hidden="true" />}
+                  {i === 0 && <span className="photo-main">Main</span>}
+                  <button type="button" className="photo-remove" onClick={() => removeExisting(img)} aria-label="Remove photo"><FiX aria-hidden="true" /></button>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label fw-semibold">SKU</label>
-                  <input
-                    className="form-control"
-                    value={form.sku}
-                    onChange={(e) => set("sku", e.target.value)}
-                  />
+              ))}
+              {newFiles.map((item, i) => (
+                <div key={item.preview} className="photo-tile is-new">
+                  <Img src={item.preview} alt="" fill sizes="120px" />
+                  <span className="photo-main">New</span>
+                  <button type="button" className="photo-remove" onClick={() => setNewFiles((prev) => prev.filter((_, j) => j !== i))} aria-label="Remove new photo"><FiX aria-hidden="true" /></button>
                 </div>
-                <div className="col-md-3">
-                  <label className="form-label fw-semibold">Status</label>
-                  <select
-                    className="form-select"
-                    value={form.status}
-                    onChange={(e) => set("status", e.target.value)}
-                  >
-                    <option value="IN_STOCK">In Stock</option>
-                    <option value="OUT_OF_STOCK">Out of Stock</option>
-                    <option value="PRE_ORDER">Pre-order</option>
-                    <option value="DISCONTINUED">Discontinued</option>
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label fw-semibold">Base Price (৳)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-control"
-                    value={form.price}
-                    onChange={(e) => set("price", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label fw-semibold">Discount Price (৳)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="form-control"
-                    value={form.discount}
-                    onChange={(e) => set("discount", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label fw-semibold">Video URL</label>
-                  <input
-                    className="form-control"
-                    placeholder="https://..."
-                    value={form.video_url}
-                    onChange={(e) => set("video_url", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label fw-semibold">Stock</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={form.stock}
-                    onChange={(e) => set("stock", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <label className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={Boolean(form.isActive)}
-                      onChange={(e) => set("isActive", e.target.checked)}
-                    />
-                    <span className="form-check-label">Active</span>
-                  </label>
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <label className="form-check">
-                    <input
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={Boolean(form.track_inventory)}
-                      onChange={(e) => set("track_inventory", e.target.checked)}
-                    />
-                    <span className="form-check-label">Track inventory</span>
-                  </label>
-                </div>
-                <div className="col-12">
-                  <label className="form-label fw-semibold">Short Description</label>
-                  <input
-                    className="form-control"
-                    value={form.short_description}
-                    onChange={(e) => set("short_description", e.target.value)}
-                  />
-                </div>
-                <div className="col-12">
-                  <label className="form-label fw-semibold">Description</label>
-                  <textarea
-                    rows={5}
-                    className="form-control"
-                    value={form.description}
-                    onChange={(e) => set("description", e.target.value)}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
+            <button type="button" className="dropzone" onClick={() => fileRef.current?.click()}>
+              <FiUploadCloud aria-hidden="true" /> <span>Add photos</span> <small>JPG, PNG or WebP, up to 5 MB each</small>
+            </button>
+          </Card>
 
-          {/* ===== categories ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <h6 className="fw-bold mb-3">Categories</h6>
-              <div className="d-flex flex-wrap gap-3">
-                {catList.map((c) => {
-                  const on = categories.some((x) => x.id === c.id);
-                  return (
-                    <label
-                      key={c.id}
-                      className={`badge border px-3 py-2 ${on ? "bg-primary text-white" : "bg-light text-dark"
-                        }`}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <input
-                        type="checkbox"
-                        className="me-2"
-                        checked={on}
-                        onChange={() => toggleCat(c.id)}
-                      />
-                      {c.name}
-                    </label>
-                  );
+          <Card>
+            <CardHeader title="Inventory & sizes" />
+            <div className="stack">
+              <Toggle checked={form.trackInventory} onChange={(v) => set("trackInventory", v)} label="Track stock per size" />
+              <div className="chip-row" role="group" aria-label="Sizes offered">
+                {sizeLabels.length === 0 && <span className="muted" style={{ fontSize: "0.9rem" }}>No sizes have been added in the Sizes section yet.</span>}
+                {sizeLabels.map((label) => {
+                  const on = form.sizes.some((s) => s.label === label);
+                  return <button key={label} type="button" className={cx("chip", on && "is-active")} aria-pressed={on} onClick={() => toggleSize(label)}>{label}</button>;
                 })}
-                {catList.length === 0 && (
-                  <span className="text-muted small">No categories available</span>
-                )}
               </div>
-            </div>
-          </div>
-
-          {/* ===== colors ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="fw-bold mb-0">Colors</h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() =>
-                    setColors((l) => [...l, { name: "", code: "", image: "" }])
-                  }
-                >
-                  <FaPlus /> Add Color
-                </button>
-              </div>
-              {colors.length === 0 && <p className="text-muted small mb-0">No colors</p>}
-              {colors.map((c, i) => (
-                <div key={i} className="row g-2 align-items-center mb-2">
-                  <div className="col-md-3">
-                    <input
-                      className="form-control"
-                      placeholder="Name"
-                      value={c.name || ""}
-                      onChange={(e) => rowSet(setColors)(i, "name", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-3">
-                    <input
-                      className="form-control"
-                      placeholder="#hex code"
-                      value={c.code || ""}
-                      onChange={(e) => rowSet(setColors)(i, "code", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-4">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="form-control"
-                      onChange={(e) => colorImg(i, e.target.files?.[0] || "")}
-                    />
-                    <input
-                      className="form-control form-control-sm mt-1"
-                      placeholder="Existing image URL"
-                      value={typeof c.image === "string" ? c.image : ""}
-                      onChange={(e) => rowSet(setColors)(i, "image", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger w-100"
-                      onClick={() => setColors((l) => l.filter((_, j) => j !== i))}
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
+              {form.sizes.length > 0 && (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead><tr><th>Size</th><th>Stock</th><th>Price override (৳)</th><th /></tr></thead>
+                    <tbody>
+                      {form.sizes.map((s, i) => (
+                        <tr key={s.label}>
+                          <td><strong>{s.label}</strong></td>
+                          <td><Input aria-label={`Stock for ${s.label}`} type="number" min="0" value={s.stock} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, stock: e.target.value } : x)))} style={{ width: 96 }} /></td>
+                          <td><Input aria-label={`Price for ${s.label}`} type="number" min="0" placeholder={form.price || "Default"} value={s.price} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} style={{ width: 120 }} /></td>
+                          <td><button type="button" className="icon-btn" aria-label={`Remove ${s.label}`} onClick={() => toggleSize(s.label)}><FiTrash2 aria-hidden="true" /></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ===== sizes ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="fw-bold mb-0">Size Variants</h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() =>
-                    setSizes((l) => [...l, { size_id: "", price: "", stock: "" }])
-                  }
-                >
-                  <FaPlus /> Add Size
-                </button>
-              </div>
-              {sizes.map((s, i) => (
-                <div key={i} className="row g-2 align-items-center mb-2">
-                  <div className="col-md-4">
-                    <input
-                      className="form-select"
-                      placeholder="Size (e.g. UK 6)"
-                      value={s.value || s.size || s.size_id || ""}
-                      onChange={(e) => rowSet(setSizes)(i, "value", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-3">
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-control"
-                      placeholder="Price override"
-                      value={s.price ?? ""}
-                      onChange={(e) => rowSet(setSizes)(i, "price", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-3">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="Stock"
-                      value={s.stock ?? ""}
-                      onChange={(e) => rowSet(setSizes)(i, "stock", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger w-100"
-                      onClick={() => setSizes((l) => l.filter((_, j) => j !== i))}
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {sizes.length === 0 && (
-                <p className="text-muted small mb-0">No size variants configured</p>
               )}
             </div>
-          </div>
+          </Card>
 
-          {/* ===== images ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <h6 className="fw-bold mb-3">Images</h6>
-              <div className="d-flex flex-wrap gap-3 align-items-center mb-2">
-                {images.map((im, i) => (
-                  <div key={i} className="position-relative">
-                    <img
-                      src={typeof im === "string" ? imgUrl(im) : URL.createObjectURL(im)}
-                      alt=""
-                      width={72}
-                      height={72}
-                      style={{ objectFit: "cover", borderRadius: 6, border: "1px solid #ddd" }}
-                    />
-                    <button
-                      type="button"
-                      className="position-absolute btn btn-danger btn-sm"
-                      style={{ top: -8, right: -8, padding: "0 5px", lineHeight: 1.1 }}
-                      onClick={() => setImages((l) => l.filter((_, j) => j !== i))}
-                    >
-                      ×
-                    </button>
+          <Card>
+            <CardHeader title="Colours" subtitle="Swatches shown on the product page." actions={<Button size="sm" variant="ghost" onClick={() => setList("colors", (l) => [...l, { name: "", code: "#000000", image: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            {form.colors.length === 0 ? <p className="muted" style={{ fontSize: "0.9rem" }}>No colours added.</p> : (
+              <div className="stack" style={{ gap: 10 }}>
+                {form.colors.map((c, i) => (
+                  <div key={i} className="color-row">
+                    <input type="color" aria-label="Colour swatch" value={/^#[0-9a-f]{6}$/i.test(c.code) ? c.code : "#000000"} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))} />
+                    <Input aria-label="Colour name" placeholder="Name" value={c.name} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                    <Input aria-label="Colour image link" placeholder="Image path (optional)" value={c.image} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, image: e.target.value } : x)))} />
+                    <button type="button" className="icon-btn" aria-label="Remove colour" onClick={() => setList("colors", (l) => l.filter((_, j) => j !== i))}><FiTrash2 aria-hidden="true" /></button>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  className="btn btn-outline-dashed"
-                  style={{
-                    width: 72,
-                    height: 72,
-                    border: "2px dashed #bbb",
-                    background: "transparent",
-                  }}
-                  onClick={() => fileRef.current?.click()}
-                  aria-label="Choose product photos"
-                >
-                  <FaPlus className="d-block mx-auto mb-1" />
-                  <span className="small">Choose photos</span>
-                </button>
-                <div className="input-group" style={{ maxWidth: 360 }}>
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Image URL from backend"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addImageUrl();
-                      }
-                    }}
-                  />
-                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={addImageUrl}>
-                    Add URL
-                  </button>
-                </div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    if (files.length) setImages((list) => [...list, ...files]);
-                    e.target.value = "";
-                  }}
-                />
               </div>
-              <small className="text-muted">
-                Choose one or more photos, or add a saved image URL. Photos upload to product storage after saving; the first image is the cover.
-              </small>
-            </div>
-          </div>
-
-          {/* ===== faq ===== */}
-          <div className="card border-0 shadow-sm mb-3">
-            <div className="card-body p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="fw-bold mb-0">FAQ</h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() => setFaqs((l) => [...l, { question: "", answer: "" }])}
-                >
-                  <FaPlus /> Add Question
-                </button>
-              </div>
-              {faqs.map((f, i) => (
-                <div key={i} className="mb-2">
-                  <div className="d-flex gap-2 mb-1">
-                    <input
-                      className="form-control"
-                      placeholder="Question"
-                      value={f.question || ""}
-                      onChange={(e) => rowSet(setFaqs)(i, "question", e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-outline-danger"
-                      onClick={() => setFaqs((l) => l.filter((_, j) => j !== i))}
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                  <textarea
-                    rows={2}
-                    className="form-control"
-                    placeholder="Answer"
-                    value={f.answer || ""}
-                    onChange={(e) => rowSet(setFaqs)(i, "answer", e.target.value)}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ===== specifications ===== */}
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-body p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h6 className="fw-bold mb-0">Product Specifications</h6>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={() => setSpecs((l) => [...l, { key: "", value: "" }])}
-                >
-                  <FaPlus /> Add Specification
-                </button>
-              </div>
-              {specs.map((s, i) => (
-                <div key={i} className="row g-2 mb-2">
-                  <div className="col-md-5">
-                    <input
-                      className="form-control"
-                      placeholder="Specification"
-                      value={s.key || ""}
-                      onChange={(e) => rowSet(setSpecs)(i, "key", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-6">
-                    <input
-                      className="form-control"
-                      placeholder="Value"
-                      value={s.value || ""}
-                      onChange={(e) => rowSet(setSpecs)(i, "value", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-md-1">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-danger w-100"
-                      onClick={() => setSpecs((l) => l.filter((_, j) => j !== i))}
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="d-flex gap-2 mb-4">
-            <button className="btn btn-grad px-4 fw-semibold" disabled={saving}>
-              {saving ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2" />
-                  Saving...
-                </>
-              ) : id ? (
-                "Update Product"
-              ) : (
-                "Create Product"
-              )}
-            </button>
-            <Link href="/admin/products" className="btn btn-outline-secondary px-4">
-              Cancel
-            </Link>
-          </div>
-        </form>
+            )}
+          </Card>
+        </div>
       </div>
+
+      <div className="savebar">
+        <Link href="/admin/products" className="btn btn-ghost">Cancel</Link>
+        <Button type="submit" variant="primary" size="lg" loading={saving} disabled={saving}>
+          {mode === "create" ? "Create product" : "Save changes"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function RowList({ rows, onChange, fields, empty }) {
+  if (!rows.length) return <p className="muted" style={{ fontSize: "0.9rem" }}>{empty}</p>;
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      {rows.map((row, i) => (
+        <div key={i} className="row-editor">
+          {fields.map((f) =>
+            f.textarea ? (
+              <Textarea key={f.key} rows={2} aria-label={f.placeholder} placeholder={f.placeholder} value={row[f.key]} onChange={(e) => onChange(rows.map((r, j) => (j === i ? { ...r, [f.key]: e.target.value } : r)))} />
+            ) : (
+              <Input key={f.key} aria-label={f.placeholder} placeholder={f.placeholder} value={row[f.key]} onChange={(e) => onChange(rows.map((r, j) => (j === i ? { ...r, [f.key]: e.target.value } : r)))} />
+            )
+          )}
+          <button type="button" className="icon-btn" aria-label="Remove row" onClick={() => onChange(rows.filter((_, j) => j !== i))}><FiTrash2 aria-hidden="true" /></button>
+        </div>
+      ))}
     </div>
   );
 }

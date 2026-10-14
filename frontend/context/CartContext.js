@@ -1,184 +1,115 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, imgUrl, unwrapObject } from "@/lib/api";
-import notify from "@/components/notify";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api, API_CONFIGURED, imgUrl, unwrap } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
-/* =====================================================================
- * CartContext - the backend is the source of truth for guest and logged-in carts.
- * ===================================================================== */
+const CartContext = createContext(null);
 
-const CartCtx = createContext(null);
-function normalizeCartItem(item) {
-  const variant = item.variant || null;
-  const color = item.color || null;
+function normalizeCart(raw) {
+  const items = (Array.isArray(raw?.items) ? raw.items : []).map((item) => ({
+    id: item.id,
+    productId: item.product_id,
+    title: item.title || "Product",
+    sku: item.sku || "",
+    image: imgUrl(item.image),
+    variant: item.variant
+      ? { id: item.variant.id, label: item.variant.value || item.variant.name || "", stock: Number(item.variant.stock ?? 0) }
+      : null,
+    color: item.color ? { id: item.color.id, name: item.color.name, code: item.color.code } : null,
+    unitPrice: Number(item.unit_price) || 0,
+    quantity: Number(item.quantity) || 0,
+    subtotal: Number(item.subtotal) || 0,
+  }));
   return {
-    ...item,
-    lineId: String(item.id),
-    id: item.product_id ?? item.productId ?? item.id,
-    cartItemId: item.id,
-    variant_id: variant?.id ?? item.variant_id ?? item.variantId ?? null,
-    product_color_id: color?.id ?? item.color_id ?? item.colorId ?? null,
-    title: item.title || item.product?.title || item.product?.name || "Product",
-    image: imgUrl(item.image || item.product?.images?.[0] || item.product?.image),
-    colorImage: imgUrl(color),
-    size_label: variant?.value || variant?.name || item.size_label || null,
-    color_name: color?.name || item.color_name || null,
-    unitPrice: Number(item.unit_price ?? item.unitPrice ?? 0),
-    qty: Number(item.quantity ?? item.qty ?? 1),
-    totalPrice: Number(item.subtotal ?? item.totalPrice ?? 0),
-    max_qty: variant?.stock ?? item.max_qty ?? null,
+    items,
+    totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
+    subtotal: items.reduce((sum, item) => sum + item.subtotal, 0),
   };
 }
 
-export function CartProvider({ children }) {
-  const [items, setItems] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [checkoutSignal, setCheckoutSignal] = useState(0);
+const EMPTY_CART = { items: [], totalItems: 0, subtotal: 0 };
 
-  const refreshCart = useCallback(async () => {
-    setLoading(true);
-    setError("");
+export function CartProvider({ children }) {
+  const { user, loading: authLoading } = useAuth();
+  const [cart, setCart] = useState(EMPTY_CART);
+  const [loading, setLoading] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bumpKey, setBumpKey] = useState(0);
+  const requestId = useRef(0);
+
+  const refresh = useCallback(async () => {
+    if (!API_CONFIGURED) {
+      setLoading(false);
+      return;
+    }
+    const current = ++requestId.current;
     try {
       const response = await api.get("api/cart");
-      const cart = unwrapObject(response) || {};
-      setItems(Array.isArray(cart.items) ? cart.items.map(normalizeCartItem) : []);
-      return cart;
-    } catch (cause) {
-      setError(cause.message || "Could not load your cart.");
-      throw cause;
+      if (current === requestId.current) setCart(normalizeCart(unwrap(response)));
+    } catch {
+      if (current === requestId.current) setCart(EMPTY_CART);
     } finally {
-      setLoading(false);
-      setHydrated(true);
+      if (current === requestId.current) setLoading(false);
     }
   }, []);
 
+  // Re-read the cart whenever the signed-in identity changes (guest cart merges on login).
+  const identity = user?.id ?? "guest";
   useEffect(() => {
-    refreshCart().catch(() => { });
-    const onAuthChanged = () => refreshCart().catch(() => { });
-    window.addEventListener("auth-changed", onAuthChanged);
-    return () => window.removeEventListener("auth-changed", onAuthChanged);
-  }, [refreshCart]);
+    if (authLoading) return;
+    refresh();
+  }, [identity, authLoading, refresh]);
 
-  const addToCart = useCallback(
-    async (item) => {
-      try {
-        await api.post("api/cart", {
-          productId: Number(item.id),
-          ...(item.variant_id ? { variantId: Number(item.variant_id) } : {}),
-          ...(item.product_color_id || item.color_id ? { colorId: Number(item.product_color_id || item.color_id) } : {}),
-          quantity: Number(item.qty) || 1,
-        });
-        await refreshCart();
-        notify.success("Added to your cart.", "Added to Cart");
-      } catch (cause) {
-        notify.error(cause.message || "Could not add this item to your cart.", "Could not add item");
-        throw cause;
-      }
+  const addItem = useCallback(
+    async ({ productId, variantId = null, colorId = null, quantity = 1 }) => {
+      await api.post("api/cart", { productId, variantId, colorId, quantity });
+      await refresh();
+      setBumpKey((key) => key + 1);
+      setDrawerOpen(true);
     },
-    [refreshCart]
+    [refresh]
   );
 
-  const setQty = useCallback(
-    async (lineId, qty) => {
-      try {
-        await api.put(`api/cart/${lineId}`, { quantity: Number(qty) });
-        await refreshCart();
-      } catch (cause) {
-        notify.error(cause.message || "Could not update your cart.", "Could not update cart");
-      }
+  const updateItem = useCallback(
+    async (itemId, quantity) => {
+      await api.put(`api/cart/${itemId}`, { quantity });
+      await refresh();
     },
-    [refreshCart]
-  );
-
-  const inc = useCallback(
-    (lineId) => {
-      const item = items.find((entry) => entry.lineId === lineId);
-      if (item) return setQty(lineId, item.qty + 1);
-    },
-    [items, setQty]
-  );
-
-  const dec = useCallback(
-    (lineId) => {
-      const item = items.find((entry) => entry.lineId === lineId);
-      if (item && item.qty > 1) return setQty(lineId, item.qty - 1);
-    },
-    [items, setQty]
+    [refresh]
   );
 
   const removeItem = useCallback(
-    async (lineId) => {
-      try {
-        await api.delete(`api/cart/${lineId}`);
-        await refreshCart();
-        notify.success("Item removed from your cart.", "Removed");
-      } catch (cause) {
-        notify.error(cause.message || "Could not remove this item.", "Could not remove item");
-      }
+    async (itemId) => {
+      await api.delete(`api/cart/${itemId}`);
+      await refresh();
     },
-    [refreshCart]
+    [refresh]
   );
-
-  const clearCart = useCallback(async () => {
-    try {
-      await api.delete("api/cart");
-      setItems([]);
-      notify.success("Your cart has been cleared.", "Cart Cleared");
-    } catch (cause) {
-      notify.error(cause.message || "Could not clear your cart.", "Could not clear cart");
-    }
-  }, []);
-
-  const total = useMemo(
-    () => items.reduce((sum, item) => sum + (Number(item.totalPrice) || Number(item.unitPrice) * item.qty || 0), 0),
-    [items]
-  );
-  const count = useMemo(
-    () => items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
-    [items]
-  );
-  const openCart = useCallback(() => setOpen(true), []);
-  const closeCart = useCallback(() => setOpen(false), []);
-  const openCheckout = useCallback(() => {
-    setCheckoutSignal((number) => number + 1);
-    setOpen(true);
-  }, []);
 
   const value = useMemo(
     () => ({
-      items,
-      count,
-      total,
-      open,
-      hydrated,
+      cart,
       loading,
-      error,
-      checkoutSignal,
-      setOpen,
-      openCart,
-      closeCart,
-      /** Open the drawer straight on the checkout tab (used by "Buy Now"). */
-      openCheckout,
-      addToCart,
-      refreshCart,
-      setQty,
-      inc,
-      dec,
+      count: cart.totalItems,
+      subtotal: cart.subtotal,
+      bumpKey,
+      drawerOpen,
+      openDrawer: () => setDrawerOpen(true),
+      closeDrawer: () => setDrawerOpen(false),
+      refresh,
+      addItem,
+      updateItem,
       removeItem,
-      clearCart,
     }),
-    [items, count, total, open, hydrated, loading, error, checkoutSignal, openCart, closeCart, openCheckout, addToCart, refreshCart, setQty, inc, dec, removeItem, clearCart]
+    [cart, loading, bumpKey, drawerOpen, refresh, addItem, updateItem, removeItem]
   );
 
-  return <CartCtx.Provider value={value}>{children}</CartCtx.Provider>;
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {
-  const ctx = useContext(CartCtx);
-  if (!ctx) throw new Error("useCart must be used inside <CartProvider>");
-  return ctx;
+  const context = useContext(CartContext);
+  if (!context) throw new Error("useCart must be used inside <CartProvider>");
+  return context;
 }
