@@ -12,9 +12,9 @@ import { normalizeOrder } from "@/lib/order";
 
 /**
  * Edit order (/dashboard/orders/edit/{id})
- *  - GET  api/orders/{id}
- *  - GET  api/order-product-options      (product picker)
- *  - PATCH api/orders/{id}  { status, paymentStatus }
+ *  - GET  api/admin/orders/{id}
+ *  - GET  api/admin/orders/product-options      (product picker)
+ *  - PATCH api/admin/orders/{id}  { status, paymentStatus }
  */
 function EditOrder({ id }) {
   const router = useRouter();
@@ -44,8 +44,8 @@ function EditOrder({ id }) {
     (async () => {
       try {
         const [o, p] = await Promise.all([
-          api.get(`api/orders/${id}`),
-          api.get("api/order-product-options").catch(() => ({ data: [] })),
+          api.get(`api/admin/orders/${id}`),
+          api.get("api/admin/orders/product-options").catch(() => ({ data: [] })),
         ]);
         if (!alive) return;
         const ord = normalizeOrder(o?.data?.data || o?.data || o);
@@ -140,7 +140,7 @@ function EditOrder({ id }) {
     }
     setSaving(true);
     try {
-      await api.patch(`api/orders/${id}`, {
+      await api.patch(`api/admin/orders/${id}`, {
         status: form.status,
         paymentStatus: form.payment_status,
       });

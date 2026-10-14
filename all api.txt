@@ -1,0 +1,259 @@
+================================================================================
+EYARA FASHION — FRONTEND <-> BACKEND API INTEGRATION REPORT
+================================================================================
+Source of truth for endpoints : readme_frontend.txt  (the backend developer's spec)
+Base URL (frontend .env.local) : http://localhost:3001
+API client (single fetch layer) : frontend/lib/api.js   (api.get/post/put/patch/delete/upload)
+Auth header on every protected call : Authorization: Bearer <JWT>
+
+STATUS LEGEND
+  [COMPLETED]  = frontend calls the exact endpoint the backend developer documented
+  [FIXED]      = frontend was calling the WRONG path/method; corrected to match the spec
+  [NO ROUTE]   = frontend references an endpoint with NO backend route (Section J)
+                 -> cannot be connected from the frontend alone (backend files untouched, as requested)
+
+================================================================================
+SECTION A — AUTH APIs
+================================================================================
+[COMPLETED] Register          POST /api/auth/register   fields: name, email, password, confirmPassword
+        Frontend: context/AuthContext.js (register); app/(site)/register, components/AccountPages.js
+        Success action: redirect to /login
+
+[COMPLETED] Login             POST /api/auth/login      fields: email, password
+        Frontend: context/AuthContext.js (login); admin login pages. Stores JWT (localStorage+cookie),
+        server merges guest cart, redirect to dashboard/home.
+
+[COMPLETED] Logout            POST /api/auth/logout     (JWT)
+        Frontend: context/AuthContext.js (logout), lib/adminAuth.js -> clears token client-side
+
+[COMPLETED] Forgot Password   POST /api/auth/forgot-password  field: email
+        Frontend: context/AuthContext.js (forgotPassword); app/(site)/forgot-password
+
+[COMPLETED] Reset Password    POST /api/auth/reset-password   fields: token, password, confirmPassword
+        Frontend: context/AuthContext.js (resetPassword); app/(site)/reset-password
+
+NOTE: readme also lists GET /api/auth/me. The frontend authenticates via the richer
+      GET /api/account/me (Section B), which the backend implements and the spec documents
+      for the logged-in user. /api/auth/me exists in the backend but is not needed by the UI.
+
+================================================================================
+SECTION B — ACCOUNT APIs  (readme lines 782-880)
+================================================================================
+[COMPLETED] Get My Profile    GET  /api/account/me      (JWT) -> user + addresses + order stats
+        Frontend: context/AuthContext.js, components/AccountPages.js, lib/adminAuth.js
+
+[COMPLETED] Update Profile    PUT  /api/account/profile (JWT) fields: name?, phone?  (email/role NOT sent)
+        Frontend: context/AuthContext.js (updateProfile), components/AccountPages.js
+
+[COMPLETED] Upload Avatar     POST /api/account/upload-avatar (JWT) multipart field: image
+        Frontend: context/AuthContext.js (uploadAvatar)
+
+[COMPLETED] Change Password   PUT  /api/account/change-password (JWT)
+        fields: currentPassword, newPassword, confirmPassword
+        Frontend: context/AuthContext.js (changePassword); components/AccountPages.js (ChangePasswordForm)
+
+[COMPLETED] Get My Orders     GET  /api/account/orders  (JWT) query: status?, page?, per_page?
+        Frontend: components/AccountPages.js (orders list + /user/orders)
+
+[COMPLETED] Create Address    POST /api/account/addresses (JWT)
+        fields: fullName/full_name, phone, addressLine/address_line, city, postalCode/postal_code?, country?
+        Frontend: components/AccountPages.js
+
+================================================================================
+SECTION D — PRODUCT APIs
+================================================================================
+[COMPLETED] Get Products        GET   /api/products           query: category?, search?, status?
+[COMPLETED] Create Product      POST  /api/products           (admin, JSON)
+[COMPLETED] Get Product By Id   GET   /api/products/:id
+[COMPLETED] Update Product      PUT   /api/products/:id       (admin, JSON)
+[COMPLETED] Delete Product      DELETE /api/products/:id      (admin)
+[COMPLETED] Upload Product Image POST /api/products/:id/images (admin, multipart: image)
+[COMPLETED] Product Search      GET   /api/product-search     query: q, category?, min_price?, max_price?
+[COMPLETED] Product Pagination  GET   /api/product-pagination query: page, per_page, category?, search?,
+                                                    min_price?, max_price?
+  Frontend: components/admin/ProductForm.js, app/(admin)/admin/products/*, app/(site)/shop,
+            app/(site)/product-page/[id], app/(site)/[category], app/(site)/page.js, components/SiteHeader.js
+
+================================================================================
+SECTION E — BANNER APIs
+================================================================================
+[COMPLETED] Get Banners        GET   /api/banners
+[COMPLETED] Create Banner      POST  /api/banners   (multipart: image, link, display_priority, is_active)
+[COMPLETED] Get Banner By Id   GET   /api/banners/:id
+[COMPLETED] Update Banner      PUT   /api/banners/:id  (multipart)
+[COMPLETED] Delete Banner      DELETE /api/banners/:id
+[COMPLETED] Banner Image       GET   /api/banners/:id/image
+  Frontend: app/(admin)/admin/banners/page.js
+
+================================================================================
+SECTION F — CART APIs  (guest + logged-in)
+================================================================================
+[COMPLETED] Get Cart           GET   /api/cart       (JWT optional; guest via cart_session_id cookie)
+[COMPLETED] Add Item To Cart   POST  /api/cart       fields: productId, variantId?, colorId?, quantity?
+[COMPLETED] Update Cart Item   PUT   /api/cart/:id   field: quantity
+[COMPLETED] Delete Cart Item   DELETE /api/cart/:id
+[COMPLETED] Clear Cart         DELETE /api/cart
+  Frontend: context/CartContext.js, components/CartDrawer.js
+
+================================================================================
+SECTION G — ORDER APIs
+================================================================================
+[COMPLETED] Create Order (public)   POST /api/orders
+        fields: guestName/guestPhone/guestAddress (guest) OR shippingAddressId/shippingAddress (user),
+                district?, shippingFee?, advancePayment?, paymentMethod?, items[] (optional -> uses cart)
+        Frontend: components/CartDrawer.js
+
+[COMPLETED] Get Single Order (public) GET /api/orders/:id
+
+--------------------------------------------------------------------------------
+ADMIN ORDER APIs  (readme lines 1072-1276) — ALL FIXED to /api/admin/*
+--------------------------------------------------------------------------------
+[FIXED]     Get All Orders (admin)  GET /api/admin/orders
+        query: search?, status?, district?, product_id?, min_price?, max_price?, from?, to?, page?, per_page?
+        was calling GET /api/orders (which only supports POST) -> corrected. Now sends per_page=100 so the
+        existing client-side search/date/paging keeps working over the returned batch.
+        Frontend: app/(admin)/admin/orders/page.js
+
+[COMPLETED] Get Order Product Options GET /api/admin/orders/product-options
+        was calling /api/order-product-options -> corrected. Frontend: orders/edit/[id]
+
+
+================================================================================
+SECTION H — ADMIN REPORTING / INVENTORY / SETTINGS  (readme 886-1001, 1366-1483)
+================================================================================
+[COMPLETED] Dashboard Summary  GET /api/admin/dashboard/summary
+        query: range (today|week|month|year|custom), from?, to?, hot_limit?
+        was calling /api/dashboard/summary -> corrected; custom-range params fixed to from/to.
+        Frontend: app/(admin)/admin/page.js
+
+[COMPLETED] Inventory Summary  GET /api/admin/inventory/summary  (admin)
+[COMPLETED] Inventory Variants GET /api/admin/inventory/variants (admin)
+        query: search?, filter (all|in_stock|low_stock|out_of_stock|preorder|tracked), page?, per_page?
+        was calling /api/inventory/variants with ?tracked=1 -> corrected to /api/admin/... with filter=tracked,
+        pager now reads total_pages (not last_page). Frontend: app/(admin)/admin/inventory/page.js
+
+[COMPLETED] Sales Report       GET /api/admin/sales-report
+        query: start_date?, end_date?, status?, product?, sort?
+        was calling /api/sales-report with from/to/search -> corrected to /api/admin/sales-report with
+        start_date/end_date/product. Frontend: app/(admin)/admin/sales-report/page.js
+
+[COMPLETED] Get All Abandoned Checkouts (admin) GET /api/admin/abandoned-checkouts
+        query: search?, status?, recovered?, page?, per_page?  -> { success, message, data, meta }
+        was calling /api/abandoned-checkouts -> corrected; pager reads meta.current_page / meta.total_pages.
+        Frontend: app/(admin)/admin/incomplete_orders/page.js
+
+[COMPLETED] Get Latest Shipping Cost (admin) GET /api/admin/shipping-costs-latest
+        returns a DIRECT object { id, inside_dhaka, outside_dhaka, one_shipping_cost, ... } (no data wrapper)
+        was calling /api/shipping-costs-latest (auth:false) -> corrected to /api/admin/... (JWT), direct
+        object field access. Frontend: incomplete_orders, shipping/page.js
+
+[COMPLETED] Create Shipping Cost (admin) POST /api/admin/shipping-costs
+        fields: inside_dhaka/insideDhaka, outside_dhaka/outsideDhaka, one_shipping_cost/oneShippingCost?
+        was calling POST /api/shipping-costs -> corrected. Frontend: app/(admin)/admin/shipping/page.js
+        (also removed the undocumented GET /api/shipping-costs list call; "Current rule" shown from -latest)
+
+--------------------------------------------------------------------------------
+ADMIN SIZE APIs  (readme lines 1003-1070) — WIRED UP (were non-functional placeholders)
+--------------------------------------------------------------------------------
+[COMPLETED] Get All Sizes (public)  GET /api/sizes   (active only) -> plain array [{id, size}]
+
+================================================================================
+SECTION I — SITE / CMS SETTINGS APIs  (storefront + admin settings)
+================================================================================
+[COMPLETED] Site Settings    GET/PUT /api/site-settings   (theme color, inventory enforcement flag)
+[COMPLETED] Footer Settings  GET/POST /api/footer-settings ; GET/PUT/DELETE /api/footer-settings/:id
+[COMPLETED] Social Links     GET/POST /api/social-links ; GET/PUT/DELETE /api/social-links/:id
+[COMPLETED] Social Links First (storefront) GET /api/social-links-first
+  Frontend: context/SiteContext.js, components/SiteFooter.js, app/(admin)/admin/{theme-settings,
+            footerSettings, socialLinks}, app/(admin)/admin/inventory (enforcement), orders/invoice (footer)
+
+================================================================================
+SECTION J — FRONTEND CALLS WITH NO BACKEND ROUTE  (NOT in readme_frontend.txt spec)
+================================================================================
+Referenced only by the OLD frontend/README.md; no matching backend route. Per instructions, backend files
+were NOT modified, so these cannot be connected from the frontend. Listed for transparency — the matching UI
+actions will fail until the backend adds these routes.
+
+  GET/PUT    /api/about-us , /api/about-us/:id            (admin/about_us, site about_us, ContentPage)
+  GET        /api/customer-profiles , /api/customer-profiles/:id , PUT /api/customer-profiles/:id
+  POST       /api/customer-profiles/assign-badge          (admin/customers, orders badge)
+  GET        /api/customers/leaderboard , /api/customers/statistics , /api/customers/:phone
+  GET/POST   /api/facebook-settings                        (admin/facebook_conversion_api)
+  GET/PUT    /api/fraud-checker/settings , POST .../test , GET /api/fraud-checker/plan
+  GET        /api/inventory/movements                      (admin/inventory/movements)
+  GET        /api/inventory/products , /api/inventory/products/:id/matrix
+  POST       /api/inventory/stock-in , /api/inventory/adjust
+  GET        /api/orders-download-csv                      (orders CSV export link)
+  POST       /api/orders/:id/courier-check , /api/pathao/orders/:id/create
+  PUT/POST   /api/dashboard/abandoned-checkouts/:id/status , /api/dashboard/abandoned-checkouts/:id/convert
+
+================================================================================
+SUMMARY OF CHANGES MADE (frontend + api only — NO backend files touched)
+================================================================================
+ 1. app/(admin)/admin/page.js              GET /api/dashboard/summary -> /api/admin/dashboard/summary
+                                          custom range params start_date/end_date -> from/to
+ 2. app/(admin)/admin/sales-report/page.js GET /api/sales-report -> /api/admin/sales-report
+                                          params from/to/search -> start_date/end_date/product
+ 3. app/(admin)/admin/inventory/page.js    GET /api/inventory/variants -> /api/admin/inventory/variants
+                                          ?tracked=1 -> ?filter=tracked ; pager last_page -> total_pages
+ 4. app/(admin)/admin/orders/page.js       GET /api/orders -> /api/admin/orders (+per_page=100)
+                                          PATCH /api/orders/:id -> /api/admin/orders/:id
+                                          DELETE /api/orders/:id -> /api/admin/orders/:id
+ 5. app/(admin)/admin/orders/edit/[id]     GET /api/orders/:id -> /api/admin/orders/:id
+                                          GET /api/order-product-options -> /api/admin/orders/product-options
+                                          PATCH /api/orders/:id -> /api/admin/orders/:id
+ 6. app/(admin)/admin/orders/invoice/[id]  GET /api/orders/:id -> /api/admin/orders/:id
+ 7. app/(admin)/admin/incomplete_orders    GET /api/abandoned-checkouts -> /api/admin/abandoned-checkouts
+                                          pager -> meta.current_page / meta.total_pages
+                                          GET /api/shipping-costs-latest -> /api/admin/shipping-costs-latest (JWT, direct object)
+ 8. app/(admin)/admin/shipping/page.js     GET /api/shipping-costs-latest -> /api/admin/shipping-costs-latest
+                                          POST /api/shipping-costs -> /api/admin/shipping-costs
+                                          removed undocumented GET /api/shipping-costs list; show "Current rule"
+ 9. app/(admin)/admin/sizes/page.js        Rewired placeholder -> full Admin Sizes CRUD via /api/admin/sizes
+10. components/admin/SizeForm.js           Rewritten placeholder -> real create/edit form (POST/PUT /api/admin/sizes)
+11. app/(admin)/admin/sizes/add & edit/[id]  (already render <SizeForm id?/>) now functional
+
+Validation: ESLint on all edited files -> 0 errors (only pre-existing <img>/useEffect warnings).
+Every call still goes through the single api.js fetch helper, so Authorization headers, error
+normalisation (API message surfaced on the UI), and the API_BASE wiring are unchanged.
+================================================================================
+
+  POST       /api/order_status/:id
+  GET        /api/product_add_category , /api/frontend/categories , /api/category-slug-products/:slug
+  GET        /api/pages/privacy-policy , /api/pages/return-policy
+
+[COMPLETED] Get All Sizes (admin)   GET /api/admin/sizes  query: search?, status (all|active|inactive)
+        -> { message:"success", data:[{id, size, position, is_active, ...}] }
+[COMPLETED] Create Size (admin)     POST /api/admin/sizes   fields: size, position?, isActive?  (201 / 409)
+[COMPLETED] Update Size (admin)     PUT  /api/admin/sizes/:id  fields: size?, position?, isActive? (404 / 409)
+[COMPLETED] Delete Size (admin)     DELETE /api/admin/sizes/:id  (404 / 409 when used by a product)
+  Frontend (rewritten from placeholder): app/(admin)/admin/sizes/page.js (list + activate/delete),
+            components/admin/SizeForm.js (create/edit), app/(admin)/admin/sizes/add, .../sizes/edit/[id]
+
+[COMPLETED] Get Order Districts       GET /api/admin/orders/districts
+        (documented + implemented; available for the district filter dropdown.)
+
+[COMPLETED] Get Single Order (admin)  GET /api/admin/orders/:id
+        was calling GET /api/orders/:id -> corrected. Frontend: orders/edit/[id], orders/invoice/[orderId]
+
+[COMPLETED] Update Order (admin)      PATCH /api/admin/orders/:id   fields: status?, paymentStatus?
+        was calling PATCH /api/orders/:id (no such route) -> corrected. Frontend: orders/page.js, orders/edit/[id]
+
+[COMPLETED] Delete Order (admin)      DELETE /api/admin/orders/:id
+        was calling DELETE /api/orders/:id (no such route) -> corrected. Frontend: orders/page.js
+
+
+[COMPLETED] Get My Addresses  GET  /api/account/addresses (JWT)                Frontend: components/AccountPages.js
+[COMPLETED] Update Address   PUT  /api/account/addresses/:id (JWT)             Frontend: components/AccountPages.js
+[COMPLETED] Delete Address   DELETE /api/account/addresses/:id (JWT)           Frontend: components/AccountPages.js
+
+================================================================================
+SECTION C — CATEGORY APIs
+================================================================================
+[COMPLETED] Create Category   POST   /api/categories     (admin) fields: name, slug, description
+[COMPLETED] Get All Categories GET  /api/categories
+[COMPLETED] Get Category By Id GET /api/categories/:id
+[COMPLETED] Update Category   PUT   /api/categories/:id  (admin)
+[COMPLETED] Delete Category   DELETE /api/categories/:id (admin)
+  Frontend: components/admin/CategoryForm.js, app/(admin)/admin/category/*, context/SiteContext.js,
+            shop/[category] pages, ProductForm (category dropdown)

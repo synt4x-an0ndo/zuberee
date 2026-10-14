@@ -8,11 +8,11 @@ import Loader from "@/components/Loader";
 
 /**
  * Shipping cost settings (/dashboard/shipping)
- *  - GET api/shipping-costs              (list of saved rules)
- *  - POST api/shipping-costs             {shipping_type, inside_dhaka,
- *                                          outside_dhaka, one_shipping_cost}
- *  - GET api/shipping-costs-latest       (storefront checkout default)
- * shipping_type: 'inside_outside' | 'one'
+ *  - GET  api/admin/shipping-costs-latest   (current rule — direct object)
+ *  - POST api/admin/shipping-costs          {inside_dhaka, outside_dhaka,
+ *                                            one_shipping_cost} (creates a new
+ *                                            versioned row)
+ * The latest endpoint is admin-only, so it is called with the JWT.
  */
 function ShippingSettings() {
   const [type, setType] = useState("");
@@ -21,7 +21,7 @@ function ShippingSettings() {
     outside_dhaka: "",
     one_shipping_cost: "",
   });
-  const [rows, setRows] = useState([]);
+  const [current, setCurrent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -29,16 +29,12 @@ function ShippingSettings() {
     let alive = true;
     (async () => {
       try {
-        const [list, latest] = await Promise.all([
-          api.get("api/shipping-costs").catch(() => null),
-          api.get("api/shipping-costs-latest", { auth: false }).catch(() => null),
-        ]);
+        const latest = await api.get("api/admin/shipping-costs-latest").catch(() => null);
         if (!alive) return;
-        const data = list?.data?.data || list?.data || [];
-        setRows(Array.isArray(data) ? data : []);
-        const cur = latest?.data || latest;
+        const cur = latest || null;
+        setCurrent(cur);
         if (cur) {
-          setType(cur.shipping_type || (cur.one_shipping_cost != null ? "one" : ""));
+          setType(cur.one_shipping_cost != null ? "one" : "inside_outside");
           setForm({
             inside_dhaka: cur.inside_dhaka ?? "",
             outside_dhaka: cur.outside_dhaka ?? "",
@@ -67,14 +63,17 @@ function ShippingSettings() {
       return notify.error("Shipping cost is required");
     setSaving(true);
     try {
-      await api.post("api/shipping-costs", {
-        shipping_type: type,
+      await api.post("api/admin/shipping-costs", {
         ...(type === "inside_outside"
           ? {
               inside_dhaka: Number(form.inside_dhaka),
               outside_dhaka: Number(form.outside_dhaka),
             }
-          : { one_shipping_cost: Number(form.one_shipping_cost) }),
+          : {
+              inside_dhaka: Number(current?.inside_dhaka ?? 0),
+              outside_dhaka: Number(current?.outside_dhaka ?? 0),
+              one_shipping_cost: Number(form.one_shipping_cost),
+            }),
       });
       notify.success("Shipping settings saved");
     } catch (err) {
@@ -157,9 +156,9 @@ function ShippingSettings() {
           </div>
         </div>
 
-        {rows.length > 0 && (
+        {current && (
           <div className="card border-0 shadow-sm mt-3">
-            <div className="card-header bg-white fw-bold">Saved rules</div>
+            <div className="card-header bg-white fw-bold">Current rule</div>
             <div className="card-body p-0">
               <table className="table mb-0">
                 <thead className="table-light">
@@ -171,14 +170,12 @@ function ShippingSettings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.shipping_type || r.type}</td>
-                      <td>{r.inside_dhaka != null ? `৳${r.inside_dhaka}` : "—"}</td>
-                      <td>{r.outside_dhaka != null ? `৳${r.outside_dhaka}` : "—"}</td>
-                      <td>{r.one_shipping_cost != null ? `৳${r.one_shipping_cost}` : "—"}</td>
-                    </tr>
-                  ))}
+                  <tr>
+                    <td>{current.one_shipping_cost != null ? "One cost" : "Inside/Outside Dhaka"}</td>
+                    <td>{current.inside_dhaka != null ? `৳${current.inside_dhaka}` : "—"}</td>
+                    <td>{current.outside_dhaka != null ? `৳${current.outside_dhaka}` : "—"}</td>
+                    <td>{current.one_shipping_cost != null ? `৳${current.one_shipping_cost}` : "—"}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>

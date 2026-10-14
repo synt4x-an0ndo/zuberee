@@ -18,11 +18,11 @@ function statusClass(status) {
 
 /**
  * Orders (/dashboard/orders)
- *  - GET    api/orders?status=   -> { data: [order] }  (admin only; the backend
- *                                   returns the full list without pagination,
- *                                   so paging + search/date are done client-side)
- *  - PATCH  api/orders/{id}           {status, paymentStatus}
- *  - DELETE api/orders/{id}
+ *  - GET    api/admin/orders?status=   -> { success, message, data:[order], meta }
+ *                                   (admin only; paginated, so search/date are
+ *                                    also done client-side over the batch)
+ *  - PATCH  api/admin/orders/{id}           {status, paymentStatus}
+ *  - DELETE api/admin/orders/{id}
  *  - POST   api/orders/{id}/courier-check  {} | {force_refresh:true}
  *  - POST   api/pathao/orders/{id}/create  {}
  *  - POST   api/customer-profiles/assign-badge {phone,name,badge_title}
@@ -41,12 +41,15 @@ function OrdersPage() {
   const [courier, setCourier] = useState({}); // id -> loading
   const [badgeOrder, setBadgeOrder] = useState(null);
 
-  // The backend GET /api/orders returns every order (no server pagination) and
-  // only honours `status`. Search + date range + paging are handled here so the
-  // existing Prev/Next controls keep working with only the supported params.
+  // The admin list endpoint (GET /api/admin/orders) is paginated and honours
+  // `status`. Search + date range + paging are handled here so the existing
+  // Prev/Next controls keep working over the fetched batch.
   const qs = useCallback(() => {
     const p = new URLSearchParams();
     if (filters.status) p.append("status", filters.status);
+    // The admin list endpoint paginates (max 100); request the largest batch so
+    // the existing client-side search/date/paging keeps working over the set.
+    p.append("per_page", "100");
     return p.toString();
   }, [filters.status]);
 
@@ -54,7 +57,7 @@ function OrdersPage() {
     setLoading(true);
     setError("");
     try {
-      const r = await api.get(`api/orders?${qs()}`);
+      const r = await api.get(`api/admin/orders?${qs()}`);
       const d = r?.data?.data || r?.data || [];
       setAllRows(normalizeOrders(Array.isArray(d) ? d : []));
     } catch (e) {
@@ -105,7 +108,7 @@ function OrdersPage() {
   const updateStatus = async (order, value) => {
     if (!value) return;
     try {
-      await api.patch(`api/orders/${order.id}`, { status: value });
+      await api.patch(`api/admin/orders/${order.id}`, { status: value });
       notify.success("Order updated successfully.", "Order Updated");
       load();
     } catch (e) {
@@ -116,7 +119,7 @@ function OrdersPage() {
   const deleteOrder = async (order) => {
     if (!window.confirm(`Delete order #${order.id}?`)) return;
     try {
-      await api.delete(`api/orders/${order.id}`);
+      await api.delete(`api/admin/orders/${order.id}`);
       notify.success("Order deleted.");
       load();
     } catch (e) {

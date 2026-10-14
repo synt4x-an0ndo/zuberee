@@ -47,14 +47,14 @@ function InventoryPage() {
     setLoading(true);
     try {
       const r = await api.get(
-        `api/inventory/variants?page=${page}&per_page=25${query ? `&search=${encodeURIComponent(query)}` : ""
-        }${trackedOnly ? "&tracked=1" : ""}`
+        `api/admin/inventory/variants?page=${page}&per_page=25${query ? `&search=${encodeURIComponent(query)}` : ""
+        }${trackedOnly ? "&filter=tracked" : ""}`
       );
       const d = r?.data?.data || r?.data || [];
       setRows(Array.isArray(d) ? d : []);
       setPager({
         current_page: r?.data?.current_page || 1,
-        last_page: r?.data?.last_page || 1,
+        last_page: r?.data?.total_pages || 1,
         total: r?.data?.total || 0,
       });
     } catch (e) {
@@ -196,7 +196,7 @@ function InventoryPage() {
                     return (
                       <tr key={v.id ?? i}>
                         <td className="fw-semibold">{v.product_title || v.product?.title}</td>
-                        <td>{v.variant_label || [v.color_name, v.size].filter(Boolean).join(" / ") || "—"}</td>
+                        <td>{v.variant_label || v.label || [v.color_name, v.color?.name, v.size?.size].filter(Boolean).join(" / ") || "—"}</td>
                         <td>{v.stock ?? v.on_hand ?? 0}</td>
                         <td>{v.held ?? 0}</td>
                         <td>{v.available ?? Math.max(0, (v.stock ?? 0) - (v.held ?? 0))}</td>
