@@ -61,12 +61,23 @@ export async function POST(request) {
         const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
         // Spec: Email (SMTP) when configured, console log in dev.
-        await sendPasswordResetEmail({
-            to: normalizedEmail,
-            name: user.name,
-            resetLink,
-            expiresAt,
-        });
+        // A delivery failure must NOT change the response shape, otherwise a
+        // real account (email send throws) could be distinguished from an
+        // unknown one (success) -> account enumeration. Log the real error
+        // server-side only and still return the generic success below.
+        try {
+            await sendPasswordResetEmail({
+                to: normalizedEmail,
+                name: user.name,
+                resetLink,
+                expiresAt,
+            });
+        } catch (mailError) {
+            console.error(
+                "Forgot password: reset email could not be delivered:",
+                mailError?.message || mailError
+            );
+        }
 
         return Response.json({
             success: true,
