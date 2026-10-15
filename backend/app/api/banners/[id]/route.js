@@ -1,4 +1,5 @@
 import prisma from "../../../../directory/prisma/prisma.js";
+import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const ALLOWED_IMAGE_TYPES = [
     "image/jpeg",
@@ -77,6 +78,15 @@ export async function GET(request, { params }) {
 // PUT /api/banners/:id
 export async function PUT(request, { params }) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
         const { id: bannerId } = await params;
         const id = Number(bannerId);
 
@@ -111,8 +121,6 @@ export async function PUT(request, { params }) {
 
         const updateData = {};
 
-        // Image is optional during update.
-        // If provided, replace the existing image.
         if (image !== null) {
             if (typeof image === "string") {
                 return Response.json(
@@ -140,7 +148,6 @@ export async function PUT(request, { params }) {
             updateData.imageType = image.type;
         }
 
-        // Update link only if field was sent
         if (link !== null) {
             updateData.link =
                 typeof link === "string" && link.trim() !== ""
@@ -148,7 +155,6 @@ export async function PUT(request, { params }) {
                     : null;
         }
 
-        // Update display priority only if field was sent
         if (displayPriority !== null && displayPriority !== "") {
             const priority = Number(displayPriority);
 
@@ -164,7 +170,6 @@ export async function PUT(request, { params }) {
             updateData.displayPriority = priority;
         }
 
-        // Update active status only if field was sent
         if (isActive !== null && isActive !== "") {
             updateData.isActive = isActive === "true";
         }
@@ -201,6 +206,15 @@ export async function PUT(request, { params }) {
 // DELETE /api/banners/:id
 export async function DELETE(request, { params }) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
         const { id: bannerId } = await params;
         const id = Number(bannerId);
 
