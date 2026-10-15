@@ -1646,3 +1646,10 @@ Not found: Return 404 Not Found
 Last entry: Return 409 Conflict
 
 Non-admin: Return
+
+===Courier Management======
+
+#	Method	Endpoint	Purpose
+1	GET	/api/admin/fraud-checker/settings	Load config
+2	PUT	/api/admin/fraud-checker/settings	Update config
+3	GET	/api/admin/fraud-checker/plan	Subscription info

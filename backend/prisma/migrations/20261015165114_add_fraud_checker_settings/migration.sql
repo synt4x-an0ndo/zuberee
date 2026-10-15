@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "fraud_checker_settings" ADD COLUMN     "apiCalls" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "callLimit" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "daysRemaining" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "expiresAt" TIMESTAMP(3),
+ADD COLUMN     "frequency" TEXT,
+ADD COLUMN     "isFree" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "nextDueDate" TIMESTAMP(3),
+ADD COLUMN     "paidCalls" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "paidLimit" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "planId" INTEGER,
+ADD COLUMN     "planName" TEXT,
+ADD COLUMN     "planType" TEXT,
+ADD COLUMN     "price" DECIMAL(10,2),
+ADD COLUMN     "status" TEXT NOT NULL DEFAULT 'inactive';

@@ -383,3 +383,31 @@ model Size {
   @@index([position])
   @@map("sizes")
 }
+
+model FraudCheckerSettings {
+  id                Int      @id @default(autoincrement())
+  isActive          Boolean  @default(true)
+  cacheMinutes      Int      @default(60)
+  apiKey            String?
+  providerUrl       String   @default("https://api.bdcourier.com/courier-check")
+
+  planId            Int?
+  planName          String?
+  planType          String?
+  isFree            Boolean  @default(true)
+  status            String   @default("inactive")
+  nextDueDate       DateTime?
+  expiresAt         DateTime?
+  daysRemaining     Int      @default(0)
+  frequency         String?
+  price             Decimal? @db.Decimal(10, 2)
+  apiCalls          Int      @default(0)
+  paidCalls         Int      @default(0)
+  callLimit         Int      @default(0)
+  paidLimit         Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("fraud_checker_settings")
+}
