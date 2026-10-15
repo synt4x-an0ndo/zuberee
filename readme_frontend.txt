@@ -1481,3 +1481,49 @@ Behavior: Versioning — notun row create hoy
 Success status: 201 Created
 
 Success message: Shipping cost updated.
+
+Get Customer Leaderboard API
+API endpoint: GET /api/admin/customer-leaderboard
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query params: search, sort, page, per_page
+
+Customer sources: User (logged) + guest orders grouped by guestPhone
+
+Badge source: User.badge for logged users, Order.assignedBadge for guests
+
+Badge value: Plain string (e.g., "vip") or null
+
+Backend badge validation: Nai — badge value blindly save hoy
+
+Frontend responsibility: Valid badge list, labels, colors, dropdown options
+
+Response badge field: null jodi customer er badge set na thake
+
+Meta fields: current_page, per_page, total, total_pages, has_more, from, to
+
+Success message: Customer leaderboard loaded.
+
+Update Customer Badge API
+API endpoint: PATCH /api/admin/customer-leaderboard/:key/badge
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param key: format user:2 or guest:01712345678 (URL encoded)
+
+Request field: badge — string (any value accepted) or null
+
+Validation: badge must be string or null (non-string value → 400)
+
+Validation: Empty/whitespace string → 400
+
+Behavior for user: Update User.badge
+
+Behavior for guest: Update all Order.assignedBadge where guestPhone = id and userId = null
+
+Success message: Badge updated.
