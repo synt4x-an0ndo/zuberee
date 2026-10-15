@@ -43,6 +43,7 @@ model User {
   passwordHash String
   phone        String?
   image        String?
+  badge        String?
   role         UserRole  @default(CUSTOMER)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -294,6 +295,7 @@ model Order {
   district        String?
   advancePayment  Decimal       @default(0) @db.Decimal(10, 2)
   paymentMethod   String        @default("cash")
+  assignedBadge   String?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
