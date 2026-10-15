@@ -44,7 +44,7 @@ export default function AdminLogin() {
     <div className="admin-login">
       <div className="admin-login-card anim-scale-in">
         <div className="admin-login-brand">
-          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={76} priority /> : <strong style={{ fontSize: "1.5rem" }}>{siteName || "Store"}</strong>}
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={54} priority /> : <strong style={{ fontSize: "1.5rem" }}>{siteName || "Store"}</strong>}
           <h1>Admin Login</h1>
           <span className="admin-login-rule" aria-hidden="true" />
         </div>

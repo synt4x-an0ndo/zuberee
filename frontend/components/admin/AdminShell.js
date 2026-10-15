@@ -132,7 +132,7 @@ export default function AdminShell({ children }) {
     <div className={cx("admin-shell", collapsed && "is-sidebar-collapsed")}>
       <aside className="admin-sidebar" aria-label="Admin navigation">
         <Link href="/admin" className="admin-brand" aria-label="Admin dashboard">
-          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={76} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={54} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
         </Link>
         <NavList pathname={pathname} />
         <div className="side-foot">

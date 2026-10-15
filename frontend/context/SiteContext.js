@@ -115,7 +115,29 @@ export function SiteProvider({ children }) {
           icon.rel = "icon";
           document.head.appendChild(icon);
         }
-        icon.href = href;
+        // The store logo is a wide wordmark; browsers squeeze it into the
+        // square tab icon. Pad it (contain, centred) onto a square canvas
+        // so the favicon keeps the logo's real proportions.
+        const image = new Image();
+        image.onload = () => {
+          try {
+            const size = 256;
+            const pad = 20;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext("2d");
+            const scale = Math.min((size - pad * 2) / image.naturalWidth, (size - pad * 2) / image.naturalHeight);
+            const w = Math.max(1, Math.round(image.naturalWidth * scale));
+            const h = Math.max(1, Math.round(image.naturalHeight * scale));
+            ctx.drawImage(image, (size - w) / 2, (size - h) / 2, w, h);
+            icon.href = canvas.toDataURL("image/png");
+          } catch {
+            icon.href = href;
+          }
+        };
+        image.onerror = () => { icon.href = href; };
+        image.src = href;
       }
     }
   }, [state.settings, state.footer]);

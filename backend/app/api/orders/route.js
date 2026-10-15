@@ -275,7 +275,33 @@ export async function POST(request) {
             totalAmount += unitPrice * quantity;
         }
 
-        const finalShippingFee = Number(shippingFee) || 0;
+        // Delivery fee: always computed server-side from the admin-managed
+        // rates (Admin -> Shipping costs) and the order's district, so the
+        // stored order + admin/invoice views show the real charge. A flat
+        // rate, when set, applies everywhere. The client-sent shippingFee is
+        // only a fallback for orders with no district / no rates yet.
+        let computedShippingFee = null;
+        try {
+            const rates = await prisma.shippingCost.findFirst({
+                orderBy: { createdAt: "desc" },
+            });
+            if (rates) {
+                if (rates.oneShippingCost !== null) {
+                    computedShippingFee = Number(rates.oneShippingCost);
+                } else if (district) {
+                    computedShippingFee =
+                        String(district).trim().toLowerCase() === "dhaka"
+                            ? Number(rates.insideDhaka)
+                            : Number(rates.outsideDhaka);
+                }
+            }
+        } catch (rateError) {
+            console.error("Shipping rate lookup failed:", rateError);
+        }
+        const finalShippingFee =
+            computedShippingFee !== null && Number.isFinite(computedShippingFee)
+                ? computedShippingFee
+                : Number(shippingFee) || 0;
         const finalAdvancePayment = Number(advancePayment) || 0;
 
         const order = await prisma.$transaction(async (tx) => {

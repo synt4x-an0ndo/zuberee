@@ -1,3 +1,5 @@
+import { readSetting } from "./settings-store.js";
+
 /**
  * Password-reset mailer.
  *
@@ -80,6 +82,150 @@ async function createTransporter() {
     });
 }
 
+const SITE_SETTING_DEFAULTS = { site_name: "", primary_color: "#ff641f" };
+
+function normalizeHex(value) {
+    if (typeof value !== "string") return null;
+    const match = value.trim().match(/^#?([\da-f]{3}|[\da-f]{6})$/i);
+    if (!match) return null;
+    let hex = match[1].toLowerCase();
+    if (hex.length === 3) hex = [...hex].map((c) => c + c).join("");
+    return `#${hex}`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/**
+ * Store branding for transactional mail: the same site name and primary
+ * colour the admin sets in the admin panel (site-settings), so the email
+ * always matches the storefront theme. Falls back to the defaults used by
+ * the site-settings route when nothing has been saved yet.
+ */
+/**
+ * The store logo (Admin -> Footer settings) prepared for email:
+ * - data-URI logos (how the admin panel stores uploads) become a CID
+ *   attachment, which even Gmail renders; the HTML references the cid.
+ * - http(s) logos are referenced directly.
+ * - relative paths are made absolute with FRONTEND_URL when configured.
+ */
+function prepareEmailLogo(rawLogo, storeName) {
+    const raw = typeof rawLogo === "string" ? rawLogo.trim() : "";
+    if (!raw) return { logoSrc: null, attachments: [] };
+
+    const dataMatch = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+    if (dataMatch) {
+        const cid = "store-logo@zuberee";
+        return {
+            logoSrc: `cid:${cid}`,
+            attachments: [
+                {
+                    filename: "logo.png",
+                    content: Buffer.from(dataMatch[2], "base64"),
+                    contentType: dataMatch[1],
+                    cid,
+                },
+            ],
+        };
+    }
+
+    if (/^https?:\/\//i.test(raw)) return { logoSrc: raw, attachments: [] };
+
+    const base = (process.env.FRONTEND_URL || "").replace(/\/+$/, "");
+    if (base) return { logoSrc: `${base}/${raw.replace(/^\/+/, "")}`, attachments: [] };
+
+    return { logoSrc: null, attachments: [] };
+}
+
+export async function getStoreBranding() {
+    const settings = await readSetting("site-settings", SITE_SETTING_DEFAULTS);
+    const footer = await readSetting("footer-settings", {});
+    const storeName = (settings.site_name || "").trim() || "Zuberee";
+    const { logoSrc, attachments } = prepareEmailLogo(
+        footer.company_logo || footer.logo_path,
+        storeName
+    );
+    return {
+        storeName,
+        brand: normalizeHex(settings.primary_color) || SITE_SETTING_DEFAULTS.primary_color,
+        logoSrc,
+        logoAttachments: attachments,
+    };
+}
+
+/**
+ * Build the password-reset email (subject + text + HTML) in the store's
+ * theme. Exported for previews/tests; sendPasswordResetEmail uses it too.
+ */
+export function buildPasswordResetEmail({ name, resetLink, storeName, brand, logoSrc = null }) {
+    const store = escapeHtml(storeName);
+    const greeting = escapeHtml(name || "there");
+    const subject = `Reset your ${storeName} password`;
+
+    const text = [
+        `${storeName} - Account Security`,
+        "",
+        "Reset Your Password",
+        "",
+        `Hi ${name || "there"},`,
+        "",
+        `We received a request to reset the password for your ${storeName} account.`,
+        "",
+        "Click the link below to choose a new password. For your security, this link will expire in 30 minutes:",
+        resetLink,
+        "",
+        "If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.",
+        "",
+        "Best regards,",
+        `${storeName} Team`,
+        "",
+        `This is an automated security email from ${storeName}. Please do not reply to this message.`,
+    ].join("\n");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f3f5f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f5f4;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background-color:#ffffff;border-radius:16px;">
+<tr><td style="padding:40px 44px 8px;text-align:center;">
+${logoSrc ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" style="display:block;margin:0 auto;max-width:220px;max-height:56px;width:auto;height:auto;">` : `<div style="font-family:Arial,Helvetica,sans-serif;font-size:32px;font-weight:700;color:${brand};">${store}</div>`}
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#5f6b66;margin-top:6px;">Account Security</div>
+</td></tr>
+<tr><td style="padding:20px 44px 0;"><div style="border-top:1px solid #e8ecea;font-size:0;line-height:0;">&nbsp;</div></td></tr>
+<tr><td style="padding:26px 44px 40px;font-family:Arial,Helvetica,sans-serif;color:#1c2420;">
+<div style="font-size:27px;font-weight:700;color:#141a17;">Reset Your Password</div>
+<p style="font-size:16px;line-height:1.55;margin:22px 0 0;">Hi ${greeting},</p>
+<p style="font-size:16px;line-height:1.55;margin:16px 0 0;">We received a request to reset the password for your ${store} account.</p>
+<p style="font-size:16px;line-height:1.55;margin:16px 0 0;">Click the button below to choose a new password. For your security, this link will expire in 30 minutes.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:30px auto 6px;">
+<tr><td align="center" bgcolor="${brand}" style="border-radius:10px;">
+<a href="${escapeHtml(resetLink)}" target="_blank" style="display:inline-block;padding:15px 38px;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:700;color:#ffffff;text-decoration:none;">Reset Password</a>
+</td></tr>
+</table>
+<p style="font-size:12px;line-height:1.5;color:#8a948f;text-align:center;margin:10px 0 0;">Button not working? Copy and paste this link into your browser:<br><a href="${escapeHtml(resetLink)}" target="_blank" style="color:${brand};word-break:break-all;">${escapeHtml(resetLink)}</a></p>
+<p style="font-size:16px;line-height:1.55;margin:24px 0 0;">If you didn&#39;t request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+<p style="font-size:16px;line-height:1.55;margin:24px 0 0;">Best regards,<br><strong>${store} Team</strong></p>
+</td></tr>
+<tr><td style="padding:0 44px;"><div style="border-top:1px solid #e8ecea;font-size:0;line-height:0;">&nbsp;</div></td></tr>
+<tr><td style="padding:16px 44px 34px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#8a948f;">
+This is an automated security email from ${store}. Please do not reply to this message.
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+
+    return { subject, text, html };
+}
+
 export async function sendPasswordResetEmail({
     to,
     name,
@@ -96,25 +242,17 @@ export async function sendPasswordResetEmail({
     const from =
         process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@zuberee";
 
+    const { storeName, brand, logoSrc, logoAttachments } = await getStoreBranding();
+    const email = buildPasswordResetEmail({ name, resetLink, storeName, brand, logoSrc });
+
     try {
         await transporter.sendMail({
             from,
             to,
-            subject: "Reset your Zuberee password",
-            text: [
-                `Hi ${name || "there"},`,
-                "",
-                "We received a request to reset your password.",
-                `Reset it here (expires in 30 minutes): ${resetLink}`,
-                "",
-                "If you did not request this, you can ignore this email.",
-            ].join("\n"),
-            html: [
-                `<p>Hi ${name || "there"},</p>`,
-                "<p>We received a request to reset your password.</p>",
-                `<p><a href="${resetLink}">Reset your password</a> (expires in 30 minutes).</p>`,
-                "<p>If you did not request this, you can ignore this email.</p>",
-            ].join(""),
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
+            attachments: logoAttachments,
         });
     } catch (error) {
         // Surface the real SMTP error (auth failed, connection refused, etc.)
