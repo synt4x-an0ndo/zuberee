@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { FiDownload, FiSearch, FiTag, FiTruck, FiX } from "react-icons/fi";
+import { FiDownload, FiEdit2, FiPrinter, FiSearch, FiTag, FiTruck, FiX } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
 import { Badge, Button, EmptyState, ErrorState, Input, Pagination, Select, Skeleton } from "@/components/ui";
 import { api, formatMoney } from "@/lib/api";
@@ -293,6 +293,12 @@ export default function AdminOrdersPage() {
                     <td className="muted" style={{ whiteSpace: "nowrap" }}>{formatDateTime(o.created_at)}</td>
                     <td>
                       <div className="orders-row-actions">
+                        <button type="button" className="order-action-button" aria-label={`Edit ${formatOrderNumber(o)}`} title="Edit order" onClick={(event) => { event.stopPropagation(); router.push(`/admin/orders/edit/${o.id}`); }}>
+                          <FiEdit2 aria-hidden="true" /> <span>Edit</span>
+                        </button>
+                        <button type="button" className="order-action-button" aria-label={`Invoice for ${formatOrderNumber(o)}`} title="View invoice" onClick={(event) => { event.stopPropagation(); router.push(`/admin/orders/invoice/${o.id}`); }}>
+                          <FiPrinter aria-hidden="true" /> <span>Invoice</span>
+                        </button>
                         <button type="button" className="order-action-button order-action-badge" aria-label={`Assign badge to ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openBadgeDialog(o); }}>
                           <FiTag aria-hidden="true" /> <span>Badge</span>
                           {rowBadge && <span className="orders-assigned-badge">{rowBadge}</span>}

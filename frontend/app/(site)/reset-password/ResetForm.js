@@ -7,12 +7,15 @@ import AuthCard from "@/components/site/AuthCard";
 import PasswordInput from "@/components/PasswordInput";
 import { Button, Field } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
+import { useSite } from "@/context/SiteContext";
 import { api } from "@/lib/api";
 
 export default function ResetForm() {
   const router = useRouter();
   const token = useSearchParams().get("token") || "";
   const { toast } = useFeedback();
+  const { siteName } = useSite();
+  const store = siteName || "Store";
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,9 +40,9 @@ export default function ResetForm() {
 
   return (
     <AuthCard
-      eyebrow="Account help"
-      title="Choose a new password"
-      subtitle="Use at least 8 characters."
+      eyebrow="Account Security"
+      title="Reset Your Password"
+      subtitle={`Choose a new password for your ${store} account.`}
       footer={<Link href="/forgot-password" className="link-arrow">Request a new link</Link>}
     >
       <form className="stack" onSubmit={submit} noValidate>
@@ -50,8 +53,19 @@ export default function ResetForm() {
         <Field label="Confirm new password" htmlFor="rp-confirm" required>
           <PasswordInput id="rp-confirm" autoComplete="new-password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} />
         </Field>
-        <Button type="submit" variant="primary" size="lg" block loading={busy} disabled={busy}>Update password</Button>
+        <Button type="submit" variant="primary" size="lg" block loading={busy} disabled={busy}>Reset Password</Button>
       </form>
+      <p className="auth-note">
+        For your security, this link will expire in 30 minutes. If you didn&apos;t request a password reset,
+        you can safely ignore the email that brought you here — your password will remain unchanged.
+      </p>
+      <div className="auth-divider" aria-hidden="true" />
+      <p className="auth-regards">
+        Best regards,
+        <br />
+        <strong>{store} Team</strong>
+      </p>
+      <p className="auth-microcopy">This is an automated security page from {store}. Please keep your reset link private.</p>
     </AuthCard>
   );
 }

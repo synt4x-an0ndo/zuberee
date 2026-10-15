@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FiBox, FiCheckCircle, FiClock } from "react-icons/fi";
-import { Badge, Card, CardHeader, EmptyState, Skeleton, Stat } from "@/components/ui";
+import { FiBox, FiCalendar, FiCheckCircle, FiClock, FiPhone, FiShield, FiUser } from "react-icons/fi";
+import Img from "@/components/Img";
+import { Badge, Button, Card, CardHeader, EmptyState, Skeleton, Stat } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatMoney } from "@/lib/api";
+import { api, formatMoney, imgUrl } from "@/lib/api";
 import { normalizeOrders } from "@/lib/order";
 import { formatDate, formatOrderNumber, orderStatusMeta } from "@/lib/format";
 
@@ -25,12 +26,39 @@ export default function AccountOverview() {
   }, []);
 
   const stats = user?.stats || { total_orders: 0, pending_orders: 0, delivered_orders: 0 };
+  const isAdmin = user?.role === "admin";
 
   return (
     <div className="stack" style={{ gap: "1.5rem" }}>
       <div>
         <p className="eyebrow">Welcome back</p>
         <h1>Hi, {user?.name?.split(" ")[0] || "there"}</h1>
+      </div>
+
+      <div className="profile-box">
+        <div className="profile-box-avatar">
+          {imgUrl(user?.image) ? <Img src={imgUrl(user.image)} alt={user?.name || "Profile photo"} fill sizes="96px" /> : <FiUser aria-hidden="true" />}
+        </div>
+        <h2 className="profile-box-name">{user?.name || "—"}</h2>
+        {user?.email && <p className="profile-box-email">{user.email}</p>}
+        {user?.phone && (
+          <p className="profile-box-phone">
+            <FiPhone aria-hidden="true" /> {user.phone}
+          </p>
+        )}
+        {isAdmin && (
+          <span className="profile-box-badge">
+            <FiShield aria-hidden="true" /> Admin
+          </span>
+        )}
+        <p className="profile-box-meta">
+          <FiCalendar aria-hidden="true" /> Member since {user?.joinedAt ? formatDate(user.joinedAt) : "—"}
+        </p>
+        {isAdmin && (
+          <Button href="/admin" variant="primary" className="profile-box-admin-btn">
+            <FiShield aria-hidden="true" /> Go to admin page
+          </Button>
+        )}
       </div>
 
       <div className="stat-grid">

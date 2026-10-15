@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiCheckCircle, FiPhone, FiTruck } from "react-icons/fi";
 import { Button, EmptyState, Field, Input, Select, Skeleton, Textarea } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -9,7 +9,7 @@ import { useCart } from "@/context/CartContext";
 import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney, isValidBdPhone, normalizePhone, unwrap } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
-import { shippingQuote } from "@/lib/shipping";
+import { fetchShippingRates, shippingQuote } from "@/lib/shipping";
 import { formatDateTime, formatOrderNumber } from "@/lib/format";
 
 const EMPTY_FORM = { name: "", phone: "", district: "", address: "", addressId: "" };
@@ -49,7 +49,14 @@ export default function CheckoutPage() {
   const savedChoice = isAuthenticated && effective.addressId ? savedAddresses.find((a) => String(a.id) === effective.addressId) || null : null;
   const usingSavedAddress = Boolean(savedChoice);
   const district = effective.district;
-  const quote = shippingQuote(district);
+  // Live delivery rates from Admin -> Shipping costs (public endpoint).
+  const [rates, setRates] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fetchShippingRates().then((r) => { if (alive) setRates(r); });
+    return () => { alive = false; };
+  }, []);
+  const quote = shippingQuote(district, rates);
   const shippingFee = quote.fee ?? 0;
   const total = cart.subtotal + shippingFee;
 

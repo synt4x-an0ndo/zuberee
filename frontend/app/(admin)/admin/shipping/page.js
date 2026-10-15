@@ -47,7 +47,7 @@ export default function ShippingPage() {
       <div className="notice notice-info" role="note" style={{ display: "flex", gap: 10 }}>
         <FiInfo aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
         <span>
-          Saved here for your records and order admin. The storefront checkout cannot read these figures yet because the backend has no public shipping endpoint, so customers see delivery as confirmed on call.
+          These rates are live on the storefront: checkout quotes the delivery charge for the district the shopper selects, and every new order stores the fee, so it appears on the admin order, invoice and sales views. A flat rate, when set, applies to all districts.
         </span>
       </div>
 

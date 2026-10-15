@@ -91,8 +91,19 @@ export default function Footer({ siteName, company, social, roots }) {
         </div>
 
         <div className="footer-bottom">
-          <span>© {year} {siteName || "All rights reserved"}</span>
-          <span>Cash on delivery</span>
+          <span>© {year} {siteName || "All Rights Reserved"} All Rights Reserved</span>
+          <span> | </span>
+         <span>
+  Developed By{" "}
+  <a
+    href="https://therawbros.pages.dev"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="hover:underline"
+  >
+    The Raw Bros
+  </a>
+</span>
         </div>
       </div>
     </footer>
