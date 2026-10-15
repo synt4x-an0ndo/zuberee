@@ -411,3 +411,66 @@ model FraudCheckerSettings {
 
   @@map("fraud_checker_settings")
 }
+
+model AboutUs {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("about_us")
+}
+
+model FooterSettings {
+  id                 Int      @id @default(autoincrement())
+  logoPath           String?
+  companyDescription String?
+  companyAddress     String?
+  companyEmail       String?
+  companyPhone       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("footer_settings")
+}
+
+model SiteSettings {
+  id                          Int      @id @default(autoincrement())
+  primaryColor                String   @default("#092009")
+  inventoryEnforcementEnabled Boolean  @default(false)
+  lowStockThreshold           Int      @default(3)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+model SocialLinks {
+  id             Int      @id @default(autoincrement())
+  facebook       String?
+  youtube        String?
+  instagram      String?
+  twitter        String?
+  pinterest      String?
+  facebookId     String?
+  whatsappNumber String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("social_links")
+}
+
+model FacebookSettings {
+  id            Int      @id @default(autoincrement())
+  pixelId       String?
+  accessToken   String?
+  testEventCode String?
+  isActive      Boolean  @default(true)
+  isTestMode    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("facebook_settings")
+}

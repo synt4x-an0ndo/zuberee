@@ -1,61 +1,48 @@
-import { authenticateRequest } from "@/directory/auth/auth.js";
-import { readSetting, writeSetting } from "@/lib/settings-store.js";
+import prisma from "../../../../directory/prisma/prisma.js";
 
-const defaults = {
-    id: 1,
-    company_description: "",
-    company_address: "",
-    company_email: "",
-    company_phone: "",
-    company_logo: null,
-    logo_path: null,
-};
-
-async function requireAdmin(request) {
-    const auth = await authenticateRequest(request);
-    return auth.authenticated && auth.user.role === "ADMIN";
-}
-
-async function update(request) {
-    if (!(await requireAdmin(request))) {
-        return Response.json({ message: "Admin authorization required." }, { status: 403 });
-    }
-
-    const contentType = request.headers.get("content-type") || "";
-    const current = await readSetting("footer-settings", defaults);
-    let fields = {};
-    let logo = current.company_logo;
-
-    if (contentType.includes("multipart/form-data")) {
-        const form = await request.formData();
-        for (const key of Object.keys(defaults)) {
-            const value = form.get(key);
-            if (typeof value === "string") fields[key] = value.trim();
-        }
-        const file = form.get("company_logo");
-        if (file && typeof file !== "string") {
-            const bytes = Buffer.from(await file.arrayBuffer()).toString("base64");
-            logo = `data:${file.type};base64,${bytes}`;
-        }
-    } else {
-        fields = await request.json();
-    }
-
-    const next = {
-        ...current,
-        ...fields,
-        id: current.id,
-        company_logo: logo,
-        logo_path: logo,
+function formatFooter(f) {
+    return {
+        id: f.id,
+        logo_path: f.logoPath,
+        company_description: f.companyDescription,
+        company_address: f.companyAddress,
+        company_email: f.companyEmail,
+        company_phone: f.companyPhone,
+        created_at: f.createdAt,
+        updated_at: f.updatedAt,
     };
-    await writeSetting("footer-settings", next);
-    return Response.json({ message: "Footer settings updated.", data: next });
 }
 
-export async function PUT(request) {
-    return update(request);
-}
+export async function GET(request, { params }) {
+    try {
+        const { id } = await params;
+        const footerId = Number(id);
 
-export async function POST(request) {
-    return update(request);
+        if (!Number.isInteger(footerId) || footerId <= 0) {
+            return Response.json(
+                { message: "Invalid footer ID." },
+                { status: 400 }
+            );
+        }
+
+        const footer = await prisma.footerSettings.findUnique({
+            where: { id: footerId },
+        });
+
+        if (!footer) {
+            return Response.json(
+                { message: "Footer not found." },
+                { status: 404 }
+            );
+        }
+
+        return Response.json(formatFooter(footer));
+    } catch (error) {
+        console.error("GET /api/footer-settings/:id error:", error);
+
+        return Response.json(
+            { message: "Failed to fetch footer." },
+            { status: 500 }
+        );
+    }
 }

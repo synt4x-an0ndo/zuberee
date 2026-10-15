@@ -1,37 +1,129 @@
+import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
-import { readSetting, writeSetting } from "@/lib/settings-store.js";
 
-const defaults = {
-    id: 1,
-    facebook: "",
-    youtube: "",
-    instagram: "",
-    tweeter: "",
-    twitter: "",
-    pinterest: "",
-    facebook_id: "",
-    whatsapp_number: "+880",
-};
-
-export async function GET() {
-    return Response.json({ data: await readSetting("social-links", defaults) });
+function formatSocialLinks(s) {
+    return {
+        id: s.id,
+        facebook: s.facebook,
+        youtube: s.youtube,
+        instagram: s.instagram,
+        twitter: s.twitter,
+        pinterest: s.pinterest,
+        facebook_id: s.facebookId,
+        whatsapp_number: s.whatsappNumber,
+        created_at: s.createdAt,
+        updated_at: s.updatedAt,
+    };
 }
 
-export async function POST(request) {
-    return save(request);
-}
+export async function PUT(request) {
+    try {
+        const auth = await authenticateRequest(request);
 
-async function save(request) {
-    const auth = await authenticateRequest(request);
-    if (!auth.authenticated || auth.user.role !== "ADMIN") {
-        return Response.json({ message: "Admin authorization required." }, { status: 403 });
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { success: false, message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
+        let body = {};
+
+        try {
+            body = await request.json();
+        } catch {
+            return Response.json(
+                { success: false, message: "Request body is required." },
+                { status: 400 }
+            );
+        }
+
+        const {
+            facebook,
+            youtube,
+            instagram,
+            twitter,
+            pinterest,
+            facebook_id,
+            facebookId,
+            whatsapp_number,
+            whatsappNumber,
+        } = body;
+
+        const updateData = {};
+
+        const handleUrl = (val, field) => {
+            if (val === undefined) return;
+            updateData[field] =
+                val === null || val === ""
+                    ? null
+                    : String(val).trim();
+        };
+
+        handleUrl(facebook, "facebook");
+        handleUrl(youtube, "youtube");
+        handleUrl(instagram, "instagram");
+        handleUrl(twitter, "twitter");
+        handleUrl(pinterest, "pinterest");
+
+        const finalFbId = facebook_id ?? facebookId;
+        if (finalFbId !== undefined) {
+            updateData.facebookId =
+                finalFbId === null || finalFbId === ""
+                    ? null
+                    : String(finalFbId).trim();
+        }
+
+        const finalWhatsapp = whatsapp_number ?? whatsappNumber;
+        if (finalWhatsapp !== undefined) {
+            updateData.whatsappNumber =
+                finalWhatsapp === null || finalWhatsapp === ""
+                    ? null
+                    : String(finalWhatsapp).trim();
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return Response.json(
+                { success: false, message: "No valid fields to update." },
+                { status: 400 }
+            );
+        }
+
+        let existing = await prisma.socialLinks.findFirst({
+            orderBy: { createdAt: "asc" },
+        });
+
+        if (!existing) {
+            existing = await prisma.socialLinks.create({
+                data: updateData,
+            });
+
+            return Response.json(
+                {
+                    success: true,
+                    message: "Social links created.",
+                    data: formatSocialLinks(existing),
+                },
+                { status: 201 }
+            );
+        }
+
+        const updated = await prisma.socialLinks.update({
+            where: { id: existing.id },
+            data: updateData,
+        });
+
+        return Response.json({
+            success: true,
+            message: "Social links updated.",
+            data: formatSocialLinks(updated),
+        });
+    } catch (error) {
+        console.error("PUT /api/admin/social-links error:", error);
+
+        return Response.json(
+            { success: false, message: "Failed to update social links." },
+            { status: 500 }
+        );
     }
-    const body = await request.json();
-    const current = await readSetting("social-links", defaults);
-    const next = { ...current };
-    for (const key of Object.keys(defaults)) {
-        if (key !== "id" && typeof body[key] === "string") next[key] = body[key].trim();
-    }
-    await writeSetting("social-links", next);
-    return Response.json({ message: "Social links saved.", data: next });
 }

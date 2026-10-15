@@ -1,37 +1,39 @@
-import { authenticateRequest } from "@/directory/auth/auth.js";
-import { readSetting, writeSetting } from "@/lib/settings-store.js";
+import prisma from "../../directory/prisma/prisma.js";
 
-const defaults = {
-    id: 1,
-    site_name: "",
-    primary_color: "#ff641f",
-    inventory_enforcement_enabled: false,
-};
-
-async function requireAdmin(request) {
-    const auth = await authenticateRequest(request);
-    return auth.authenticated && auth.user.role === "ADMIN";
+function formatSiteSettings(s) {
+    return {
+        primary_color: s.primaryColor,
+        inventory_enforcement_enabled:
+        s.inventoryEnforcementEnabled,
+        low_stock_threshold: s.lowStockThreshold,
+    };
 }
 
 export async function GET() {
-    return Response.json({ data: await readSetting("site-settings", defaults) });
-}
+    try {
+        let settings = await prisma.siteSettings.findFirst({
+            orderBy: { createdAt: "asc" },
+        });
 
-export async function PUT(request) {
-    if (!(await requireAdmin(request))) {
-        return Response.json({ message: "Admin authorization required." }, { status: 403 });
+        if (!settings) {
+            settings = await prisma.siteSettings.create({
+                data: {
+                    primaryColor: "#092009",
+                    inventoryEnforcementEnabled: false,
+                    lowStockThreshold: 3,
+                },
+            });
+        }
+
+        return Response.json({
+            data: formatSiteSettings(settings),
+        });
+    } catch (error) {
+        console.error("GET /api/site-settings error:", error);
+
+        return Response.json(
+            { message: "Failed to fetch site settings." },
+            { status: 500 }
+        );
     }
-
-    const body = await request.json();
-    const current = await readSetting("site-settings", defaults);
-    const next = {
-        ...current,
-        ...(typeof body.site_name === "string" ? { site_name: body.site_name.trim() } : {}),
-        ...(typeof body.primary_color === "string" ? { primary_color: body.primary_color.trim() } : {}),
-        ...(typeof body.inventory_enforcement_enabled === "boolean"
-            ? { inventory_enforcement_enabled: body.inventory_enforcement_enabled }
-            : {}),
-    };
-    await writeSetting("site-settings", next);
-    return Response.json({ message: "Site settings updated.", data: next });
 }
