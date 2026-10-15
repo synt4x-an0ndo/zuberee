@@ -1583,3 +1583,66 @@ Customer sources: User (logged) + guest orders grouped by guestPhone
 Ordering: createdAt desc
 
 Success message: None (reference match)
+
+Get All Shipping Costs API
+API endpoint: GET /api/admin/shipping-costs
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Ordering: createdAt desc (newest first)
+
+Response format: { data: [...] }
+
+Data fields: id, inside_dhaka, outside_dhaka, one_shipping_cost, created_at, updated_at
+
+inside_dhaka and outside_dhaka: Numbers
+
+one_shipping_cost: Number or null
+
+Success message: None (reference match)
+
+Non-admin: Return 403 Forbidden
+
+Create Shipping Cost API
+API endpoint: POST /api/admin/shipping-costs
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: inside_dhaka or insideDhaka, outside_dhaka or outsideDhaka, one_shipping_cost or oneShippingCost (optional)
+
+Validation: Inside + outside required, must be numeric
+
+Behavior: Creates new row (versioning)
+
+Success status: 201 Created
+
+Success message: Shipping cost updated.
+
+Delete Shipping Cost API
+API endpoint: DELETE /api/admin/shipping-costs/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param: id
+
+Validation: Valid positive integer
+
+Validation: Shipping cost must exist
+
+Business rule: Cannot delete the only remaining entry
+
+Success message: Shipping cost deleted.
+
+Invalid ID: Return 400 Bad Request
+
+Not found: Return 404 Not Found
+
+Last entry: Return 409 Conflict
+
+Non-admin: Return

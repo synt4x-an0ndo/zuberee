@@ -1,6 +1,48 @@
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
+function formatShippingCost(s) {
+    return {
+        id: s.id,
+        inside_dhaka: Number(s.insideDhaka),
+        outside_dhaka: Number(s.outsideDhaka),
+        one_shipping_cost:
+            s.oneShippingCost === null
+                ? null
+                : Number(s.oneShippingCost),
+        created_at: s.createdAt,
+        updated_at: s.updatedAt,
+    };
+}
+
+export async function GET(request) {
+    try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { success: false, message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
+        const shippingCosts = await prisma.shippingCost.findMany({
+            orderBy: { createdAt: "desc" },
+        });
+
+        return Response.json({
+            data: shippingCosts.map(formatShippingCost),
+        });
+    } catch (error) {
+        console.error("Get shipping costs API error:", error);
+
+        return Response.json(
+            { success: false, message: "Failed to load shipping costs." },
+            { status: 500 }
+        );
+    }
+}
+
 export async function POST(request) {
     try {
         const auth = await authenticateRequest(request);
@@ -34,7 +76,10 @@ export async function POST(request) {
             Number.isNaN(Number(finalOutside))
         ) {
             return Response.json(
-                { success: false, message: "Inside and outside Dhaka costs required." },
+                {
+                    success: false,
+                    message: "Inside and outside Dhaka costs required.",
+                },
                 { status: 400 }
             );
         }
@@ -52,17 +97,7 @@ export async function POST(request) {
             {
                 success: true,
                 message: "Shipping cost updated.",
-                data: {
-                    id: created.id,
-                    inside_dhaka: Number(created.insideDhaka),
-                    outside_dhaka: Number(created.outsideDhaka),
-                    one_shipping_cost:
-                        created.oneShippingCost === null
-                            ? null
-                            : Number(created.oneShippingCost),
-                    created_at: created.createdAt,
-                    updated_at: created.updatedAt,
-                },
+                data: formatShippingCost(created),
             },
             { status: 201 }
         );
