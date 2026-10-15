@@ -1,4 +1,5 @@
 import prisma from "../../../../directory/prisma/prisma.js";
+import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const VALID_STATUSES = [
     "IN_STOCK",
@@ -10,39 +11,26 @@ const VALID_STATUSES = [
 function formatProduct(product) {
     return {
         id: product.id,
-
         title: product.name,
-
         sku: product.sku,
-
         price: Number(product.price),
-
         discount:
             product.discount === null
                 ? null
                 : Number(product.discount),
-
-        status: product.status
-            .toLowerCase()
-            .replace("_", "-"),
-
+        status: product.status.toLowerCase().replace("_", "-"),
         short_description: product.shortDescription,
-
         description: product.description,
-
         video_url: product.videoUrl,
-
         images: product.images.map((image) => ({
             image: image.imageUrl,
         })),
-
         colors: product.colors.map((color) => ({
             id: color.id,
             name: color.name,
             code: color.code,
             image: color.image,
         })),
-
         sizes: product.variants.map((variant) => ({
             id: variant.id,
             size: variant.value,
@@ -54,7 +42,6 @@ function formatProduct(product) {
                 stock: variant.stock,
             },
         })),
-
         category: product.category
             ? [
                 {
@@ -64,23 +51,18 @@ function formatProduct(product) {
                 },
             ]
             : [],
-
         inventory: {
             track_inventory:
                 product.inventory?.trackInventory ?? false,
-
             combinations: [],
         },
-
         product_colors: [],
-
         specifications: product.specifications.map(
             (specification) => ({
                 key: specification.key,
                 value: specification.value,
             })
         ),
-
         faqs: product.faqs.map((faq) => ({
             id: faq.id,
             question: faq.question,
@@ -91,10 +73,7 @@ function formatProduct(product) {
 
 async function getProduct(id) {
     return prisma.product.findUnique({
-        where: {
-            id,
-        },
-
+        where: { id },
         include: {
             category: {
                 select: {
@@ -103,28 +82,22 @@ async function getProduct(id) {
                     slug: true,
                 },
             },
-
             images: {
                 orderBy: {
                     isPrimary: "desc",
                 },
             },
-
             variants: true,
-
             colors: true,
-
             specifications: true,
-
             faqs: true,
-
             inventory: true,
         },
     });
 }
 
 // =====================================================
-// GET SINGLE PRODUCT
+// GET SINGLE PRODUCT (PUBLIC)
 // GET /api/products/:id
 // =====================================================
 
@@ -161,10 +134,7 @@ export async function GET(request, { params }) {
             data: formatProduct(product),
         });
     } catch (error) {
-        console.error(
-            "Get product by ID API error:",
-            error
-        );
+        console.error("Get product by ID API error:", error);
 
         return Response.json(
             {
@@ -177,12 +147,24 @@ export async function GET(request, { params }) {
 }
 
 // =====================================================
-// UPDATE PRODUCT
+// UPDATE PRODUCT (ADMIN ONLY)
 // PUT /api/products/:id
 // =====================================================
 
 export async function PUT(request, { params }) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                {
+                    success: false,
+                    message: "Admin access required.",
+                },
+                { status: 403 }
+            );
+        }
+
         const { id: productId } = await params;
         const id = Number(productId);
 
@@ -196,11 +178,9 @@ export async function PUT(request, { params }) {
             );
         }
 
-        const existingProduct = await prisma.product.findUnique(
-            {
-                where: { id },
-            }
-        );
+        const existingProduct = await prisma.product.findUnique({
+            where: { id },
+        });
 
         if (!existingProduct) {
             return Response.json(
@@ -257,10 +237,6 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // ---------------------------------------------
-        // Category
-        // ---------------------------------------------
-
         const newCategoryId =
             category_id ??
             categoryId ??
@@ -276,12 +252,11 @@ export async function PUT(request, { params }) {
             );
         }
 
-        const categoryRecord =
-            await prisma.category.findUnique({
-                where: {
-                    id: Number(newCategoryId),
-                },
-            });
+        const categoryRecord = await prisma.category.findUnique({
+            where: {
+                id: Number(newCategoryId),
+            },
+        });
 
         if (!categoryRecord) {
             return Response.json(
@@ -293,41 +268,31 @@ export async function PUT(request, { params }) {
             );
         }
 
-        // ---------------------------------------------
-        // SKU duplicate validation
-        // ---------------------------------------------
-
         const newSku =
             sku !== undefined
                 ? sku?.trim() || null
                 : existingProduct.sku;
 
         if (newSku) {
-            const duplicateSku =
-                await prisma.product.findFirst({
-                    where: {
-                        sku: newSku,
-                        NOT: {
-                            id,
-                        },
+            const duplicateSku = await prisma.product.findFirst({
+                where: {
+                    sku: newSku,
+                    NOT: {
+                        id,
                     },
-                });
+                },
+            });
 
             if (duplicateSku) {
                 return Response.json(
                     {
                         success: false,
-                        message:
-                            "Product SKU already exists.",
+                        message: "Product SKU already exists.",
                     },
                     { status: 409 }
                 );
             }
         }
-
-        // ---------------------------------------------
-        // Status
-        // ---------------------------------------------
 
         const newStatus = status
             ? String(status)
@@ -344,10 +309,6 @@ export async function PUT(request, { params }) {
                 { status: 400 }
             );
         }
-
-        // ---------------------------------------------
-        // Transaction
-        // ---------------------------------------------
 
         const updatedProduct =
             await prisma.$transaction(async (tx) => {
@@ -389,9 +350,7 @@ export async function PUT(request, { params }) {
                             videoUrl ??
                             existingProduct.videoUrl,
 
-                        categoryId: Number(
-                            newCategoryId
-                        ),
+                        categoryId: Number(newCategoryId),
 
                         stock:
                             body.stock !== undefined
@@ -405,41 +364,27 @@ export async function PUT(request, { params }) {
                     },
                 });
 
-                // -------------------------------------
-                // Replace images if provided
-                // -------------------------------------
-
                 if (Array.isArray(images)) {
                     await tx.productImage.deleteMany({
                         where: { productId: id },
                     });
 
                     await tx.productImage.createMany({
-                        data: images.map(
-                            (image, index) => ({
-                                productId: id,
+                        data: images.map((image, index) => ({
+                            productId: id,
 
-                                imageUrl:
-                                    typeof image ===
-                                    "string"
-                                        ? image
-                                        : image.image,
+                            imageUrl:
+                                typeof image === "string"
+                                    ? image
+                                    : image.image,
 
-                                isPrimary:
-                                    typeof image ===
-                                    "object"
-                                        ? Boolean(
-                                            image.isPrimary
-                                        )
-                                        : index === 0,
-                            })
-                        ),
+                            isPrimary:
+                                typeof image === "object"
+                                    ? Boolean(image.isPrimary)
+                                    : index === 0,
+                        })),
                     });
                 }
-
-                // -------------------------------------
-                // Replace sizes
-                // -------------------------------------
 
                 if (Array.isArray(sizes)) {
                     await tx.productVariant.deleteMany({
@@ -448,43 +393,27 @@ export async function PUT(request, { params }) {
 
                     if (sizes.length > 0) {
                         await tx.productVariant.createMany({
-                            data: sizes.map(
-                                (size) => ({
-                                    productId: id,
+                            data: sizes.map((size) => ({
+                                productId: id,
 
-                                    name: "size",
+                                name: "size",
 
-                                    value:
-                                        size.size ??
-                                        size.value ??
-                                        "",
+                                value: size.size ?? size.value ?? "",
 
-                                    price:
-                                        size.price ===
-                                        undefined ||
-                                        size.price ===
-                                        null ||
-                                        size.price === ""
-                                            ? null
-                                            : Number(
-                                                size.price
-                                            ),
+                                price:
+                                    size.price === undefined ||
+                                    size.price === null ||
+                                    size.price === ""
+                                        ? null
+                                        : Number(size.price),
 
-                                    stock: Number(
-                                        size.stock ??
-                                        size.pivot
-                                            ?.stock ??
-                                        0
-                                    ),
-                                })
-                            ),
+                                stock: Number(
+                                    size.stock ?? size.pivot?.stock ?? 0
+                                ),
+                            })),
                         });
                     }
                 }
-
-                // -------------------------------------
-                // Replace colors
-                // -------------------------------------
 
                 if (Array.isArray(colors)) {
                     await tx.productColor.deleteMany({
@@ -493,114 +422,67 @@ export async function PUT(request, { params }) {
 
                     if (colors.length > 0) {
                         await tx.productColor.createMany({
-                            data: colors.map(
-                                (color) => ({
-                                    productId: id,
-                                    name: color.name,
-                                    code: color.code,
-                                    image:
-                                        color.image ??
-                                        null,
-                                })
-                            ),
+                            data: colors.map((color) => ({
+                                productId: id,
+                                name: color.name,
+                                code: color.code,
+                                image: color.image ?? null,
+                            })),
                         });
                     }
                 }
 
-                // -------------------------------------
-                // Replace specifications
-                // -------------------------------------
+                if (Array.isArray(specifications)) {
+                    await tx.productSpecification.deleteMany({
+                        where: { productId: id },
+                    });
 
-                if (
-                    Array.isArray(
-                        specifications
-                    )
-                ) {
-                    await tx.productSpecification.deleteMany(
-                        {
-                            where: {
+                    if (specifications.length > 0) {
+                        await tx.productSpecification.createMany({
+                            data: specifications.map((specification) => ({
                                 productId: id,
-                            },
-                        }
-                    );
-
-                    if (
-                        specifications.length >
-                        0
-                    ) {
-                        await tx.productSpecification.createMany(
-                            {
-                                data: specifications.map(
-                                    (
-                                        specification
-                                    ) => ({
-                                        productId: id,
-                                        key:
-                                        specification.key,
-                                        value:
-                                        specification.value,
-                                    })
-                                ),
-                            }
-                        );
+                                key: specification.key,
+                                value: specification.value,
+                            })),
+                        });
                     }
                 }
 
-                // -------------------------------------
-                // Replace FAQs
-                // -------------------------------------
-
                 if (Array.isArray(faqs)) {
                     await tx.productFaq.deleteMany({
-                        where: {
-                            productId: id,
-                        },
+                        where: { productId: id },
                     });
 
                     if (faqs.length > 0) {
                         await tx.productFaq.createMany({
-                            data: faqs.map(
-                                (faq) => ({
-                                    productId: id,
-                                    question:
-                                    faq.question,
-                                    answer:
-                                    faq.answer,
-                                })
-                            ),
+                            data: faqs.map((faq) => ({
+                                productId: id,
+                                question: faq.question,
+                                answer: faq.answer,
+                            })),
                         });
                     }
                 }
 
-                // -------------------------------------
-                // Inventory
-                // -------------------------------------
-
                 if (
                     inventory &&
-                    typeof inventory ===
-                    "object" &&
-                    inventory.track_inventory !==
-                    undefined
+                    typeof inventory === "object" &&
+                    inventory.track_inventory !== undefined
                 ) {
                     await tx.productInventory.upsert({
-                        where: {
-                            productId: id,
-                        },
+                        where: { productId: id },
 
                         create: {
                             productId: id,
-                            trackInventory:
-                                Boolean(
-                                    inventory.track_inventory
-                                ),
+                            trackInventory: Boolean(
+                                inventory.track_inventory
+                            ),
                         },
 
                         update: {
-                            trackInventory:
-                                Boolean(
-                                    inventory.track_inventory
-                                ),
+                            trackInventory: Boolean(
+                                inventory.track_inventory
+                            ),
                         },
                     });
                 }
@@ -616,21 +498,15 @@ export async function PUT(request, { params }) {
                                 slug: true,
                             },
                         },
-
                         images: {
                             orderBy: {
                                 isPrimary: "desc",
                             },
                         },
-
                         variants: true,
-
                         colors: true,
-
                         specifications: true,
-
                         faqs: true,
-
                         inventory: true,
                     },
                 });
@@ -638,15 +514,11 @@ export async function PUT(request, { params }) {
 
         return Response.json({
             success: true,
-            message:
-                "Product updated successfully.",
+            message: "Product updated successfully.",
             data: formatProduct(updatedProduct),
         });
     } catch (error) {
-        console.error(
-            "Update product API error:",
-            error
-        );
+        console.error("Update product API error:", error);
 
         return Response.json(
             {
@@ -659,12 +531,24 @@ export async function PUT(request, { params }) {
 }
 
 // =====================================================
-// DELETE PRODUCT
+// DELETE PRODUCT (ADMIN ONLY)
 // DELETE /api/products/:id
 // =====================================================
 
 export async function DELETE(request, { params }) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                {
+                    success: false,
+                    message: "Admin access required.",
+                },
+                { status: 403 }
+            );
+        }
+
         const { id: productId } = await params;
         const id = Number(productId);
 
@@ -700,10 +584,6 @@ export async function DELETE(request, { params }) {
             );
         }
 
-        // ---------------------------------------------
-        // Do not delete products already used in orders
-        // ---------------------------------------------
-
         if (product._count.orderItems > 0) {
             return Response.json(
                 {
@@ -721,14 +601,10 @@ export async function DELETE(request, { params }) {
 
         return Response.json({
             success: true,
-            message:
-                "Product deleted successfully.",
+            message: "Product deleted successfully.",
         });
     } catch (error) {
-        console.error(
-            "Delete product API error:",
-            error
-        );
+        console.error("Delete product API error:", error);
 
         return Response.json(
             {

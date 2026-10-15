@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import prisma from "../../../../../directory/prisma/prisma.js";
+import prisma from "../../../../../../directory/prisma/prisma.js";
+import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const ALLOWED_IMAGE_TYPES = new Map([
     ["image/jpeg", ".jpg"],
@@ -14,6 +15,15 @@ export async function POST(request, { params }) {
     let savedFilePath = null;
 
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { success: false, message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
         const { id: productId } = await params;
         const id = Number(productId);
 

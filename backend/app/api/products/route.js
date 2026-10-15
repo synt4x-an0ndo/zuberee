@@ -1,4 +1,5 @@
 import prisma from "../../../directory/prisma/prisma.js";
+import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const VALID_STATUSES = [
     "IN_STOCK",
@@ -168,6 +169,18 @@ export async function GET(request) {
 
 export async function POST(request) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                {
+                    success: false,
+                    message: "Admin access required.",
+                },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
 
         const {

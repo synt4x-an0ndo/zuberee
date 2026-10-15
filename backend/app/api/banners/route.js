@@ -1,4 +1,5 @@
 import prisma from "../../../directory/prisma/prisma.js";
+import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const ALLOWED_IMAGE_TYPES = [
     "image/jpeg",
@@ -19,7 +20,7 @@ function formatBanner(banner) {
     };
 }
 
-// GET /api/banners
+// GET /api/banners (PUBLIC)
 export async function GET() {
     try {
         const banners = await prisma.banner.findMany({
@@ -52,9 +53,18 @@ export async function GET() {
     }
 }
 
-// POST /api/banners
+// POST /api/banners (ADMIN ONLY)
 export async function POST(request) {
     try {
+        const auth = await authenticateRequest(request);
+
+        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+            return Response.json(
+                { message: "Admin access required." },
+                { status: 403 }
+            );
+        }
+
         const formData = await request.formData();
 
         const image = formData.get("image");
@@ -62,7 +72,6 @@ export async function POST(request) {
         const displayPriority = formData.get("display_priority");
         const isActive = formData.get("is_active");
 
-        // Validate image
         if (!image || typeof image === "string") {
             return Response.json(
                 {
@@ -82,11 +91,9 @@ export async function POST(request) {
             );
         }
 
-        // Convert uploaded file to Buffer
         const arrayBuffer = await image.arrayBuffer();
         const imageBuffer = Buffer.from(arrayBuffer);
 
-        // Validate optional display priority
         let priority = 0;
 
         if (displayPriority !== null && displayPriority !== "") {
@@ -102,7 +109,6 @@ export async function POST(request) {
             }
         }
 
-        // Validate optional active status
         let active = true;
 
         if (isActive !== null && isActive !== "") {
