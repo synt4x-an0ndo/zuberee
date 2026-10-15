@@ -1653,3 +1653,235 @@ Non-admin: Return
 1	GET	/api/admin/fraud-checker/settings	Load config
 2	PUT	/api/admin/fraud-checker/settings	Update config
 3	GET	/api/admin/fraud-checker/plan	Subscription info
+
+Settings & Content API
+Get About Us API
+API endpoint: GET /api/about-us
+
+Authentication: Not required
+
+Authorization: Public
+
+Data source: First AboutUs row (createdAt asc)
+
+Response fields: id, title, content, image, created_at, updated_at
+
+content field: HTML string
+
+Not configured: Return 404 Not Found
+
+Failure response: { message: "Failed to fetch about us." } with 500
+
+Update About Us API
+API endpoint: PUT /api/admin/about-us
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: title (optional), content (optional), image (optional)
+
+Validation: Title must be non-empty string if provided
+
+Validation: Content must be string if provided
+
+Validation: Image must be string or null if provided
+
+Behavior: Jodi first row na thake, create koro; thakle update koro
+
+Success status: 200 OK (update) / 201 Created (create)
+
+Success message: About us updated. / About us created.
+
+Invalid fields: Return 400 Bad Request
+
+Non-admin: Return 403 Forbidden
+
+Get Footer Settings API
+API endpoint: GET /api/footer-settings
+
+Authentication: Not required
+
+Authorization: Public
+
+Data source: First FooterSettings row (createdAt asc)
+
+Response fields: id, logo_path, company_description, company_address, company_email, company_phone, created_at, updated_at
+
+Not configured: Return 404 Not Found
+
+Failure message: Failed to fetch footer settings.
+
+Get Footer Settings by ID API
+API endpoint: GET /api/footer-settings/:id
+
+Authentication: Not required
+
+Authorization: Public
+
+URL param: id — footer settings ID
+
+Validation: ID must be positive integer
+
+Response fields: Same as footer settings
+
+Invalid ID: Return 400 Bad Request
+
+Not found: Return 404 Not Found
+
+Failure message: Failed to fetch footer.
+
+Update Footer Settings API
+API endpoint: PUT /api/admin/footer-settings/:id
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+URL param: id — footer settings ID
+
+Request fields: logo_path or logoPath, company_description or companyDescription, company_address or companyAddress, company_email or companyEmail, company_phone or companyPhone (all optional)
+
+Validation: id must be positive integer
+
+Validation: Footer must exist
+
+Validation: Empty string treated as null
+
+Validation: At least one field required
+
+Behavior: Partial update
+
+Success message: Footer updated.
+
+Invalid ID: Return 400 Bad Request
+
+Not found: Return 404 Not Found
+
+No valid fields: Return 400 Bad Request
+
+Non-admin: Return 403 Forbidden
+
+Get Site Settings API
+API endpoint: GET /api/site-settings
+
+Authentication: Not required
+
+Authorization: Public
+
+Auto-create: Jodi row na thake, default value diye create hoy
+
+Default values: primaryColor: "#092009", inventoryEnforcementEnabled: false, lowStockThreshold: 3
+
+Response format: { data: {...} }
+
+Data fields: primary_color, inventory_enforcement_enabled, low_stock_threshold
+
+Failure message: Failed to fetch site settings.
+
+Update Site Settings API
+API endpoint: PUT /api/admin/site-settings
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: primary_color or primaryColor, inventory_enforcement_enabled or inventoryEnforcementEnabled, low_stock_threshold or lowStockThreshold (all optional)
+
+Validation: primary_color must be non-empty string if provided
+
+Validation: inventory_enforcement_enabled coerced to boolean
+
+Validation: low_stock_threshold must be non-negative integer
+
+Validation: At least one field required
+
+Auto-create: Jodi settings row na thake, default diye create hoy
+
+Success message: Site settings updated.
+
+Invalid values: Return 400 Bad Request
+
+No valid fields: Return 400 Bad Request
+
+Non-admin: Return 403 Forbidden
+
+Get First Social Links API
+API endpoint: GET /api/social-links-first
+
+Authentication: Not required
+
+Authorization: Public
+
+Data source: First SocialLinks row (createdAt asc)
+
+Response fields: id, facebook, youtube, instagram, twitter, pinterest, facebook_id, whatsapp_number, created_at, updated_at
+
+Not configured: Return 404 Not Found
+
+Failure message: Failed to fetch social links.
+
+Update Social Links API
+API endpoint: PUT /api/admin/social-links
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: facebook, youtube, instagram, twitter, pinterest, facebook_id or facebookId, whatsapp_number or whatsappNumber (all optional)
+
+Validation: URL fields must be string or null if provided
+
+Validation: Empty string treated as null
+
+Validation: At least one field required
+
+Behavior: Upsert — first row na thakle create, thakle update
+
+Success status: 200 OK (update) / 201 Created (create)
+
+Success message: Social links updated. / Social links created.
+
+No valid fields: Return 400 Bad Request
+
+Non-admin: Return 403 Forbidden
+
+Get Facebook Settings API
+API endpoint: GET /api/facebook-settings
+
+Authentication: Not required
+
+Authorization: Public
+
+Data source: First FacebookSettings row (createdAt asc)
+
+Response fields: id, pixel_id, access_token, test_event_code, is_active, is_test_mode, created_at, updated_at
+
+Not configured: Return 404 Not Found
+
+Failure message: Failed to fetch Facebook settings.
+
+Update Facebook Settings API
+API endpoint: PUT /api/admin/facebook-settings
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Request fields: pixel_id or pixelId, access_token or accessToken, test_event_code or testEventCode, is_active or isActive, is_test_mode or isTestMode (all optional)
+
+Validation: String fields must be string or null
+
+Validation: Boolean fields coerced
+
+Validation: At least one field required
+
+Behavior: Upsert — first row na thakle create, thakle update
+
+Success status: 200 OK (update) / 201 Created (create)
+
+Success message: Facebook settings updated. / Facebook settings created.
+
+No valid fields: Return 400 Bad Request
+
+Non-admin: Return 403 Forbidden
