@@ -1,21 +1,35 @@
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
+function formatDate(date) {
+    if (!date) return null;
+
+    const d = new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    const s = String(d.getSeconds()).padStart(2, "0");
+
+    return `${y}-${m}-${day} ${h}:${min}:${s}`;
+}
+
 function formatCustomer(c) {
     return {
-        id: c.key,
-        user_id: c.userId,
         name: c.name,
         phone: c.phone,
         email: c.email,
-        badge: c.badge,
-        is_guest: c.userId === null,
+        address: c.address,
+        district: c.district,
         total_orders: c.totalOrders,
         total_spent: c.totalSpent,
-        delivered_orders: c.deliveredOrders,
-        cancelled_orders: c.cancelledOrders,
-        first_order_at: c.firstOrderAt,
-        last_order_at: c.lastOrderAt,
+        last_order_date: c.lastOrderDate
+            ? formatDate(c.lastOrderDate)
+            : null,
+        last_ordered_products: c.lastOrderedProducts,
+        badge: c.badge,
+        assigned_badge: c.assignedBadge,
     };
 }
 
@@ -37,7 +51,7 @@ export async function GET(request) {
         const page = Math.max(1, Number(searchParams.get("page") ?? 1));
         const perPage = Math.min(
             100,
-            Math.max(1, Number(searchParams.get("per_page") ?? 50))
+            Math.max(1, Number(searchParams.get("per_page") ?? 15))
         );
 
         const skip = (page - 1) * perPage;
@@ -51,6 +65,8 @@ export async function GET(request) {
                 totalAmount: true,
                 status: true,
                 assignedBadge: true,
+                shippingAddress: true,
+                district: true,
                 createdAt: true,
                 user: {
                     select: {
@@ -61,8 +77,25 @@ export async function GET(request) {
                         badge: true,
                     },
                 },
+                items: {
+                    select: {
+                        productId: true,
+                        quantity: true,
+                        unitPrice: true,
+                        product: {
+                            select: {
+                                name: true,
+                                images: {
+                                    orderBy: { isPrimary: "desc" },
+                                    take: 1,
+                                    select: { imageUrl: true },
+                                },
+                            },
+                        },
+                    },
+                },
             },
-            orderBy: { createdAt: "asc" },
+            orderBy: { createdAt: "desc" },
         });
 
         const customerMap = new Map();
@@ -74,6 +107,7 @@ export async function GET(request) {
             let phone = "";
             let email = null;
             let badge = null;
+            let assignedBadge = null;
 
             if (o.userId && o.user) {
                 key = `user:${o.userId}`;
@@ -82,11 +116,13 @@ export async function GET(request) {
                 phone = o.user.phone ?? "";
                 email = o.user.email ?? null;
                 badge = o.user.badge ?? null;
+                assignedBadge = o.user.badge ?? null;
             } else {
                 key = `guest:${o.guestPhone ?? "unknown"}`;
                 name = o.guestName ?? "";
                 phone = o.guestPhone ?? "";
                 badge = o.assignedBadge ?? null;
+                assignedBadge = o.assignedBadge ?? null;
             }
 
             if (!customerMap.has(key)) {
@@ -96,13 +132,14 @@ export async function GET(request) {
                     name,
                     phone,
                     email,
+                    address: o.shippingAddress ?? null,
+                    district: o.district ?? null,
                     badge,
+                    assignedBadge,
                     totalOrders: 0,
                     totalSpent: 0,
-                    deliveredOrders: 0,
-                    cancelledOrders: 0,
-                    firstOrderAt: o.createdAt,
-                    lastOrderAt: o.createdAt,
+                    lastOrderDate: o.createdAt,
+                    lastOrderedProducts: [],
                 });
             }
 
@@ -114,21 +151,49 @@ export async function GET(request) {
                 entry.totalSpent += Number(o.totalAmount);
             }
 
-            if (o.status === "DELIVERED") {
-                entry.deliveredOrders += 1;
+            if (o.createdAt > entry.lastOrderDate) {
+                entry.lastOrderDate = o.createdAt;
+                entry.address = o.shippingAddress ?? entry.address;
+                entry.district = o.district ?? entry.district;
             }
 
-            if (o.status === "CANCELLED") {
-                entry.cancelledOrders += 1;
+            if (!entry.badge && badge) {
+                entry.badge = badge;
             }
 
-            if (o.createdAt < entry.firstOrderAt) {
-                entry.firstOrderAt = o.createdAt;
+            if (!entry.assignedBadge && assignedBadge) {
+                entry.assignedBadge = assignedBadge;
+            }
+        }
+
+        for (const o of orders) {
+            let key;
+
+            if (o.userId) {
+                key = `user:${o.userId}`;
+            } else {
+                key = `guest:${o.guestPhone ?? "unknown"}`;
             }
 
-            if (o.createdAt > entry.lastOrderAt) {
-                entry.lastOrderAt = o.createdAt;
+            const entry = customerMap.get(key);
+
+            if (!entry) continue;
+
+            if (o.createdAt.getTime() !== entry.lastOrderDate.getTime()) {
+                continue;
             }
+
+            entry.lastOrderedProducts = o.items.map((item) => ({
+                title: item.product?.name ?? null,
+                qty: item.quantity,
+                unitPrice: Number(item.unitPrice).toFixed(2),
+                totalPrice: (
+                    Number(item.unitPrice) * item.quantity
+                ).toFixed(2),
+                colorImage:
+                    item.product?.images?.[0]?.imageUrl ?? null,
+                selected_size: null,
+            }));
         }
 
         let customers = Array.from(customerMap.values());
@@ -151,7 +216,8 @@ export async function GET(request) {
             customers.sort((a, b) => b.totalOrders - a.totalOrders);
         } else if (sort === "last_order") {
             customers.sort(
-                (a, b) => new Date(b.lastOrderAt) - new Date(a.lastOrderAt)
+                (a, b) =>
+                    new Date(b.lastOrderDate) - new Date(a.lastOrderDate)
             );
         } else if (sort === "name") {
             customers.sort((a, b) =>
@@ -160,19 +226,17 @@ export async function GET(request) {
         }
 
         const total = customers.length;
-        const totalPages = Math.ceil(total / perPage);
+        const lastPage = Math.ceil(total / perPage);
         const paginated = customers.slice(skip, skip + perPage);
 
         return Response.json({
             success: true,
-            message: "Customer leaderboard loaded.",
             data: paginated.map(formatCustomer),
-            meta: {
+            pagination: {
                 current_page: page,
                 per_page: perPage,
                 total,
-                total_pages: totalPages,
-                has_more: page < totalPages,
+                last_page: lastPage,
                 from: total > 0 ? skip + 1 : 0,
                 to: Math.min(skip + perPage, total),
             },

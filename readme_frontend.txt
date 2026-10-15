@@ -1482,6 +1482,8 @@ Success status: 201 Created
 
 Success message: Shipping cost updated.
 
+=========================================================
+
 Get Customer Leaderboard API
 API endpoint: GET /api/admin/customer-leaderboard
 
@@ -1527,3 +1529,57 @@ Behavior for user: Update User.badge
 Behavior for guest: Update all Order.assignedBadge where guestPhone = id and userId = null
 
 Success message: Badge updated.
+
+Get Customer Statistics API
+API endpoint: GET /api/admin/customers/statistics
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Customer sources: User (logged) + guest orders grouped by guestPhone
+
+Response fields: total_customers, total_orders, total_revenue, average_order_value, new_customers, repeat_customers
+
+total_revenue: Rounded to nearest integer
+
+average_order_value: Rounded to 4 decimal places
+
+new_customers: Customers with exactly 1 order
+
+repeat_customers: Customers with 2 or more orders
+
+Cancelled orders: Excluded from total_revenue and average_order_value
+
+Success message: None (reference match)
+
+Get Customer Profiles API
+API endpoint: GET /api/admin/customer-profiles
+
+Authentication: JWT required
+
+Authorization: Admin only
+
+Query params: search, has_account, page, per_page
+
+Search fields: name, phone, email
+
+has_account values: true, false
+
+Default per_page: 20
+
+Max per_page: 100
+
+Response format: Laravel-style pagination match
+
+Pagination fields: current_page, data, first_page_url, from, last_page, last_page_url, next_page_url, path, per_page, prev_page_url, to, total
+
+Data fields: id, name, phone, email, user_id, has_user_account, assigned_badge, created_at, updated_at
+
+id: Synthetic (index + 1), not a real DB ID
+
+Customer sources: User (logged) + guest orders grouped by guestPhone
+
+Ordering: createdAt desc
+
+Success message: None (reference match)
