@@ -8197,3 +8197,255 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
   .pd2-assure-item { padding: 0; }
   .pd2-assure-item + .pd2-assure-item { border-left: 0; border-top: 1px solid #f0eadf; padding-top: 10px; }
 }
+
+/* =====================================================================
+   PRODUCT CARD - HOVER CHOREOGRAPHY (v2)
+   ---------------------------------------------------------------------
+   Appended last on purpose: these rules intentionally override the three
+   earlier .product-card hover generations (~lines 2130 / 4214 / 4982).
+   Everything is scoped to @media (hover: hover) and (pointer: fine), so
+   touch devices keep their existing no-hover behaviour untouched.
+   prefers-reduced-motion is already handled globally (line 278) with
+   !important, which outranks these declarations - no duplicate needed.
+   ===================================================================== */
+
+/* --- entrance + root cause fix ---------------------------------------
+   Two separate faults in the shared entrance, both fixed here:
+
+   1. HIDDEN CONTENT. `.anim-fade-up` begins at `opacity: 0` and fills
+      both ways, so combined with the per-card stagger delay the grid
+      rendered blank for up to ~0.9s before anything appeared. Product
+      cards now use a non-hiding entrance: opacity stays 1 for the entire
+      animation and only a small transform settles back into place, so
+      image, badge, title and price are visible and interactive from the
+      first paint. Nothing is ever pushed out of view.
+
+   2. DEAD HOVER. The old animation also ended on `transform: none` and
+      kept that value applied forever (fill mode). A filling animation
+      outranks normal declarations, so `.product-card:hover { transform }`
+      could not take effect - the card was physically unable to move.
+      This animation does not fill forwards, so hover keeps full control
+      of `transform` once it settles.
+   --------------------------------------------------------------------- */
+.product-card.anim-fade-up {
+  animation: product-card-in 0.45s var(--card-spring) backwards;
+}
+
+@keyframes product-card-in {
+  from {
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.product-card {
+  --card-spring: cubic-bezier(0.22, 1.16, 0.32, 1);
+  --card-soft: cubic-bezier(0.33, 1, 0.68, 1);
+  --card-lift: -9px;
+  /* defaults for the spotlight before the pointer reports in */
+  --card-mx: 50%;
+  --card-my: 40%;
+  /* `isolation` gives the card a stable stacking context for the ::before /
+     ::after layers without the side effects of a permanent transform (a
+     transform would make every card a containing block for fixed-position
+     descendants and force one composited layer per card in the grid). */
+  isolation: isolate;
+  transition:
+    transform 0.44s var(--card-spring),
+    box-shadow 0.44s var(--card-soft),
+    border-color 0.26s ease;
+}
+
+/* --- media: slow drift zoom ------------------------------------------
+   The previous markup only ever rendered two photos (images[0] at rest,
+   images[1] on hover), so a product with three or more uploads never had
+   its later photos seen. Every usable gallery photo is now layered in the
+   same box and ProductCard.js puts `is-active` on the one to show, so the
+   card can walk the whole gallery instead of stopping at the second image.
+   --------------------------------------------------------------------- */
+.product-card .product-media img {
+  transition: transform 0.9s var(--card-soft), opacity 0.5s ease;
+}
+
+.product-card .product-media img.stack-img {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.55s var(--card-soft), transform 0.9s var(--card-soft);
+  /* a freshly swapped-in photo starts slightly wide and settles into the
+     same scale as the outgoing one, so the change reads as one continuous
+     camera move rather than a hard cut */
+  transform: scale(1.045);
+}
+
+.product-card .product-media img.stack-img.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* light sweep - animation (not transition) so it never reverses on
+   pointer-out; it simply disappears. */
+.product-card .product-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-150%, 0, 0);
+  background: linear-gradient(
+    100deg,
+    transparent 32%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 68%
+  );
+}
+
+/* cursor spotlight, fed by --card-mx/--card-my from ProductCard.js.
+   Falls back to a soft centred glow when JS is not driving it. */
+.product-card .product-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: radial-gradient(
+    circle 170px at var(--card-mx) var(--card-my),
+    rgb(var(--brand-rgb, 14 43 27) / 0.16),
+    transparent 72%
+  );
+}
+
+/* --- quick actions: staggered spring reveal --------------------------- */
+.product-card .product-card-actions {
+  transform: translate3d(0, calc(100% + 1rem), 0);
+  transition: opacity 0.28s ease, transform 0.52s var(--card-spring);
+}
+
+.product-card .product-card-action {
+  transform: translate3d(0, 12px, 0);
+  transition:
+    transform 0.48s var(--card-spring),
+    box-shadow 0.24s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+/* Buy Now leads, Add to Cart follows - reads as choreography rather
+   than two buttons arriving at once */
+.product-card .product-card-action:nth-child(1) {
+  transition-delay: 0.04s;
+}
+
+.product-card .product-card-action:nth-child(2) {
+  transition-delay: 0.11s;
+}
+
+/* --- supporting micro-motion ------------------------------------------ */
+.product-card .product-tags .badge {
+  transition: transform 0.42s var(--card-spring), box-shadow 0.3s ease;
+}
+
+.product-card .swatch {
+  transition: transform 0.38s var(--card-spring), box-shadow 0.24s ease;
+}
+
+.product-card .swatch:nth-child(1) { transition-delay: 0.03s; }
+.product-card .swatch:nth-child(2) { transition-delay: 0.07s; }
+.product-card .swatch:nth-child(3) { transition-delay: 0.11s; }
+.product-card .swatch:nth-child(4) { transition-delay: 0.15s; }
+.product-card .swatch:nth-child(5) { transition-delay: 0.19s; }
+.product-card .swatch:nth-child(6) { transition-delay: 0.23s; }
+
+.product-card .product-title a {
+  transition: color 0.24s ease;
+}
+
+/* =====================================================================
+   THE CHOREOGRAPHY
+   0ms   card lifts, ring fades in
+   0ms   image starts its 900ms drift zoom, 2nd image begins to settle in
+   50ms  light sweep crosses the frame once
+   40ms  Buy Now arrives  ->  110ms Add to Cart follows
+   -     badge lifts, swatches rise in sequence, title warms to brand
+   ===================================================================== */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover,
+  .product-card:focus-within {
+    transform: translate3d(0, var(--card-lift), 0);
+    border-color: transparent;
+    /* keeps the lifted card's shadow above its neighbours in the grid */
+    z-index: 3;
+    box-shadow:
+      0 27px 52px -22px rgb(16 24 20 / 0.3),
+      0 12px 22px -14px rgb(16 24 20 / 0.16),
+      0 0 0 1px rgb(var(--brand-rgb, 14 43 27) / 0.5);
+  }
+
+  .product-card:hover .product-media img,
+  .product-card:focus-within .product-media img {
+    transform: scale(1.055);
+  }
+
+  /* the active photo drifts in and settles while the gallery cycles */
+  .product-card:hover .product-media img.stack-img.is-active,
+  .product-card:focus-within .product-media img.stack-img.is-active {
+    transform: scale(1.055);
+  }
+
+  .product-card:hover .product-media::after,
+  .product-card:focus-within .product-media::after {
+    animation: product-card-sheen 0.95s var(--card-soft) 0.05s both;
+  }
+
+  .product-card:hover .product-media::before,
+  .product-card:focus-within .product-media::before {
+    opacity: 1;
+  }
+
+  .product-card:hover .product-card-actions,
+  .product-card:focus-within .product-card-actions {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    pointer-events: auto;
+  }
+
+  .product-card:hover .product-card-action,
+  .product-card:focus-within .product-card-action {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .product-card:hover .product-tags .badge,
+  .product-card:focus-within .product-tags .badge {
+    transform: translate3d(0, -2px, 0);
+    box-shadow: 0 5px 14px rgb(16 24 20 / 0.18);
+  }
+
+  .product-card:hover .swatch,
+  .product-card:focus-within .swatch {
+    transform: translate3d(0, -2px, 0);
+  }
+
+  .product-card:hover .product-title a,
+  .product-card:focus-within .product-title a {
+    color: var(--brand);
+  }
+}
+
+@keyframes product-card-sheen {
+  0% {
+    opacity: 0;
+    transform: translate3d(-150%, 0, 0);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(150%, 0, 0);
+  }
+}
