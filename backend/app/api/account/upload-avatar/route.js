@@ -1,6 +1,6 @@
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
 const MAX_SIZE = 2 * 1024 * 1024;

@@ -43,25 +43,36 @@ export default function CategoriesPage() {
   const { data, loading, error, reload } = useAsync(() => api.get("api/categories", { auth: false }).then(categoryRowsFrom), []);
   const flat = useMemo(() => (data ? buildFlat(data) : []), [data]);
 
-  const open = (row) => {
+  /**
+   * Editing re-reads the single category (GET /api/categories/:id, public) so a stale list row can
+   * never overwrite newer values; the list row is used as the fallback when the call fails.
+   */
+  const open = async (row) => {
     setErrors({});
     if (!row) {
       setEditing({});
       setForm(blank);
       return;
     }
-    setEditing(row);
+    let fresh = row;
+    try {
+      const body = await api.get(`api/categories/${row.id}`, { auth: false });
+      if (body?.data) fresh = { ...row, ...body.data };
+    } catch {
+      /* keep the row from the list */
+    }
+    setEditing(fresh);
     setForm({
-      id: row.id,
-      name: row.name || "",
-      slug: row.slug || "",
+      id: fresh.id,
+      name: fresh.name || "",
+      slug: fresh.slug || "",
       slugTouched: true,
-      description: row.description || "",
-      parentId: row.parentId ?? row.parent_id ?? "",
-      displayPriority: row.displayPriority ?? 0,
-      showOnHomepage: Boolean(row.showOnHomepage),
-      stockTracking: Boolean(row.stockTracking),
-      sizeGuideType: row.sizeGuideType || "NONE",
+      description: fresh.description || "",
+      parentId: fresh.parentId ?? fresh.parent_id ?? "",
+      displayPriority: fresh.displayPriority ?? 0,
+      showOnHomepage: Boolean(fresh.showOnHomepage),
+      stockTracking: Boolean(fresh.stockTracking),
+      sizeGuideType: fresh.sizeGuideType || "NONE",
     });
   };
 

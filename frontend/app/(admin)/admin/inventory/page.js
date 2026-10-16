@@ -5,7 +5,7 @@ import { useState } from "react";
 import { FiBox, FiAlertTriangle, FiLayers, FiSearch } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
 import { Badge, EmptyState, ErrorState, Input, Pagination, Select, Skeleton, Stat } from "@/components/ui";
-import { api, listOf } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
 const FILTERS = [
@@ -27,7 +27,17 @@ export default function InventoryPage() {
     const params = { filter, page, per_page: 20 };
     if (search.trim()) params.search = search.trim();
     const body = await api.get("api/admin/inventory/variants", { params });
-    return { rows: listOf(body), meta: body.meta || body };
+    // The endpoint returns { message, data: { current_page, data: [...], total, total_pages, ... } },
+    // i.e. the pagination object wraps the rows a second time.
+    const pagination = body?.data || {};
+    return {
+      rows: Array.isArray(pagination.data) ? pagination.data : [],
+      meta: {
+        current_page: pagination.current_page,
+        total_pages: pagination.total_pages,
+        total: pagination.total,
+      },
+    };
   }, [filter, page, search]);
 
   const s = summary.data;

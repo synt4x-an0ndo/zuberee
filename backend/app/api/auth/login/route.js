@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { cookies } from "next/headers";
 import {
     mergeGuestCart,

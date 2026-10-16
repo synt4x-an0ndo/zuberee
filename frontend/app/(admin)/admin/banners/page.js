@@ -22,10 +22,26 @@ export default function BannersPage() {
   const [failedImages, setFailedImages] = useState({});
   const { data, loading, error: loadError, reload } = useAsync(() => api.get("api/banners", { auth: false }).then(listOf), []);
 
-  const open = (row) => {
+  /**
+   * Editing re-reads the single banner (GET /api/banners/:id, public) so the form always shows the
+   * stored values; the list row is the fallback when the call fails.
+   */
+  const open = async (row) => {
     setFormError("");
-    setEditing(row || {});
-    setForm(row ? { ...EMPTY, id: row.id, link: row.link || "", display_priority: row.display_priority ?? 0, is_active: row.is_active !== false, existing: imgUrl(row.image) } : EMPTY);
+    if (!row) {
+      setEditing({});
+      setForm(EMPTY);
+      return;
+    }
+    let fresh = row;
+    try {
+      const body = await api.get(`api/banners/${row.id}`, { auth: false });
+      if (body?.data) fresh = { ...row, ...body.data };
+    } catch {
+      /* keep the row from the list */
+    }
+    setEditing(fresh);
+    setForm({ ...EMPTY, id: fresh.id, link: fresh.link || "", display_priority: fresh.display_priority ?? 0, is_active: fresh.is_active !== false, existing: imgUrl(fresh.image) });
   };
 
   const pickFile = (file) => {
@@ -50,10 +66,10 @@ export default function BannersPage() {
     data.append("link", form.link.trim());
     data.append("display_priority", String(Number(form.display_priority) || 0));
     data.append("is_active", String(form.is_active));
-    if (form.id) data.append("_method", "PUT");
     setBusy(true);
     try {
-      if (form.id) await api.upload(`api/banners/${form.id}`, data);
+      // Update must use PUT — POST /api/banners/:id has no handler (405).
+      if (form.id) await api.upload(`api/banners/${form.id}`, data, { method: "PUT" });
       else await api.upload("api/banners", data);
       toast.success(form.id ? "Banner updated." : "Banner added.");
       setEditing(null);

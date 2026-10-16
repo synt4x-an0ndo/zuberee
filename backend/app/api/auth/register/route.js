@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 export async function POST(request) {

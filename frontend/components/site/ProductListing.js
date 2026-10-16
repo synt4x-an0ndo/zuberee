@@ -42,6 +42,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [suggest, setSuggest] = useState({ loading: false, items: [], error: "" });
   const requestRef = useRef(0);
   const lastLoadedRef = useRef({ key: "", page: 0 });
 
@@ -85,6 +86,41 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     const timer = setTimeout(() => update({ q: searchDraft.trim() }), 380);
     return () => clearTimeout(timer);
   }, [searchDraft, q, update]);
+
+  /**
+   * Instant suggestions while typing, from GET /api/product-search (public, unpaginated, title/sku/
+   * description match). The grid itself keeps using api/product-pagination, so this never duplicates
+   * the filtered query: it is skipped until two characters are typed, debounced, and dropped as soon
+   * as the suggestion matches the query already applied to the grid.
+   */
+  useEffect(() => {
+    const term = searchDraft.trim();
+    if (term.length < 2 || term === q) {
+      setSuggest((current) => (current.items.length || current.loading || current.error ? { loading: false, items: [], error: "" } : current));
+      return undefined;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      setSuggest((current) => ({ ...current, loading: true, error: "" }));
+      api
+        .get("api/product-search", { auth: false, params: { q: term } })
+        .then((response) => {
+          if (!alive) return;
+          const items = listOf(response)
+            .map((item) => ({ id: item?.id, title: item?.title || item?.name || "", price: item?.price }))
+            .filter((item) => item.id)
+            .slice(0, 5);
+          setSuggest({ loading: false, items, error: "" });
+        })
+        .catch((err) => alive && setSuggest({ loading: false, items: [], error: err?.message || "Search unavailable." }));
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [searchDraft, q]);
+
+  const showSuggestions = searchDraft.trim().length >= 2 && searchDraft.trim() !== q;
 
   const discoveredSizes = useMemo(
     () => products.flatMap((product) => product.sizes.map((item) => item.label)).filter(Boolean),
@@ -189,6 +225,26 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
             aria-label="Search products"
           />
         </form>
+        {showSuggestions && (
+          <div className="card" style={{ marginTop: 8, padding: "0.5rem 0.75rem" }} role="status" aria-live="polite">
+            {suggest.loading && <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Looking for matches…</p>}
+            {!suggest.loading && suggest.error && <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>{suggest.error}</p>}
+            {!suggest.loading && !suggest.error && suggest.items.length === 0 && (
+              <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>No products match “{searchDraft.trim()}”.</p>
+            )}
+            {!suggest.loading && !suggest.error && suggest.items.length > 0 && (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+                {suggest.items.map((item) => (
+                  <li key={item.id}>
+                    <Link href={`/product-page/${item.id}`} className="muted" style={{ display: "block", padding: "4px 0", fontSize: "0.9rem" }}>
+                      {item.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {showCategoryFilter && !fixedCategory && roots.length > 0 && (

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { sendPasswordResetEmail } from "../../../../lib/mailer.js";
 
 const TOKEN_EXPIRY_MINUTES = 30;

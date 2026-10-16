@@ -257,3 +257,166 @@ SECTION C — CATEGORY APIs
 [COMPLETED] Delete Category   DELETE /api/categories/:id (admin)
   Frontend: components/admin/CategoryForm.js, app/(admin)/admin/category/*, context/SiteContext.js,
             shop/[category] pages, ProductForm (category dropdown)
+updated
+================================================================================
+UPDATE LOG — APIs ADDED / COMPLETED AFTER THE REPORT ABOVE
+Date: 2026-10-16  (Zuberee storefront + admin work; verified live on localhost:3001)
+Status tags: [ADDED] = brand-new backend route written for that feature,
+             [COMPLETED] = existed, now fully wired in the frontend,
+             [EXTENDED] = existing route gained new fields/behaviour.
+================================================================================
+
+--------------------------------------------------------------------------------
+K. CHAT APIs (customer <-> admin + AI assistant) — [ADDED]
+--------------------------------------------------------------------------------
+[ADDED] Start/Resume Admin Chat  POST /api/chat/admin-chat        (JWT customer)
+        Opens (or resumes) the customer's current open conversation and
+        returns the full thread; admin messages are marked read for the user.
+        Frontend: components/site/ChatWidget.js ("Chat with Admin")
+
+[ADDED] Chat Badge Summary       GET  /api/chat/admin-chat        (JWT customer)
+        -> { conversationId, status, unread } — drives the unread badge on
+        the storefront chat button (polled ~25s). Frontend: ChatWidget.js
+
+[ADDED] Poll Admin Chat          GET  /api/chat/admin-chat/:id    (JWT, owner)
+        Returns thread; marks admin messages read.
+[ADDED] Send Admin-Chat Message  POST /api/chat/admin-chat/:id    (JWT, owner)
+        field: body (<=2000 chars)
+[ADDED] End Admin Chat           DELETE /api/chat/admin-chat/:id  (JWT, owner)
+        Ends the chat; history is KEPT (status -> ended).
+
+[ADDED] List Chats (admin)       GET  /api/admin/chat/conversations      (ADMIN)
+        All conversations, latest activity first, with customer name/email,
+        last message and unread count. Frontend: admin/chat page (polls 5s)
+[ADDED] Get Chat (admin)         GET  /api/admin/chat/conversations/:id  (ADMIN)
+        Full thread; marks customer messages read (polls 3s).
+[ADDED] Reply To Chat (admin)    POST /api/admin/chat/conversations/:id  (ADMIN)
+        field: body. Replying to an ENDED chat REOPENS it; the customer sees
+        the reply with an unread badge.
+[ADDED] End Chat (admin)         DELETE /api/admin/chat/conversations/:id (ADMIN)
+        Ends for both sides; history kept.
+
+[ADDED] AI Shopping Assistant    POST /api/chat/ai                (JWT customer)
+        fields: message (<=1000), history (<=8 msgs)
+        -> { reply, products[] }  Gemini (cheapest-first Flash-Lite chain,
+        key from Site Settings "Chat & AI"). AI chats are NEVER stored.
+
+        Persistence rule: admin chats live in DB tables chat_conversations /
+        chat_messages and are AUTO-DELETED 7 days after creation
+        (lib/chat-retention.js sweep, throttled 1/min). AI chats: no log.
+
+--------------------------------------------------------------------------------
+L. ADMIN IMAGE UPLOAD — [ADDED]
+--------------------------------------------------------------------------------
+[ADDED] Upload Image             POST /api/admin/upload-image     (ADMIN)
+        multipart field: image -> { url } ; used by all admin image fields
+        with the Upload-OR-URL control (About Us, logos, product photos).
+
+--------------------------------------------------------------------------------
+M. SETTINGS EXTENSIONS — [EXTENDED]
+--------------------------------------------------------------------------------
+[EXTENDED] Site Settings         GET/PUT /api/admin/site-settings  (ADMIN)
+        New over time: site_name, favicon_path, favicon_zoom, logo_sizes
+        (per-placement), gemini_api_key_set + write-only geminiApiKey
+        (never returned). Public read: GET /api/site-settings.
+[EXTENDED] Footer Settings       PUT /api/admin/footer-settings    (ADMIN)
+        Upsert (creates the row when missing) for logo/company fields.
+
+--------------------------------------------------------------------------------
+N. CART — [COMPLETED in UI]
+--------------------------------------------------------------------------------
+[COMPLETED] Clear Cart           DELETE /api/cart
+        Already listed in Section F; now exposed in the cart DRAWER too
+        ("Clear all" next to the drawer title, with confirm dialog), and the
+        cart page button was restyled (outline, "Clear all").
+
+--------------------------------------------------------------------------------
+O. CORRECTIONS TO SECTION J (routes that exist today)
+--------------------------------------------------------------------------------
+Several "NO ROUTE" entries now exist under /api/admin/* — e.g.
+GET/PUT /api/admin/fraud-checker/settings, POST /api/admin/fraud-checker/check,
+GET /api/admin/fraud-checker/plan, PUT /api/admin/admin/facebook-settings
+(+ public GET /api/facebook-settings), GET /api/admin/customer-profiles,
+GET /api/admin/customer-leaderboard (+ PATCH .../:key/badge),
+GET /api/admin/customers/statistics, PUT /api/admin/about-us
+(+ public GET /api/about-us). The complete list below is authoritative.
+
+================================================================================
+COMPLETE BACKEND API INVENTORY (auto-generated from backend/app/api, 71 routes)
+Base URL: http://localhost:3001   Auth: Authorization: Bearer <JWT> unless public
+================================================================================
+POST                   /api/abandoned-checkouts
+GET                    /api/about-us
+POST, GET              /api/account/addresses
+PUT, DELETE            /api/account/addresses/:id
+PUT                    /api/account/change-password
+GET                    /api/account/me
+GET                    /api/account/orders
+PUT                    /api/account/profile
+POST                   /api/account/upload-avatar
+GET                    /api/admin/abandoned-checkouts
+PUT                    /api/admin/about-us
+PUT                    /api/admin/admin/facebook-settings
+GET                    /api/admin/chat/conversations
+GET, POST, DELETE      /api/admin/chat/conversations/:id
+GET                    /api/admin/customer-leaderboard
+PATCH                  /api/admin/customer-leaderboard/:key/badge
+GET                    /api/admin/customer-profiles
+GET                    /api/admin/customers/statistics
+GET                    /api/admin/dashboard/summary
+PUT                    /api/admin/footer-settings
+PUT                    /api/admin/footer-settings/:id
+POST                   /api/admin/fraud-checker/check
+GET                    /api/admin/fraud-checker/plan
+GET, PUT               /api/admin/fraud-checker/settings
+GET                    /api/admin/inventory/summary
+GET                    /api/admin/inventory/variants
+GET, POST              /api/admin/orders
+GET, PATCH, DELETE     /api/admin/orders/:id
+GET                    /api/admin/orders/districts
+GET                    /api/admin/orders/product-options
+GET                    /api/admin/sales-report
+GET, POST              /api/admin/shipping-costs
+GET                    /api/admin/shipping-costs-latest
+PUT, DELETE            /api/admin/shipping-costs/:id
+GET, PUT               /api/admin/site-settings
+GET, POST              /api/admin/sizes
+PUT, DELETE            /api/admin/sizes/:id
+POST                   /api/admin/upload-image
+POST                   /api/auth/forgot-password
+POST                   /api/auth/login
+POST                   /api/auth/logout
+GET                    /api/auth/me
+POST                   /api/auth/register
+POST                   /api/auth/reset-password
+GET, POST              /api/banners
+GET, PUT, DELETE       /api/banners/:id
+GET                    /api/banners/:id/image
+GET, POST, DELETE      /api/cart
+PUT, DELETE            /api/cart/:id
+POST, GET              /api/categories
+GET, PUT, DELETE       /api/categories/:id
+POST, GET              /api/chat/admin-chat
+GET, POST, DELETE      /api/chat/admin-chat/:id
+POST                   /api/chat/ai
+GET                    /api/facebook-settings
+GET                    /api/footer-settings
+GET                    /api/footer-settings/:id
+GET                    /api/order-districts
+GET                    /api/order-product-options
+POST                   /api/orders
+GET                    /api/orders/:id
+GET                    /api/product-pagination
+GET                    /api/product-search
+GET, POST              /api/products
+GET, PUT, DELETE       /api/products/:id
+POST                   /api/products/:id/images
+GET                    /api/shipping-costs
+GET                    /api/site-settings
+GET                    /api/sizes
+PUT                    /api/social-links
+GET                    /api/social-links-first
+
+================================================================================
+END OF UPDATE LOG
+================================================================================

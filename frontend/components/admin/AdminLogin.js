@@ -13,7 +13,7 @@ export default function AdminLogin() {
   const router = useRouter();
   const { login, logout } = useAuth();
   const { toast } = useFeedback();
-  const { siteName, company } = useSite();
+  const { siteName, company, logoSizes } = useSite();
   const [form, setForm] = useState({ email: "", password: "" });
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
@@ -44,7 +44,7 @@ export default function AdminLogin() {
     <div className="admin-login">
       <div className="admin-login-card anim-scale-in">
         <div className="admin-login-brand">
-          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={54} priority /> : <strong style={{ fontSize: "1.5rem" }}>{siteName || "Store"}</strong>}
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={logoSizes.adminLogin.width} height={logoSizes.adminLogin.height} style={{ width: logoSizes.adminLogin.width, height: logoSizes.adminLogin.height, objectFit: "contain" }} priority /> : <strong style={{ fontSize: "1.5rem" }}>{siteName || "Store"}</strong>}
           <h1>Admin Login</h1>
           <span className="admin-login-rule" aria-hidden="true" />
         </div>

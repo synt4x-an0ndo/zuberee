@@ -1,7 +1,11 @@
-import prisma from "../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 
 function formatSiteSettings(s) {
     return {
+        site_name: s.siteName,
+        favicon_path: s.faviconPath ?? null,
+        favicon_zoom: s.faviconZoom ?? 85,
+        logo_sizes: s.logoSizes ?? null,
         primary_color: s.primaryColor,
         inventory_enforcement_enabled:
         s.inventoryEnforcementEnabled,

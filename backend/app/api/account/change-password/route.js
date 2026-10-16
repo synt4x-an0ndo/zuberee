@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
 export async function PUT(request) {

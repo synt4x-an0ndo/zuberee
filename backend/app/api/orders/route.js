@@ -1,4 +1,4 @@
-import prisma from "../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { cookies } from "next/headers";
 import { CART_COOKIE_NAME } from "@/lib/cart.js";

@@ -26,7 +26,7 @@ const tk = (value) => `৳${invoiceMoney(value)}`;
 export default function AdminOrderInvoicePage() {
   const { orderId } = useParams();
   const { toast } = useFeedback();
-  const { siteName, primaryColor, company } = useSite();
+  const { siteName, primaryColor, company, logoSizes } = useSite();
   const { data: order, loading, error, reload } = useAsync(() => api.get(`api/admin/orders/${orderId}`).then((b) => b.data), [orderId]);
   const [downloading, setDownloading] = useState(false);
 
@@ -84,7 +84,7 @@ export default function AdminOrderInvoicePage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", alignItems: "start" }}>
             <div style={{ display: "grid", gap: 10 }}>
               {company.logo ? (
-                <Img src={company.logo} alt={store} width={220} height={54} className="invoice-logo-img" priority />
+                <Img src={company.logo} alt={store} width={logoSizes.invoice.width} height={logoSizes.invoice.height} style={{ width: logoSizes.invoice.width, height: logoSizes.invoice.height, objectFit: "contain" }} className="invoice-logo-img" priority />
               ) : (
                 <span style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "2rem", fontWeight: 700, letterSpacing: "0.06em", color: "var(--brand, #b4532a)", textTransform: "uppercase", lineHeight: 1 }}>
                   {store}

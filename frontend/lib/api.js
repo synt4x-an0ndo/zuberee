@@ -102,11 +102,28 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Some backend routes (dashboard/summary, inventory/*, sizes, admin/sizes) answer with
+ * `{ message: "failed", data: "<the real explanation>" }` instead of the usual
+ * `{ success: false, message: "<the real explanation>" }`. If the client trusted `message`
+ * blindly the UI would only ever show the word "failed", so those placeholder tokens are
+ * skipped in favour of the specific text the response also carries.
+ */
+const PLACEHOLDER_MESSAGES = new Set(["failed", "fail", "failure", "error", "unsuccessful", "false"]);
+
+function isPlaceholder(value) {
+  return PLACEHOLDER_MESSAGES.has(String(value).trim().toLowerCase());
+}
+
 function errorMessage(status, data) {
   if (data && typeof data === "object") {
-    if (typeof data.message === "string" && data.message) return data.message;
-    if (typeof data.error === "string" && data.error) return data.error;
-    if (typeof data.data === "string" && data.data) return data.data;
+    const candidates = [data.message, data.error, data.data, data.detail].filter(
+      (value) => typeof value === "string" && value.trim()
+    );
+    const specific = candidates.find((value) => !isPlaceholder(value));
+    if (specific) return specific.trim();
+    // Every candidate was a placeholder token (e.g. { message: "failed", data: null }) — fall
+    // through to the status-based wording below rather than showing the user "failed".
     if (data.errors && typeof data.errors === "object") {
       const flat = Object.values(data.errors).flat().filter(Boolean).join(" ");
       if (flat) return flat;
@@ -184,6 +201,8 @@ export const api = {
   get: (path, opts) => request(path, { ...opts, method: "GET" }),
   post: (path, body, opts) => request(path, { ...opts, method: "POST", body }),
   put: (path, body, opts) => request(path, { ...opts, method: "PUT", body }),
+  /** PATCH routes in the backend: /api/admin/orders/:id, /api/admin/customer-leaderboard/:key/badge */
+  patch: (path, body, opts) => request(path, { ...opts, method: "PATCH", body }),
   delete: (path, opts) => request(path, { ...opts, method: "DELETE" }),
   upload: (path, formData, opts = {}) =>
     request(path, { ...opts, method: opts.method || "POST", body: formData }),

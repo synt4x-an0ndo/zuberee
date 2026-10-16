@@ -100,7 +100,8 @@ export default function MyOrdersPage() {
         <Pagination page={state.meta.current_page || page} totalPages={state.meta.total_pages} onChange={setPage} />
       )}
       <p className="muted" style={{ fontSize: "0.88rem" }}>
-        Need help with an order? <Link href="/return_policy" className="link-arrow">Read our return policy</Link>.
+        Need help with an order? <Link href="/track-order" className="link-arrow">Track it</Link> or{" "}
+        <Link href="/return_policy" className="link-arrow">read our return policy</Link>.
       </p>
     </div>
   );

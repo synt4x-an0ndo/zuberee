@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FiBox, FiGrid, FiImage, FiLayers, FiLogOut, FiMenu, FiPackage, FiSettings, FiShoppingBag, FiTag, FiTruck, FiX, FiBarChart2, FiExternalLink, FiUsers, FiUserCheck, FiFileText, FiSliders, FiLink, FiShield, FiActivity } from "react-icons/fi";
+import { FiActivity, FiBarChart2, FiBox, FiExternalLink, FiFileText, FiGrid, FiImage, FiLayers, FiLogOut, FiMenu, FiMessageCircle, FiPackage, FiSettings, FiShield, FiShoppingBag, FiTag, FiTruck, FiUserCheck, FiUsers, FiX } from "react-icons/fi";
 import Img from "@/components/Img";
 import { cx } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -27,6 +27,7 @@ const NAV = [
       { href: "/admin/orders", label: "Orders", icon: FiBox },
       { href: "/admin/sales", label: "Sales report", icon: FiBarChart2 },
       { href: "/admin/customers", label: "Customers", icon: FiUsers },
+      { href: "/admin/chat", label: "Live chat", icon: FiMessageCircle },
       { href: "/admin/customer_leaderboard", label: "Customer leaderboard", icon: FiUserCheck },
       { href: "/admin/incomplete_orders", label: "Incomplete orders", icon: FiFileText },
       { href: "/admin/shipping", label: "Shipping costs", icon: FiTruck },
@@ -52,8 +53,6 @@ const NAV = [
     items: [
       { href: "/admin/banners", label: "Banners", icon: FiImage },
       { href: "/admin/about_us", label: "About us", icon: FiFileText },
-      { href: "/admin/footerSettings", label: "Footer settings", icon: FiSliders },
-      { href: "/admin/socialLinks", label: "Social links", icon: FiLink },
       { href: "/admin/settings", label: "Settings & theme", icon: FiSettings },
       { href: "/admin/facebook_conversion_api", label: "Facebook conversion API", icon: FiActivity },
     ],
@@ -86,7 +85,7 @@ export default function AdminShell({ children }) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { toast } = useFeedback();
-  const { siteName, company } = useSite();
+  const { siteName, company, logoSizes } = useSite();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -132,7 +131,7 @@ export default function AdminShell({ children }) {
     <div className={cx("admin-shell", collapsed && "is-sidebar-collapsed")}>
       <aside className="admin-sidebar" aria-label="Admin navigation">
         <Link href="/admin" className="admin-brand" aria-label="Admin dashboard">
-          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={220} height={54} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={logoSizes.adminSidebar.width} height={logoSizes.adminSidebar.height} style={collapsed ? undefined : { width: logoSizes.adminSidebar.width, height: logoSizes.adminSidebar.height, objectFit: "contain" }} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
         </Link>
         <NavList pathname={pathname} />
         <div className="side-foot">
@@ -148,7 +147,7 @@ export default function AdminShell({ children }) {
       <div className={cx("admin-mobile-overlay", open && "is-open")} onClick={() => setOpen(false)} aria-hidden="true" />
       <aside className={cx("admin-mobile-drawer", open && "is-open")} aria-label="Admin navigation" aria-hidden={!open}>
         <div className="admin-mobile-head">
-          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={180} height={62} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
+          {company.logo ? <Img src={company.logo} alt={siteName || "Store logo"} width={86} height={48} priority /> : <span className="brand-name">{siteName || "Store"}</span>}
           <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close menu"><FiX aria-hidden="true" /></button>
         </div>
         <NavList pathname={pathname} onNavigate={() => setOpen(false)} />

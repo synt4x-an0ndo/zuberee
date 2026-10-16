@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiCamera, FiEdit2, FiMapPin, FiPlus, FiTrash2, FiUser } from "react-icons/fi";
 import Img from "@/components/Img";
 import PasswordInput from "@/components/PasswordInput";
@@ -107,11 +107,34 @@ function PersonalCard({ user, refresh, toast }) {
 }
 
 function AddressCard({ user, refresh, toast, confirm }) {
-  const addresses = user?.addresses || [];
+  /**
+   * The profile payload embeds addresses[], but GET /api/account/addresses returns the same rows on
+   * their own, so the list is kept in local state and reloaded from that endpoint after every change.
+   * (Falls back to a full profile refresh when the address call fails.)
+   */
+  const [addresses, setAddresses] = useState(user?.addresses || []);
   const [editing, setEditing] = useState(null); // null | { id?, ...fields }
   const [form, setForm] = useState(EMPTY_ADDRESS);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (Array.isArray(user?.addresses)) setAddresses(user.addresses);
+  }, [user]);
+
+  const loadAddresses = async () => {
+    try {
+      const body = await api.get("api/account/addresses");
+      const rows = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : null;
+      if (rows) {
+        setAddresses(rows);
+        return;
+      }
+    } catch {
+      /* fall through to the full profile refresh */
+    }
+    await refresh();
+  };
 
   const open = (address) => {
     setErrors({});
@@ -141,7 +164,7 @@ function AddressCard({ user, refresh, toast, confirm }) {
     try {
       if (editing?.id) await api.put(`api/account/addresses/${editing.id}`, body);
       else await api.post("api/account/addresses", body);
-      await refresh();
+      await loadAddresses();
       toast.success(editing?.id ? "Address updated." : "Address added.");
       setEditing(null);
     } catch (err) {
@@ -156,7 +179,7 @@ function AddressCard({ user, refresh, toast, confirm }) {
     if (!ok) return;
     try {
       await api.delete(`api/account/addresses/${address.id}`);
-      await refresh();
+      await loadAddresses();
       toast.success("Address removed.");
     } catch (err) {
       toast.error(err.message);

@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiImage, FiPlus, FiTrash2, FiUploadCloud, FiX } from "react-icons/fi";
 import Img from "@/components/Img";
+import { ImageUploadButton } from "@/components/admin/ImageUploadField";
 import { Button, Card, CardHeader, Field, Input, Select, Textarea, Toggle, cx } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
 import { useSite } from "@/context/SiteContext";
-import { api, listOf } from "@/lib/api";
+import { api, imgUrl, listOf } from "@/lib/api";
 
 const STATUS_OPTIONS = [
   { value: "in-stock", label: "In stock" },
@@ -69,6 +70,8 @@ export default function ProductForm({ mode, productId, initial }) {
   const [saving, setSaving] = useState(false);
   const [sizeMaster, setSizeMaster] = useState([]);
   const [newFiles, setNewFiles] = useState([]); // { file, preview }
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -169,10 +172,50 @@ export default function ProductForm({ mode, productId, initial }) {
     }
   };
 
-  const onFiles = (fileList) => {
+  const onFiles = async (fileList) => {
     const picked = Array.from(fileList || []).filter((f) => f.type.startsWith("image/") && f.size <= 5 * 1024 * 1024);
     if (picked.length < (fileList?.length || 0)) toast.info("Some files were skipped. Use images under 5 MB.");
+    if (!picked.length) return;
+
+    // Editing an existing product: upload immediately (POST /api/products/:id/images,
+    // the dedicated product-photo endpoint) and add the returned photos to the list.
+    // Creating a product has no id yet, so files stay queued and `uploadFiles`
+    // sends them right after the product is created, as before.
+    if (mode === "edit" && productId) {
+      setUploadingPhotos(true);
+      let uploaded = 0;
+      const failed = [];
+      for (const file of picked) {
+        try {
+          const data = new FormData();
+          data.append("image", file);
+          const body = await api.upload(`api/products/${productId}/images`, data);
+          const path = body?.data?.image || body?.data?.imageUrl || "";
+          if (!path) throw new Error("No image path was returned.");
+          setList("images", (list) => [...list, { id: body?.data?.id ?? null, path, url: imgUrl(path) }]);
+          uploaded += 1;
+        } catch {
+          failed.push(file);
+        }
+      }
+      setUploadingPhotos(false);
+      if (uploaded) toast.success(uploaded === 1 ? "Photo uploaded." : `${uploaded} photos uploaded.`);
+      if (failed.length) {
+        setNewFiles((prev) => [...prev, ...failed.map((file) => ({ file, preview: URL.createObjectURL(file) }))]);
+        toast.info("Some photos could not upload now — they are queued and will upload when you save.");
+      }
+      return;
+    }
+
     setNewFiles((prev) => [...prev, ...picked.map((file) => ({ file, preview: URL.createObjectURL(file) }))]);
+  };
+
+  const addPhotoByUrl = () => {
+    const url = photoUrl.trim();
+    if (!url) return;
+    setList("images", (list) => [...list, { path: url, url: imgUrl(url) }]);
+    setPhotoUrl("");
+    toast.info(mode === "edit" ? "Photo added — it will be attached when you save." : "Photo added — it will be saved with the product.");
   };
 
   const removeExisting = async (img) => {
@@ -253,9 +296,27 @@ export default function ProductForm({ mode, productId, initial }) {
               ))}
             </div>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
-            <button type="button" className="dropzone" onClick={() => fileRef.current?.click()}>
-              <FiUploadCloud aria-hidden="true" /> <span>Add photos</span> <small>JPG, PNG or WebP, up to 5 MB each</small>
+            <button type="button" className="dropzone" onClick={() => fileRef.current?.click()} disabled={uploadingPhotos}>
+              <FiUploadCloud aria-hidden="true" /> <span>{uploadingPhotos ? "Uploading…" : "Add photos"}</span>{" "}
+              <small>
+                {mode === "edit"
+                  ? "JPG, PNG, WebP or GIF, up to 5 MB each — uploaded immediately"
+                  : "JPG, PNG, WebP or GIF, up to 5 MB each — uploaded as soon as the product is created"}
+              </small>
             </button>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <Input
+                aria-label="Add photo by URL"
+                placeholder="…or paste a photo URL / path"
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPhotoByUrl(); } }}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={addPhotoByUrl} disabled={!photoUrl.trim()}>
+                Add by URL
+              </Button>
+            </div>
           </Card>
 
           <Card>
@@ -297,7 +358,11 @@ export default function ProductForm({ mode, productId, initial }) {
                   <div key={i} className="color-row">
                     <input type="color" aria-label="Colour swatch" value={/^#[0-9a-f]{6}$/i.test(c.code) ? c.code : "#000000"} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, code: e.target.value } : x)))} />
                     <Input aria-label="Colour name" placeholder="Name" value={c.name} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-                    <Input aria-label="Colour image link" placeholder="Image path (optional)" value={c.image} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, image: e.target.value } : x)))} />
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
+                      {c.image && imgUrl(c.image) ? <Img src={imgUrl(c.image)} alt="" width={38} height={38} style={{ borderRadius: 8, objectFit: "cover", flexShrink: 0 }} /> : null}
+                      <Input aria-label="Colour image link" placeholder="Image URL / path (optional)" value={c.image} onChange={(e) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, image: e.target.value } : x)))} style={{ flex: 1, minWidth: 0 }} />
+                      <ImageUploadButton folder="colors" label={`Upload image for colour ${c.name || i + 1}`} onUploaded={(stored) => setList("colors", (l) => l.map((x, j) => (j === i ? { ...x, image: stored } : x)))} />
+                    </div>
                     <button type="button" className="icon-btn" aria-label="Remove colour" onClick={() => setList("colors", (l) => l.filter((_, j) => j !== i))}><FiTrash2 aria-hidden="true" /></button>
                   </div>
                 ))}

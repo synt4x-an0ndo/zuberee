@@ -39,7 +39,7 @@ function SearchForm({ className, placeholder = "Search products" }) {
 
 export default function Header() {
   const pathname = usePathname() || "/";
-  const { siteName, company, categories, loading } = useSite();
+  const { siteName, company, categories, loading, logoSizes } = useSite();
   const { isAuthenticated, user } = useAuth();
   const { count, openDrawer } = useCart();
   const [scrolled, setScrolled] = useState(false);
@@ -149,7 +149,7 @@ export default function Header() {
 
           <Link href="/" className="brand" aria-label={siteName || "Home"}>
             {logo ? (
-              <Img src={logo} alt={siteName || "Logo"} width={180} height={44} priority />
+              <Img src={logo} alt={siteName || "Logo"} width={logoSizes.header.width} height={logoSizes.header.height} style={{ width: logoSizes.header.width, height: logoSizes.header.height, objectFit: "contain" }} priority />
             ) : siteName ? (
               <span className="brand-name">{siteName}</span>
             ) : loading ? (
