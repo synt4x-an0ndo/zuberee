@@ -1,4 +1,4 @@
-import prisma from "../../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "../../../../../directory/auth/auth.js";
 
 const DEFAULT_LOW_STOCK_THRESHOLD = 3;

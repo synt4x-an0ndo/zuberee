@@ -2,20 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { FiDownload, FiEdit2, FiPrinter, FiSearch, FiTag, FiTruck, FiX } from "react-icons/fi";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiDownload, FiEdit2, FiPlus, FiPrinter, FiSearch, FiTag, FiTrash2, FiTruck, FiX } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
 import { Badge, Button, EmptyState, ErrorState, Input, Pagination, Select, Skeleton } from "@/components/ui";
+import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
+import { badgePath } from "@/lib/customers";
 import { ORDER_STATUS_OPTIONS, formatDateTime, formatOrderNumber, orderStatusMeta } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
 const EMPTY = { search: "", status: "", district: "", from: "", to: "" };
 const BADGE_OPTIONS = ["VIP", "Repeat Customer", "Priority", "High Value"];
 
+/** key accepted by PATCH /api/admin/customer-leaderboard/:key/badge */
 function customerKey(order) {
-  return String(order?.user_id ?? order?.phone ?? order?.id ?? "");
+  const userId = order?.user_id ?? order?.userId;
+  if (userId !== undefined && userId !== null && userId !== "") return `user:${userId}`;
+  const phone = String(order?.phone ?? "").trim();
+  if (phone) return `guest:${phone}`;
+  return "";
 }
 
 function apiBadgeValue(order) {
@@ -26,8 +33,10 @@ function apiBadgeValue(order) {
 
 export default function AdminOrdersPage() {
   const router = useRouter();
+  const { toast, confirm } = useFeedback();
   const [filters, setFilters] = useState(EMPTY);
   const [applied, setApplied] = useState(EMPTY);
+  const [liveDistricts, setLiveDistricts] = useState([]);
   const [page, setPage] = useState(1);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -36,12 +45,46 @@ export default function AdminOrdersPage() {
   const [activeOrder, setActiveOrder] = useState(null);
   const [badgeDraft, setBadgeDraft] = useState("");
   const [badgeAssignments, setBadgeAssignments] = useState({});
+  const [badgeSaving, setBadgeSaving] = useState(false);
+  const [courierResult, setCourierResult] = useState(null);
+  const [courierError, setCourierError] = useState("");
+  const [courierChecking, setCourierChecking] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const selectAllRef = useRef(null);
 
   useEffect(() => {
     const t = setTimeout(() => setApplied((prev) => ({ ...prev, search: filters.search })), 350);
     return () => clearTimeout(t);
   }, [filters.search]);
+
+  /**
+   * District filter options come from the orders that actually exist
+   * (GET /api/admin/orders/districts). Falls back to the full BD district list
+   * while the request is in flight or if it fails, so the filter never goes blank.
+   */
+  useEffect(() => {
+    let alive = true;
+    api
+      .get("api/admin/orders/districts")
+      .then((body) => {
+        if (!alive) return;
+        const list = Array.isArray(body?.data) ? body.data : [];
+        setLiveDistricts(list.filter((d) => typeof d === "string" && d.trim()));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const districtOptions = useMemo(() => {
+    if (!liveDistricts.length) return DISTRICTS;
+    const known = new Map(DISTRICTS.map((d) => [d.value, d.label]));
+    return liveDistricts.map((value) => ({
+      value,
+      label: known.get(value) || value.replace(/\b\w/g, (c) => c.toUpperCase()),
+    }));
+  }, [liveDistricts]);
 
   const { data, loading, error, reload } = useAsync(async () => {
     const params = { page, per_page: 15 };
@@ -132,8 +175,30 @@ export default function AdminOrdersPage() {
   };
 
   const openCourierDialog = (order) => {
+    setCourierResult(null);
+    setCourierError("");
     setActiveOrder(order);
     setActiveDialog("courier");
+  };
+
+  /** POST /api/admin/fraud-checker/check — live courier history for the order's phone number. */
+  const runCourierCheck = async () => {
+    const phone = String(activeOrder?.phone ?? "").trim();
+    if (!phone) {
+      setCourierError("This order has no phone number to check.");
+      return;
+    }
+    setCourierChecking(true);
+    setCourierError("");
+    setCourierResult(null);
+    try {
+      const body = await api.post("api/admin/fraud-checker/check", { phone });
+      setCourierResult(body.data ?? body);
+    } catch (err) {
+      setCourierError(err.message);
+    } finally {
+      setCourierChecking(false);
+    }
   };
 
   const closeActionDialog = () => {
@@ -141,10 +206,50 @@ export default function AdminOrdersPage() {
     setActiveOrder(null);
   };
 
-  const saveBadge = () => {
+  const saveBadge = async () => {
     if (!activeOrder) return;
-    setBadgeAssignments((current) => ({ ...current, [customerKey(activeOrder)]: badgeDraft }));
-    closeActionDialog();
+    const key = customerKey(activeOrder);
+    if (!key) {
+      toast.error("This order has neither a linked account nor a phone number, so a badge cannot be assigned.");
+      return;
+    }
+    setBadgeSaving(true);
+    try {
+      await api.patch(badgePath(key), { badge: badgeDraft ? badgeDraft : null });
+      setBadgeAssignments((current) => ({ ...current, [key]: badgeDraft }));
+      toast.success(`Badge saved for ${activeOrder.name || activeOrder.phone || "customer"}.`);
+      closeActionDialog();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBadgeSaving(false);
+    }
+  };
+
+  /**
+   * DELETE /api/admin/orders/:id — the backend removes the order and its items, so this is
+   * always confirmed first and the list is reloaded afterwards. The route answers
+   * {"success":false,"message":"Order not found."} when the row is already gone.
+   */
+  const deleteOrder = async (order) => {
+    const ok = await confirm({
+      title: "Delete this order?",
+      message: `${formatOrderNumber(order)} for ${order.name || "Guest"} and all of its items will be removed permanently. This cannot be undone.`,
+      confirmText: "Delete order",
+      danger: true,
+    });
+    if (!ok) return;
+    setDeletingId(order.id);
+    try {
+      await api.delete(`api/admin/orders/${order.id}`);
+      setSelectedOrders((current) => current.filter((selected) => String(selected.id) !== String(order.id)));
+      toast.success(`${formatOrderNumber(order)} deleted.`);
+      reload();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const downloadCsv = async () => {
@@ -224,6 +329,10 @@ export default function AdminOrdersPage() {
           <span className="muted">{selectedOrders.length ? "Only selected orders will be exported." : "With no selection, exports every order matching the current filters."}</span>
         </div>
         <div className="orders-export-actions">
+          {/* Manual order entry: POST /api/admin/orders (the create route had no screen before). */}
+          <Link href="/admin/orders/new" className="btn btn-primary btn-sm">
+            <FiPlus aria-hidden="true" /> New order
+          </Link>
           {selectedOrders.length > 0 && <Button variant="ghost" onClick={() => setSelectedOrders([])}>Clear selection</Button>}
           <Button variant="primary" onClick={downloadCsv} disabled={exporting || (!selectedOrders.length && !visibleOrders.length)}>
             <FiDownload aria-hidden="true" /> {exporting ? "Preparing CSV..." : "Download CSV"}
@@ -238,7 +347,7 @@ export default function AdminOrdersPage() {
           <Input aria-label="Search orders" placeholder="Search by name, phone or order number" value={filters.search} onChange={set("search")} style={{ paddingLeft: 36 }} />
         </div>
         <Select aria-label="Status" value={filters.status} onChange={set("status")} placeholder="All statuses" options={ORDER_STATUS_OPTIONS} style={{ flex: "0 1 170px" }} />
-        <Select aria-label="District" value={filters.district} onChange={set("district")} placeholder="All districts" options={DISTRICTS} style={{ flex: "0 1 170px" }} />
+        <Select aria-label="District" value={filters.district} onChange={set("district")} placeholder="All districts" options={districtOptions} style={{ flex: "0 1 170px" }} />
         <Input aria-label="From date" type="date" value={filters.from} onChange={set("from")} style={{ flex: "0 1 160px" }} />
         <Input aria-label="To date" type="date" value={filters.to} onChange={set("to")} style={{ flex: "0 1 160px" }} />
         <Button variant="ghost" onClick={reset}>Clear</Button>
@@ -306,6 +415,17 @@ export default function AdminOrdersPage() {
                         <button type="button" className="order-action-button order-action-courier" aria-label={`Open courier profile for ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openCourierDialog(o); }}>
                           <FiTruck aria-hidden="true" /> <span>Courier</span>
                         </button>
+                        <button
+                          type="button"
+                          className="order-action-button"
+                          style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                          aria-label={`Delete ${formatOrderNumber(o)}`}
+                          title="Delete order"
+                          disabled={deletingId === o.id}
+                          onClick={(event) => { event.stopPropagation(); deleteOrder(o); }}
+                        >
+                          <FiTrash2 aria-hidden="true" /> <span>{deletingId === o.id ? "Deleting…" : "Delete"}</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -342,40 +462,46 @@ export default function AdminOrdersPage() {
                     {BADGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 </div>
-                <p className="orders-modal-note">This frontend preview saves the selection for this page only. It can be connected to the badge API when it is ready.</p>
+                <p className="orders-modal-note">Saved with PATCH /api/admin/customer-leaderboard/:key/badge. For an account order the badge is stored on the user; for a guest order it is written to that phone number&rsquo;s orders.</p>
               </div>
               <footer className="orders-modal-footer">
                 <button type="button" className="orders-modal-button orders-modal-button-secondary" onClick={closeActionDialog}>Cancel</button>
-                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={saveBadge}>Save Badge</button>
+                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={saveBadge} disabled={badgeSaving}>{badgeSaving ? "Saving…" : "Save Badge"}</button>
               </footer>
             </>
           ) : (
             <>
               <div className="orders-courier-content">
                 <section className="orders-courier-overview">
-                  <div className="orders-courier-ring"><strong>&mdash;</strong><span>SUCCESS</span></div>
+                  <div className="orders-courier-ring"><strong>{courierResult ? "OK" : "—"}</strong><span>API</span></div>
                   <div>
-                    <p className="eyebrow">Overall delivery success</p>
-                    <h3>Courier history will appear here</h3>
-                    <p>Delivery outcomes and success rate will populate when the courier-history API is connected.</p>
+                    <p className="eyebrow">BD Courier lookup</p>
+                    <h3>{activeOrder.phone || "No phone number on this order"}</h3>
+                    <p>Runs a live courier history check through the configured provider.</p>
                   </div>
                 </section>
-                <div className="orders-courier-stats">
-                  <div><strong>&mdash;</strong><span>Total parcels</span></div>
-                  <div><strong>&mdash;</strong><span>Delivered</span></div>
-                  <div><strong>&mdash;</strong><span>Cancelled</span></div>
-                </div>
-                <section className="orders-courier-breakdown">
-                  <div className="orders-courier-breakdown-head">
-                    <div><p className="eyebrow">Network view</p><h3>Courier breakdown</h3></div>
-                    <span className="orders-api-status">API pending</span>
-                  </div>
-                  <p>Courier-wise parcel totals and delivery outcomes for {activeOrder.name || "this customer"} will appear here.</p>
-                </section>
+
+                {courierError && <p className="notice notice-danger" role="alert">{courierError}</p>}
+
+                {courierResult ? (
+                  <section className="orders-courier-breakdown">
+                    <div className="orders-courier-breakdown-head">
+                      <div><p className="eyebrow">Provider response</p><h3>Courier history</h3></div>
+                      <span className="orders-api-status">Received</span>
+                    </div>
+                    <pre className="num" style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: "0.82rem", maxHeight: 260, overflow: "auto" }}>
+                      {JSON.stringify(courierResult, null, 2)}
+                    </pre>
+                  </section>
+                ) : (
+                  <section className="orders-courier-breakdown">
+                    <p>No lookup has been run for this order yet.</p>
+                  </section>
+                )}
               </div>
               <footer className="orders-modal-footer">
                 <span className="muted">Order {formatOrderNumber(activeOrder)}</span>
-                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={closeActionDialog}>Close</button>
+                <button type="button" className="orders-modal-button orders-modal-button-primary" onClick={runCourierCheck} disabled={courierChecking}>{courierChecking ? "Checking…" : "Run courier check"}</button>
               </footer>
             </>
           )}

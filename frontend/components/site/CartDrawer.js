@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
-import { FiMinus, FiPlus, FiShoppingBag, FiX } from "react-icons/fi";
+import { useEffect, useState } from "react";
+import { FiMinus, FiPlus, FiShoppingBag, FiTrash2, FiX } from "react-icons/fi";
 import Img from "@/components/Img";
 import { Button, Spinner } from "@/components/ui";
 import { useCart } from "@/context/CartContext";
@@ -10,8 +10,9 @@ import { useFeedback } from "@/context/FeedbackContext";
 import { formatMoney } from "@/lib/api";
 
 export default function CartDrawer() {
-  const { cart, drawerOpen, closeDrawer, updateItem, removeItem, loading } = useCart();
-  const { toast } = useFeedback();
+    const { cart, drawerOpen, closeDrawer, updateItem, removeItem, clearCart, loading } = useCart();
+  const { toast, confirm } = useFeedback();
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (!drawerOpen) return undefined;
@@ -35,6 +36,25 @@ export default function CartDrawer() {
     }
   };
 
+    const clearAll = async () => {
+    const ok = await confirm({
+      title: "Clear your cart?",
+      message: "Every item will be removed from your cart.",
+      confirmText: "Clear all",
+      danger: true,
+    });
+    if (!ok) return;
+    setClearing(true);
+    try {
+      await clearCart();
+      toast.success("Cart cleared.");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const remove = async (item) => {
     try {
       await removeItem(item.id);
@@ -51,9 +71,22 @@ export default function CartDrawer() {
           <h2 style={{ fontSize: "1.1rem", fontWeight: 800 }}>
             Your cart <span className="muted">({cart.totalItems})</span>
           </h2>
-          <button type="button" className="icon-btn" onClick={closeDrawer} aria-label="Close cart">
-            <FiX aria-hidden="true" />
-          </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {cart.items.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ color: "#b3261e" }}
+                onClick={clearAll}
+                disabled={clearing}
+              >
+                <FiTrash2 aria-hidden="true" /> {clearing ? "Clearing…" : "Clear all"}
+              </button>
+            )}
+            <button type="button" className="icon-btn" onClick={closeDrawer} aria-label="Close cart">
+              <FiX aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         <div className="drawer-body">

@@ -1,4 +1,4 @@
-import prisma from "../../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 import { resolveCart } from "@/lib/cart.js";
 import {
     formatCart,

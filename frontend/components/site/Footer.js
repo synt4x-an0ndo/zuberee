@@ -2,9 +2,11 @@ import Link from "next/link";
 import { FaFacebookF, FaInstagram, FaPinterestP, FaTwitter, FaWhatsapp, FaYoutube } from "react-icons/fa";
 import { FiMail, FiMapPin, FiPhone } from "react-icons/fi";
 import Img from "@/components/Img";
+import { useSite } from "@/context/SiteContext";
 
 /** Footer content comes entirely from admin-managed settings; empty fields are simply omitted. */
 export default function Footer({ siteName, company, social, roots }) {
+  const { logoSizes } = useSite();
   const socials = [
     { href: social.facebook, label: "Facebook", Icon: FaFacebookF },
     { href: social.instagram, label: "Instagram", Icon: FaInstagram },
@@ -27,7 +29,7 @@ export default function Footer({ siteName, company, social, roots }) {
           <div>
             <Link href="/" className="brand" style={{ color: "#fff" }}>
               {company.logo ? (
-                <Img src={company.logo} alt={siteName || "Logo"} width={180} height={44} />
+                <Img src={company.logo} alt={siteName || "Logo"} width={logoSizes.footer.width} height={logoSizes.footer.height} style={{ width: logoSizes.footer.width, height: logoSizes.footer.height, objectFit: "contain" }} />
               ) : (
                 <span className="brand-name">{siteName}</span>
               )}
@@ -86,6 +88,7 @@ export default function Footer({ siteName, company, social, roots }) {
               <li><Link href="/return_policy">Return policy</Link></li>
               <li><Link href="/size-guide">Size guide</Link></li>
               <li><Link href="/about_us">About us</Link></li>
+              <li><Link href="/track-order">Track an order</Link></li>
             </ul>
           </div>
         </div>

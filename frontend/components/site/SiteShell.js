@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import CartDrawer from "@/components/site/CartDrawer";
+import ChatWidget from "@/components/site/ChatWidget";
 import Footer from "@/components/site/Footer";
 import Header from "@/components/site/Header";
 import MobileBottomNav from "@/components/site/MobileBottomNav";
@@ -23,6 +24,7 @@ export default function SiteShell({ children }) {
         {children}
       </main>
       <Footer siteName={site.siteName} company={site.company} social={site.social} roots={site.categories.tree} />
+      <ChatWidget />
       {!drawerOpen && <MobileBottomNav />}
       {drawerOpen && <CartDrawer />}
     </>

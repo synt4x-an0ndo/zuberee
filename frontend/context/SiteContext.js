@@ -6,6 +6,39 @@ import { applyPalette, buildPalette, DEFAULT_BRAND, normalizeHex, THEME_STORAGE_
 
 const SiteContext = createContext(null);
 
+/**
+ * Logo display boxes (px) for every place the logo appears. Admins can
+ * override each placement separately in Settings > Store; anything unset
+ * falls back to these. The image itself is always fitted with
+ * object-fit: contain inside the box, so it is never stretched.
+ */
+export const DEFAULT_LOGO_SIZES = {
+  header: { width: 180, height: 44 },
+  footer: { width: 180, height: 44 },
+  auth: { width: 200, height: 44 },
+  adminSidebar: { width: 180, height: 38 },
+  adminLogin: { width: 220, height: 54 },
+  invoice: { width: 220, height: 54 },
+};
+
+export function normalizeLogoSizes(raw) {
+  const out = {};
+  for (const [key, def] of Object.entries(DEFAULT_LOGO_SIZES)) {
+    const w = Number(raw?.[key]?.width);
+    const h = Number(raw?.[key]?.height);
+    out[key] = {
+      width: Number.isInteger(w) && w >= 8 && w <= 800 ? w : def.width,
+      height: Number.isInteger(h) && h >= 8 && h <= 400 ? h : def.height,
+    };
+  }
+  return out;
+}
+
+function clampFaviconZoom(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 40 && n <= 100 ? n : 85;
+}
+
 /** Flat category rows (camelCase from Prisma) -> tree with stable keys. */
 function buildCategoryTree(rows) {
   const items = rows
@@ -106,8 +139,9 @@ export function SiteProvider({ children }) {
     if (typeof document === "undefined") return;
     const name = (state.settings?.site_name || "").trim() || "Store";
     document.title = name;
-    if (state.footer?.company_logo || state.footer?.logo_path) {
-      const href = imgUrl(state.footer.company_logo || state.footer.logo_path);
+    const faviconSource = state.settings?.favicon_path || state.footer?.company_logo || state.footer?.logo_path;
+    if (faviconSource) {
+      const href = imgUrl(faviconSource);
       if (href) {
         let icon = document.querySelector('link[rel="icon"]');
         if (!icon) {
@@ -115,22 +149,30 @@ export function SiteProvider({ children }) {
           icon.rel = "icon";
           document.head.appendChild(icon);
         }
-        // The store logo is a wide wordmark; browsers squeeze it into the
-        // square tab icon. Pad it (contain, centred) onto a square canvas
-        // so the favicon keeps the logo's real proportions.
+        // The store logo is rarely square; browsers squeeze a non-square
+        // favicon into the square tab icon. Pad it (contain, centred) onto a
+        // square canvas so the favicon keeps the logo's real proportions.
+        // crossOrigin is required: the logo is served by the backend origin,
+        // and without CORS approval the canvas is tainted, toDataURL() throws,
+        // and the browser falls back to squeezing the raw file. The backend
+        // sends Access-Control-Allow-Origin for /storage/* (see its
+        // next.config.mjs), which makes this work.
         const image = new Image();
+        image.crossOrigin = "anonymous";
+        const zoom = clampFaviconZoom(state.settings?.favicon_zoom);
         image.onload = () => {
           try {
             const size = 256;
-            const pad = 20;
+            const drawable = Math.round((size * zoom) / 100);
             const canvas = document.createElement("canvas");
             canvas.width = size;
             canvas.height = size;
             const ctx = canvas.getContext("2d");
-            const scale = Math.min((size - pad * 2) / image.naturalWidth, (size - pad * 2) / image.naturalHeight);
+            const scale = Math.min(drawable / image.naturalWidth, drawable / image.naturalHeight);
             const w = Math.max(1, Math.round(image.naturalWidth * scale));
             const h = Math.max(1, Math.round(image.naturalHeight * scale));
             ctx.drawImage(image, (size - w) / 2, (size - h) / 2, w, h);
+            icon.type = "image/png";
             icon.href = canvas.toDataURL("image/png");
           } catch {
             icon.href = href;
@@ -152,6 +194,9 @@ export function SiteProvider({ children }) {
       backendAvailable: API_CONFIGURED && !state.error && !state.loading,
       settings,
       siteName: (settings.site_name || "").trim(),
+      logoSizes: normalizeLogoSizes(settings.logo_sizes),
+      favicon: imgUrl(settings.favicon_path) || "",
+      faviconZoom: clampFaviconZoom(settings.favicon_zoom),
       primaryColor: primary || DEFAULT_BRAND,
       inventoryEnforced: Boolean(settings.inventory_enforcement_enabled),
       company: {

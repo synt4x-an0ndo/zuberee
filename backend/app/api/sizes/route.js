@@ -1,4 +1,4 @@
-import prisma from "../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 
 export async function GET(request) {
     try {

@@ -28,7 +28,7 @@ export default function AdminModulePage({
             <Button variant="ghost" size="sm" onClick={() => toast.info("This module will refresh when its API is connected.")}>
               <FiRefreshCw aria-hidden="true" /> Refresh
             </Button>
-            {actionLabel && <Button variant="primary" onClick={() => toast.info("This action will be enabled when the backend API is connected.")}><FiPlus aria-hidden="true" /> {actionLabel}</Button>}
+            {actionLabel ? <Button variant="primary" onClick={() => toast.info("This action will be enabled when the backend API is connected.")}><FiPlus aria-hidden="true" /> {actionLabel}</Button> : null}
           </div>
         }
       />

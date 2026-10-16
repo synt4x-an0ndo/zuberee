@@ -10,9 +10,10 @@ import { useFeedback } from "@/context/FeedbackContext";
 import { formatMoney } from "@/lib/api";
 
 export default function CartPage() {
-  const { cart, loading, updateItem, removeItem } = useCart();
+  const { cart, loading, updateItem, removeItem, clearCart } = useCart();
   const { toast, confirm } = useFeedback();
   const [pending, setPending] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   const run = async (itemId, action) => {
     setPending(itemId);
@@ -22,6 +23,25 @@ export default function CartPage() {
       toast.error(error.message);
     } finally {
       setPending(null);
+    }
+  };
+
+  const clear = async () => {
+    const ok = await confirm({
+      title: "Clear your cart?",
+      message: "Every item will be removed from your cart.",
+      confirmText: "Clear cart",
+      danger: true,
+    });
+    if (!ok) return;
+    setClearing(true);
+    try {
+      await clearCart();
+      toast.success("Cart cleared.");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setClearing(false);
     }
   };
 
@@ -79,6 +99,12 @@ export default function CartPage() {
           <h1>Shopping cart</h1>
         </div>
         <p className="muted">{cart.totalItems} {cart.totalItems === 1 ? "item" : "items"}</p>
+      </div>
+
+      <div className="row" style={{ justifyContent: "flex-end", marginBottom: 12 }}>
+        <Button variant="outline" size="sm" loading={clearing} disabled={clearing} onClick={clear} style={{ color: "#b3261e", borderColor: "#e5c2bf" }}>
+          <FiTrash2 aria-hidden="true" /> Clear all
+        </Button>
       </div>
 
       <div className="cart-layout">

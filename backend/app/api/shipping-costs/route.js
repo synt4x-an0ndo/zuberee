@@ -1,4 +1,4 @@
-import prisma from "../../../directory/prisma/prisma.js";
+import prisma from "@/directory/prisma/prisma.js";
 
 /**
  * Public shipping rates for the storefront checkout.

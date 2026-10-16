@@ -21,6 +21,21 @@ function districtFromCity(city) {
   return DISTRICTS.find((d) => d.value === c || d.label.toLowerCase() === c)?.value || "";
 }
 
+const CHECKOUT_SESSION_KEY = "zuberee-checkout-session";
+
+/** Stable per-browser id used as the key for the incomplete-checkout snapshot. */
+function checkoutSessionId() {
+  try {
+    const existing = window.localStorage.getItem(CHECKOUT_SESSION_KEY);
+    if (existing) return existing;
+    const created = (window.crypto?.randomUUID?.() || `sess-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    window.localStorage.setItem(CHECKOUT_SESSION_KEY, created);
+    return created;
+  } catch {
+    return `sess-${Date.now()}`;
+  }
+}
+
 export default function CheckoutPage() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const { cart, loading: cartLoading, refresh } = useCart();
@@ -78,6 +93,40 @@ export default function CheckoutPage() {
       address: address ? [address.addressLine, address.city, address.postalCode].filter(Boolean).join(", ") : "",
     });
   };
+
+  /**
+   * POST /api/abandoned-checkouts — public. Upserts one row per session so the admin
+   * "Incomplete orders" screen can see checkouts that were started but never submitted.
+   * Only fires once the shopper has given a name and a usable phone number.
+   */
+  const [snapshotDone, setSnapshotDone] = useState(false);
+  useEffect(() => {
+    if (order || snapshotDone) return undefined;
+    if (cart.items.length === 0) return undefined;
+    const phone = normalizePhone(effective.phone);
+    if (!effective.name.trim() || !isValidBdPhone(phone)) return undefined;
+
+    const timer = setTimeout(() => {
+      const payload = {
+        sessionId: checkoutSessionId(),
+        cartItems: cart.items.map((item) => ({
+          productId: item.productId,
+          title: item.title,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        name: effective.name.trim(),
+        phone,
+        address: [effective.address.trim(), DISTRICTS.find((d) => d.value === effective.district)?.label || ""].filter(Boolean).join(", "),
+      };
+      if (isAuthenticated && user?.id) payload.userId = user.id;
+      api.post("api/abandoned-checkouts", payload, { auth: false })
+        .then(() => setSnapshotDone(true))
+        .catch(() => { /* best-effort: never block checkout on this */ });
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [order, snapshotDone, cart.items, effective.name, effective.phone, effective.address, effective.district, isAuthenticated, user]);
 
   const validate = () => {
     const next = {};

@@ -87,6 +87,12 @@ export function CartProvider({ children }) {
     [refresh]
   );
 
+  /** DELETE /api/cart — empties the whole cart (guest cart or the signed-in user's cart). */
+  const clearCart = useCallback(async () => {
+    await api.delete("api/cart");
+    await refresh();
+  }, [refresh]);
+
   const value = useMemo(
     () => ({
       cart,
@@ -101,8 +107,9 @@ export function CartProvider({ children }) {
       addItem,
       updateItem,
       removeItem,
+      clearCart,
     }),
-    [cart, loading, bumpKey, drawerOpen, refresh, addItem, updateItem, removeItem]
+    [cart, loading, bumpKey, drawerOpen, refresh, addItem, updateItem, removeItem, clearCart]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

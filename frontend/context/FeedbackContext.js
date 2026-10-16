@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { FiCheckCircle, FiInfo, FiXCircle } from "react-icons/fi";
 
 const FeedbackContext = createContext(null);
 let nextId = 1;
@@ -17,9 +18,10 @@ export function FeedbackProvider({ children }) {
 
   const push = useCallback(
     (tone, message) => {
-      const id = nextId++;
-      setToasts((list) => [...list.slice(-3), { id, tone, message, leaving: false }]);
-      setTimeout(() => dismiss(id), tone === "error" ? 5200 : 3400);
+            const id = nextId++;
+      const duration = tone === "error" ? 5200 : 3400;
+      setToasts((list) => [...list.slice(-3), { id, tone, message, duration, leaving: false }]);
+      setTimeout(() => dismiss(id), duration);
       return id;
     },
     [dismiss]
@@ -73,12 +75,19 @@ export function FeedbackProvider({ children }) {
 
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.tone}${t.leaving ? " is-leaving" : ""}`}>
-            <span className="toast-dot" aria-hidden="true" />
+                    <div key={t.id} className={`toast toast-${t.tone}${t.leaving ? " is-leaving" : ""}`}>
+            <span className="toast-icon" aria-hidden="true">
+              {t.tone === "success" ? <FiCheckCircle /> : t.tone === "error" ? <FiXCircle /> : <FiInfo />}
+            </span>
             <p>{t.message}</p>
             <button type="button" className="toast-close" onClick={() => dismiss(t.id)} aria-label="Dismiss">
               ×
             </button>
+            <span
+              className="toast-progress"
+              aria-hidden="true"
+              style={{ animationDuration: `${t.duration || 3400}ms` }}
+            />
           </div>
         ))}
       </div>

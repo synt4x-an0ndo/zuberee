@@ -3,13 +3,13 @@ import Img from "@/components/Img";
 import { useSite } from "@/context/SiteContext";
 
 export default function AuthCard({ eyebrow, title, subtitle, children, footer }) {
-  const { siteName, company } = useSite();
+  const { siteName, company, logoSizes } = useSite();
   const name = siteName || "Store";
   return (
     <div className="auth-wrap anim-fade-up">
       <div className="auth-card">
         <Link href="/" className="auth-brand" aria-label={`${name} home`}>
-          {company.logo ? <Img src={company.logo} alt={name} width={180} height={44} priority /> : (
+          {company.logo ? <Img src={company.logo} alt={name} width={logoSizes.auth.width} height={logoSizes.auth.height} style={{ width: logoSizes.auth.width, height: logoSizes.auth.height, objectFit: "contain" }} priority /> : (
             <>
               <span className="brand-mark" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
               <span className="brand-name">{name}</span>
