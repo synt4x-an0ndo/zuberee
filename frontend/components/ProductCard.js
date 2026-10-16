@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiShoppingCart, FiX, FiZap } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import Img from "@/components/Img";
@@ -29,13 +29,56 @@ export default function ProductCard({ product: raw, index = 0 }) {
   const [selectedColorId, setSelectedColorId] = useState(defaultColorId);
   const [selectedSizeId, setSelectedSizeId] = useState(null);
   const [busyAction, setBusyAction] = useState("");
+  const [failedImages, setFailedImages] = useState([]);
+  const [activeImage, setActiveImage] = useState(0);
+  const [hoveringCard, setHoveringCard] = useState(false);
+  const cardRef = useRef(null);
+  const cardRect = useRef(null);
+
+  // Feeds --card-mx/--card-my so the CSS spotlight follows the pointer.
+  const trackCardPointer = (event) => {
+    const node = cardRef.current;
+    if (!node) return;
+    if (!cardRect.current) cardRect.current = node.getBoundingClientRect();
+    const rect = cardRect.current;
+    if (!rect.width || !rect.height) return;
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    node.style.setProperty("--card-mx", `${x.toFixed(2)}%`);
+    node.style.setProperty("--card-my", `${y.toFixed(2)}%`);
+  };
+
+  const resetCardRect = () => {
+    cardRect.current = null;
+  };
 
   useEffect(() => setPortalReady(true), []);
   useEffect(() => {
     setSelectedColorId(defaultColorId);
     setSelectedSizeId(null);
     setQuickOpen(false);
+    setFailedImages([]);
+    setActiveImage(0);
+    setHoveringCard(false);
   }, [product?.id, defaultColorId]);
+
+  // Gallery walk: while the card is hovered, step through every usable
+  // photo so all of them are seen, not just the first two. The first step
+  // lands on the second photo immediately, which is what the card already
+  // did on hover. Uses mouseenter/mouseleave (not pointer events) so touch
+  // devices are untouched - they never fire these.
+  useEffect(() => {
+    if (!hoveringCard) return undefined;
+    const total = Array.isArray(product?.images)
+      ? product.images.filter((item) => item.url && !failedImages.includes(item.url)).length
+      : 0;
+    if (total < 2) return undefined;
+    setActiveImage(1 % total);
+    const timer = window.setInterval(() => {
+      setActiveImage((current) => (current + 1) % total);
+    }, 1600);
+    return () => window.clearInterval(timer);
+  }, [hoveringCard, failedImages, product?.id]);
   useEffect(() => {
     if (!quickOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -53,7 +96,19 @@ export default function ProductCard({ product: raw, index = 0 }) {
   const status = AVAILABILITY[product.availability];
   const swatches = product.colors.filter((color) => color.code).slice(0, 5);
   const extraColors = Math.max(0, product.colors.length - swatches.length);
-  const second = product.images[1]?.url;
+  // Gallery fallback: the backend can reference files that are no longer on
+  // disk, so drop any image that has failed and use what is left. images[0]
+  // becomes the resting photo and images[1] the hover photo, exactly as
+  // before - we just skip the dead ones instead of showing a broken image.
+  const usableImages = product.images.filter((item) => item.url && !failedImages.includes(item.url));
+  const galleryCount = usableImages.length;
+  // clamp defensively: photos can drop out of the gallery after a 404
+  const activeIndex = galleryCount ? ((activeImage % galleryCount) + galleryCount) % galleryCount : 0;
+  const primaryImage = usableImages[0]?.url || null;
+  const markImageFailed = (url) => {
+    if (!url) return;
+    setFailedImages((current) => (current.includes(url) ? current : [...current, url]));
+  };
   const unavailable = product.availability === "sold-out";
   const needsOptions = product.sizes.length > 0 || product.colors.length > 1;
   const selectedSize = product.sizes.find((size) => String(size.id) === String(selectedSizeId)) || null;
@@ -119,7 +174,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
 
             <div className="quick-add-product">
               <div className="quick-add-thumb">
-                {product.image && <Img src={product.image} alt="" fill sizes="72px" />}
+                {primaryImage && <Img src={primaryImage} alt="" fill sizes="72px" />}
               </div>
               <div className="quick-add-product-copy">
                 <h3>{product.title}</h3>
@@ -194,14 +249,33 @@ export default function ProductCard({ product: raw, index = 0 }) {
 
   return (
     <>
-      <article className="product-card anim-fade-up" style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}>
+      <article
+        ref={cardRef}
+        className="product-card anim-fade-up"
+        style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
+        onPointerEnter={resetCardRect}
+        onPointerMove={trackCardPointer}
+        onPointerLeave={resetCardRect}
+        onMouseEnter={() => setHoveringCard(true)}
+        onMouseLeave={() => {
+          setHoveringCard(false);
+          setActiveImage(0);
+        }}
+      >
         <div className="product-card-visual">
           <Link href={`/product-page/${product.id}`} className="product-media" aria-label={product.title}>
-            {product.image ? (
-              <>
-                <Img src={product.image} alt={product.title} fill sizes="(max-width: 760px) 50vw, (max-width: 1200px) 33vw, 25vw" />
-                {second && <Img src={second} alt="" fill className="img-hover" />}
-              </>
+            {galleryCount > 0 ? (
+              usableImages.map((item, imageIndex) => (
+                <Img
+                  key={item.url}
+                  src={item.url}
+                  alt={imageIndex === 0 ? product.title : ""}
+                  fill
+                  sizes="(max-width: 760px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                  className={cx("stack-img", activeIndex === imageIndex && "is-active")}
+                  onError={() => markImageFailed(item.url)}
+                />
+              ))
             ) : (
               <span className="no-image">No image</span>
             )}
