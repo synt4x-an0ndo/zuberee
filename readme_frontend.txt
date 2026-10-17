@@ -1885,3 +1885,287 @@ Success message: Facebook settings updated. / Facebook settings created.
 No valid fields: Return 400 Bad Request
 
 Non-admin: Return 403 Forbidden
+
+
+===========================================================
+
+# User Management & RBAC API Documentation
+
+## Prerequisites & Setup
+- **Database:** `npx prisma migrate dev`
+- **Seeding (Roles & Permissions):** `npx tsx prisma/seed-rbac.js`
+- **Server:** `npm run dev` (Port: 3001)
+- **Headers:** `Authorization: Bearer <JWT_TOKEN>` (Admin token required)
+
+---
+
+## 1. Get All Users API (List Users)
+
+- **API endpoint:** `GET /api/admin/users`
+- **Authentication:** JWT required
+- **Authorization:** User must have `view users` permission
+- **Request headers:** `Authorization: Bearer <token>`
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "users": [
+      {
+        "id": 1,
+        "name": "Mehedi Hasan",
+        "email": "admin@gmail.com",
+        "email_verified_at": null,
+        "created_at": "2026-10-17T...",
+        "updated_at": "2026-10-17T...",
+        "roles": [
+          {
+            "id": 1,
+            "name": "super-admin",
+            "guard_name": "sanctum",
+            "pivot": {
+              "model_type": "User",
+              "model_id": 1,
+              "role_id": 1
+            }
+          }
+        ]
+      }
+    ]
+  }
+  ```
+- **Error response:**
+  - `401 Unauthorized`: Missing/Invalid token
+  - `403 Forbidden`: Missing `view users` permission
+  - `500 Internal Server Error`: Server issue
+
+---
+
+## 2. Assign Roles to User API
+
+- **API endpoint:** `PATCH /api/admin/users/:id/roles`
+- **Authentication:** JWT required
+- **Authorization:** User must have `assign roles` permission
+- **URL param:** `id` = User ID
+- **Request headers:**
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request fields:** `role_ids` (Array of Role IDs)
+- **Request body:**
+  ```json
+  {
+    "role_ids": [1, 2]
+  }
+  ```
+- **Behavior:**
+  - Replaces existing roles with the new ones.
+  - Runs inside a DB transaction (safe).
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "message": "Roles assigned.",
+    "data": {
+      "id": 1,
+      "name": "Mehedi Hasan",
+      "email": "admin@gmail.com",
+      "roles": [
+        { "id": 1, "name": "super-admin", "guard_name": "sanctum" }
+      ]
+    }
+  }
+  ```
+- **Error response:**
+  - `400 Bad Request`: `role_ids` not an array
+  - `404 Not Found`: User or Role ID doesn't exist
+  - `403 Forbidden`: Missing `assign roles` permission
+
+---
+
+## 3. Get All Roles API
+
+- **API endpoint:** `GET /api/admin/roles`
+- **Authentication:** JWT required
+- **Authorization:** User must have `view roles` permission
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "roles": [
+      {
+        "id": 1,
+        "name": "super-admin",
+        "guard_name": "sanctum",
+        "created_at": "...",
+        "updated_at": "...",
+        "permissions": [
+          {
+            "id": 1,
+            "name": "view products",
+            "guard_name": "sanctum",
+            "pivot": { "role_id": 1, "permission_id": 1 }
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+---
+
+## 4. Create New Role API
+
+- **API endpoint:** `POST /api/admin/roles`
+- **Authentication:** JWT required
+- **Authorization:** User must have `create roles` permission
+- **Request fields:** `name` (required), `permission_ids` (optional array)
+- **Request body:**
+  ```json
+  {
+    "name": "editor",
+    "permission_ids": [1, 2, 3]
+  }
+  ```
+- **Response status:** `201 Created`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "message": "Role created.",
+    "data": { ...role object with permissions... }
+  }
+  ```
+- **Error response:**
+  - `400 Bad Request`: Missing name
+  - `409 Conflict`: Role name already exists
+
+---
+
+## 5. Update Role API
+
+- **API endpoint:** `PUT /api/admin/roles/:id`
+- **Authentication:** JWT required
+- **Authorization:** User must have `edit roles` permission
+- **URL param:** `id` = Role ID
+- **Request fields:** `name` (optional), `permission_ids` (optional array)
+- **Behavior:**
+  - If `permission_ids` is provided, it replaces all existing permissions for that role.
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "message": "Role updated.",
+    "data": { ...updated role object... }
+  }
+  ```
+- **Error response:**
+  - `404 Not Found`: Role ID doesn't exist
+  - `409 Conflict`: New role name already exists
+
+---
+
+## 6. Delete Role API
+
+- **API endpoint:** `DELETE /api/admin/roles/:id`
+- **Authentication:** JWT required
+- **Authorization:** User must have `delete roles` permission
+- **URL param:** `id` = Role ID
+- **Business rule:** Cannot delete a role if users are still assigned to it.
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "message": "Role deleted."
+  }
+  ```
+- **Error response:**
+  - `404 Not Found`: Role ID doesn't exist
+  - `409 Conflict`: Role is assigned to users (Cannot delete)
+
+---
+
+## 7. Get All Permissions API
+
+- **API endpoint:** `GET /api/admin/permissions`
+- **Authentication:** JWT required
+- **Authorization:** Any admin user (typically requires `view roles` or `view users`)
+- **Response status:** `200 OK`
+- **Response format:**
+  ```json
+  {
+    "status": true,
+    "permissions": [
+      {
+        "id": 1,
+        "name": "view products",
+        "guard_name": "sanctum",
+        "created_at": "...",
+        "updated_at": "..."
+      }
+    ]
+  }
+  ```
+
+---
+
+# Frontend Integration & Real-Time RBAC Guide
+
+Frontend developer ke ei niyom gulo bujhiye dao:
+
+## 1. Permissions Frontend e Kivabe Ashibe?
+Login korar por frontend ke `GET /api/auth/me` (ba login response) theke `user.permissions` array ta nite hobe ebong `localStorage` ba state e rakhte hobe.
+
+## 2. UI Render Logic (Conditional Rendering)
+Prottek button ba menu item render korar age permission check korte hobe.
+
+```javascript
+// Example React/Next.js component
+const userPermissions = JSON.parse(localStorage.getItem("permissions")) || [];
+
+const canCreateProduct = userPermissions.includes("create products");
+
+return (
+  <div>
+    <h1>Products List</h1>
+
+    {/* Add Button */}
+    {canCreateProduct && (
+      <button onClick={openAddModal}>Add New Product</button>
+    )}
+  </div>
+);
+```
+
+## 3. Backend Security (Real-Time)
+Frontend e button hide korle o, keu jodi Postman theke API hit kore, backend take atkabe (403 Forbidden)।
+- Jokhon `super-admin` Role assign kora thake, tokhon DB theke permission eshe API access dey.
+- Jodi `super-admin` ke `user` role e downgrade kora hoy, tokhon ager JWT token diye API hit korleo backend DB theke notun permission (khali) check kore `403` dey. (Mane **real-time sync** ache)।
+
+---
+
+# Full System Run Korar Steps (Developer Er Jonno)
+
+1. **Database sync:**
+   ```bash
+   npx prisma migrate dev
+   ```
+2. **Permissions & Roles seed:**
+   ```bash
+   npx tsx prisma/seed-rbac.js
+   ```
+3. **Initial Super Admin Assign (Direct DB - Ekbar korte hobe):**
+   ```sql
+   INSERT INTO "user_roles" ("userId", "roleId") VALUES (1, 1);
+   ```
+   *(Ekhane `1` holo tomar prothom User er ID ar `1` holo super-admin Role ID)*
+4. **Server start:**
+   ```bash
+   npm run dev
+   ```
+5. **Frontend Login & Test:**
+   - `super-admin` token diye test koro (Sob API access pabe).
+   - Onno user ke `order manager` (Role ID: 4) dao ebong tar token diye test koro (Sudhu Orders API access pabe, Users API e `403` pabe).

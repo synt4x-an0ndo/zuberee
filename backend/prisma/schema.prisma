@@ -8,11 +8,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
+enum SystemRoleEnum {
   CUSTOMER
   ADMIN
 }
-
 
 enum OrderStatus {
   PENDING
@@ -37,24 +36,72 @@ enum SizeGuideType {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
+  id           Int            @id @default(autoincrement())
   name         String
-  email        String    @unique
+  email        String         @unique
   passwordHash String
   phone        String?
   image        String?
   badge        String?
-  role         UserRole  @default(CUSTOMER)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  role         SystemRoleEnum @default(CUSTOMER)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   addresses    Address[]
   orders       Order[]
   cart         Cart?
   passwordResetTokens PasswordResetToken[]
   chatConversations   ChatConversation[]
+  userRoles           UserRole[]
 
   @@map("users")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  guardName   String   @default("sanctum")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  guardName   String   @default("sanctum")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId  Int
+  roleId  Int
+
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
 }
 
 model PasswordResetToken {
@@ -481,12 +528,10 @@ model FacebookSettings {
   @@map("facebook_settings")
 }
 
-// ---- Store chat ("chat with admin") — persisted by owner request ----
-// Only admin chats are stored. AI chats remain stateless and unlogged.
 model ChatConversation {
   id        Int           @id @default(autoincrement())
   userId    Int
-  status    String        @default("open") // open | ended
+  status    String        @default("open")
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -501,7 +546,7 @@ model ChatConversation {
 model ChatMessage {
   id             Int              @id @default(autoincrement())
   conversationId Int
-  sender         String // visitor | admin
+  sender         String
   body           String
   readByAdmin    Boolean          @default(false)
   readByUser     Boolean          @default(false)
