@@ -166,7 +166,7 @@ function ThemePanel({ initial, onSaved }) {
             <Button variant="ghost" onClick={() => pick(saved)} disabled={!dirty && normalizeHex(text) === saved}><FiRefreshCw aria-hidden="true" /> Reset to saved</Button>
             <Button variant="primary" size="lg" loading={busy} disabled={!dirty || busy} onClick={save}><FiCheck aria-hidden="true" /> Save colour</Button>
           </div>
-          {!dirty && <p className="muted" style={{ fontSize: "0.88rem" }}>Saved colour: <span className="num">{saved}</span>{saved === DEFAULT_BRAND ? " (Eyara Green)" : ""}</p>}
+          {!dirty && <p className="muted" style={{ fontSize: "0.88rem" }}>Saved colour: <span className="num">{saved}</span>{saved === DEFAULT_BRAND ? " (Zuberee Green)" : ""}</p>}
         </div>
       </Card>
 

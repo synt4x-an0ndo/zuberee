@@ -1,5 +1,6 @@
 "use client";
 
+import AlignedTable from "@/components/AlignedTable";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -152,7 +153,7 @@ export default function ProductPage() {
 
   const ctaLabel = unavailable ? "Sold out" : preorder ? "Pre-order Now" : "Add to Cart";
 
-  // Eyara-style contact buttons: Messenger from the Facebook page, WhatsApp
+  // Zuberee-style contact buttons: Messenger from the Facebook page, WhatsApp
   // from the store number (BD local numbers get the 880 country code).
   const fb = (social?.facebook || "").trim();
   let messengerUrl = "";
@@ -184,7 +185,19 @@ export default function ProductPage() {
         <div className="pd2">
           <div className="pd2-gallery-card">
             <div className="pd2-frame">
-              <div className="pd2-img-wrap">
+              <div
+                key={gallery[imageIndex] || "empty"}
+                className={cx("pd2-img-wrap", gallery[imageIndex] && "has-hover-zoom")}
+                onPointerMove={(event) => {
+                  if (event.pointerType !== "mouse") return;
+                  const frame = event.currentTarget;
+                  const rect = frame.getBoundingClientRect();
+                  const x = Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100));
+                  const y = Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100));
+                  frame.style.setProperty("--zoom-x", `${x}%`);
+                  frame.style.setProperty("--zoom-y", `${y}%`);
+                }}
+              >
                 {gallery[imageIndex] ? (
                   <Img key={gallery[imageIndex]} src={gallery[imageIndex]} alt={product.title} fill priority sizes="(max-width: 1024px) 100vw, 600px" />
                 ) : (
@@ -413,7 +426,7 @@ export default function ProductPage() {
 
             {tab === "specs" &&
               (product.specifications.length > 0 ? (
-                <table className="spec-table">
+                <AlignedTable className="spec-table">
                   <tbody>
                     {product.specifications.map((spec, i) => (
                       <tr key={`${spec.key}-${i}`}>
@@ -422,7 +435,7 @@ export default function ProductPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </AlignedTable>
               ) : (
                 <p className="muted">No specifications listed.</p>
               ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { DEFAULT_AVATAR } from "@/lib/avatar";
 import { api, AUTH_EXPIRED_EVENT, clearToken, getToken, setToken, unwrap } from "@/lib/api";
 
 const AuthContext = createContext(null);
@@ -13,8 +14,13 @@ export function normalizeUser(raw) {
     name: raw.name || "",
     email: raw.email || "",
     phone: raw.phone || "",
-    image: raw.image || null,
+    image: typeof raw.image === "string" && raw.image.trim() ? raw.image : DEFAULT_AVATAR,
     role: String(raw.role || "customer").toLowerCase(),
+    roles: Array.isArray(raw.roles) ? raw.roles : [],
+    // null means unverified; never infer access from the legacy role label.
+    permissions: Array.isArray(raw.permissions)
+      ? raw.permissions.map((permission) => typeof permission === "string" ? permission : permission?.name).filter(Boolean)
+      : null,
     joinedAt: raw.joined_at || null,
     stats: raw.stats || { total_orders: 0, pending_orders: 0, delivered_orders: 0 },
     addresses: (Array.isArray(raw.addresses) ? raw.addresses : []).map((address) => ({
@@ -34,8 +40,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const loadProfile = useCallback(async () => {
+    const sessionToken = getToken();
+    if (!sessionToken) return null;
     const response = await api.get("api/account/me");
     const profile = normalizeUser(unwrap(response));
+    // Ignore an in-flight refresh if logout or another login changed the session.
+    if (getToken() !== sessionToken) return null;
     setUser(profile);
     return profile;
   }, []);
@@ -124,3 +134,4 @@ export function useAuth() {
   if (!context) throw new Error("useAuth must be used inside <AuthProvider>");
   return context;
 }
+

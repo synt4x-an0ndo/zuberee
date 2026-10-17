@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Website Color — standalone theme page (Eyara parity).
+ * Website Color — standalone theme page (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/theme-settings ("Website Color", Settings menu).
+ * Zuberee reference: GET /dashboard/theme-settings ("Website Color", Settings menu).
  * Zuberee already has the same control as the "Theme colour" tab of
- * Admin -> Settings & theme; this route exists so the Eyara URL structure is
+ * Admin -> Settings & theme; this route exists so the Zuberee URL structure is
  * fully covered and the colour control can be linked/bookmarked on its own.
  *
  * FRONTEND ONLY (backend API to be wired by the backend dev, no UI change needed):
@@ -26,10 +26,10 @@ import { useSite } from "@/context/SiteContext";
 import { api } from "@/lib/api";
 import { DEFAULT_BRAND, THEME_STORAGE_KEY, applyPalette, buildPalette, normalizeHex } from "@/lib/theme";
 
-/** Presets from the live Eyara "Website Color" page, plus Zuberee's default. */
-const EYARA_PRESETS = [
-  { name: "Eyara Green", hex: DEFAULT_BRAND },
-  { name: "Eyara Purple", hex: "#7d0ba7" },
+/** Presets from the live Zuberee "Website Color" page, plus Zuberee's default. */
+const ZUBEREE_PRESETS = [
+  { name: "Zuberee Green", hex: DEFAULT_BRAND },
+  { name: "Zuberee Purple", hex: "#7d0ba7" },
   { name: "Coral Pink", hex: "#eb3b5a" },
   { name: "Classic Red", hex: "#db3340" },
   { name: "Royal Blue", hex: "#1d4ed8" },
@@ -178,7 +178,7 @@ export default function ThemeSettingsPage() {
               <div>
                 <p className="field-label" style={{ marginBottom: 8 }}>Presets</p>
                 <div className="preset-grid">
-                  {EYARA_PRESETS.map((preset) => (
+                  {ZUBEREE_PRESETS.map((preset) => (
                     <button
                       key={preset.hex + preset.name}
                       type="button"
@@ -203,7 +203,7 @@ export default function ThemeSettingsPage() {
               {!dirty && (
                 <p className="muted" style={{ fontSize: "0.88rem" }}>
                   Saved colour: <span className="num">{saved}</span>
-                  {saved === DEFAULT_BRAND ? " (Eyara Green)" : ""}
+                  {saved === DEFAULT_BRAND ? " (Zuberee Green)" : ""}
                 </p>
               )}
             </div>
@@ -226,7 +226,7 @@ export default function ThemeSettingsPage() {
               <CardHeader title="Live preview" />
               <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid var(--line)" }}>
                 <div style={{ background: "var(--brand)", color: "var(--brand-contrast)", padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong>{siteName || "Eyara Fashion"}</strong>
+                  <strong>{siteName || "Zuberee Fashion"}</strong>
                   <span style={{ fontSize: "0.85rem", opacity: 0.9 }}>Shop · Sale</span>
                 </div>
                 <div style={{ padding: 20, display: "flex", gap: 10, flexWrap: "wrap", background: "var(--paper, #fff)" }}>
@@ -236,7 +236,7 @@ export default function ThemeSettingsPage() {
                 </div>
               </div>
               <p className="muted" style={{ fontSize: "0.88rem", marginTop: 12 }}>
-                Same control as <Link href="/admin/settings">Settings &amp; theme</Link>, on its own page like Eyara.
+                Same control as <Link href="/admin/settings">Settings &amp; theme</Link>, on its own page like Zuberee.
               </p>
             </Card>
           </div>

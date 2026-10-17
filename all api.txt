@@ -1,5 +1,5 @@
 ================================================================================
-EYARA FASHION — FRONTEND <-> BACKEND API INTEGRATION REPORT
+ZUBEREE FASHION — FRONTEND <-> BACKEND API INTEGRATION REPORT
 ================================================================================
 Source of truth for endpoints : readme_frontend.txt  (the backend developer's spec)
 Base URL (frontend .env.local) : http://localhost:3001
@@ -419,4 +419,238 @@ GET                    /api/social-links-first
 
 ================================================================================
 END OF UPDATE LOG
+================================================================================
+
+
+================================================================================
+RBAC FRONTEND INTEGRATION UPDATE — 2026-10-17
+================================================================================
+This section supersedes earlier statements that users/roles endpoints do not exist.
+Scope: frontend changes only. No existing backend source, schema, middleware,
+permission configuration, or application database data was changed.
+
+IMPLEMENTED FRONTEND CONTRACT (inspected actual route handlers)
+GET    /api/admin/users                 -> {status, users:[{id,name,email,roles:[]}]}
+PATCH  /api/admin/users/:id/roles        <- {role_ids:[integer,...]} (REPLACES roles)
+                                       -> {status,message,data:{id,name,email,roles}}
+GET    /api/admin/roles                 -> {status,roles:[{id,name,permissions:[]}]}
+POST   /api/admin/roles                 <- {name,permission_ids:[integer,...]}
+                                       -> 201 {status,message,data:role}
+PUT    /api/admin/roles/:id              <- {name,permission_ids:[integer,...]}
+                                       -> {status,message,data:role}
+DELETE /api/admin/roles/:id              -> {status,message}; 409 when assigned
+GET    /api/admin/permissions           -> {status,permissions:[{id,name,...}]}
+All calls reuse frontend/lib/api.js and its Authorization: Bearer token storage.
+
+BACKEND BLOCKERS — PLEASE RESOLVE IN BACKEND, NOT IN FRONTEND
+1) Application database zuberee_db has no roles, permissions, user_roles, or
+   role_permissions tables (read-only information_schema/to_regclass queries).
+   Authenticated GET users/roles/permissions each returned HTTP 500, for both
+   ADMIN and CUSTOMER test claims. Unauthenticated GET users returned 401.
+   Backend developer needs to deploy the RBAC schema/migrations, regenerate the
+   Prisma client, and provision authorized roles/assignments. A separate scratch
+   database was created for attempted testing, NOT applied to zuberee_db; no
+   successful real-backend CRUD verification was achieved.
+
+2) GET /api/auth/me returns only {userId,email,role}; login and account/me also
+   omit effective roles/permissions. Need a fresh, server-computed permissions
+   string[] on /api/auth/me for EVERY authenticated user, even those who cannot
+   list users or roles. Do not use the global permission catalogue as the user's
+   effective permission set, and do not infer permission from the legacy ADMIN flag.
+   Frontend supports data.permissions string[] (or permission objects) if supplied.
+   Current fallback derives the union of the signed-in user's assigned role
+   permissions from GET users + GET roles, but ONLY when BOTH reads succeed.
+   Therefore users lacking 'view users' OR 'view roles' cannot bootstrap their
+   effective permissions with the current API. Frontend fails closed in that case.
+
+3) Legacy admin endpoints (e.g. sizes) still check JWT role === ADMIN rather than
+   current database role permissions. Assigning an RBAC role does not update that
+   legacy enum or JWT claim. RBAC-only users may still receive 403 on those APIs;
+   revocation may not take effect for those legacy APIs until token expiry.
+   Backend must enforce granular authorization itself. UI hiding is not security.
+
+4) No verified granular permission mappings exist for chat, shipping, couriers,
+   fraud-checker, about-us, social-links and Facebook settings. These pages are
+   deliberately unavailable in permission-driven navigation/direct URL rendering
+   rather than granting guessed access. Backend developer should specify mappings.
+   Sales reporting currently uses the seeded 'view dashboard summary' UI gate;
+   a distinct reporting permission contract is not implemented by the backend.
+
+5) User create/edit/delete endpoints were NOT provided; no such operations were
+   invented. User management here means listing users and assigning their roles.
+   Backend POST roles is not atomic across role creation and permission inserts;
+   invalid permission IDs may leave a role after an error. Frontend uses only
+   catalogue IDs, but server validation/transaction behavior needs backend review.
+
+FRONTEND VERIFICATION
+- Next.js /admin/users and /admin/roles compiled and returned HTTP 200. This proves
+  compilation, not authenticated CRUD success.
+- ESLint targeted changed JS files: zero errors (a hook dependency warning was
+  subsequently corrected and lint re-run).
+- Isolated Chromium tests with MOCKED API responses: role create/edit/delete,
+  delete confirmation, exact permission_ids payload, exact role_ids assignment,
+  required role-name validation, no-permission action visibility, and HTTP
+  401/403/404/409/422/500 failure handling passed without browser runtime errors.
+- Permission refresh: after mutations, window focus, visibility return, and 30s
+  polling; no logout/login is needed for fresh permissions when backend supports it.
+- No successful LIVE CRUD/assignment or database-driven revocation test can be
+  claimed until blockers 1 and 2 are resolved and authorized test access is provided.
+================================================================================
+
+================================================================================
+RBAC REPAIR VERIFIED — 2026-10-17 (supersedes prior missing-table blockers)
+================================================================================
+User explicitly authorized backend/database edits for this repair.
+- Database backed up first to C:\Users\aiuser\zuberee-before-rbac-repair.dump.
+- Added ONLY missing roles/permissions/role_permissions/user_roles tables, using
+  additive migration 20261017160000_repair_missing_rbac. Existing users.role and
+  other application data preserved. Repair migration marked applied with Prisma.
+- Seeded 49 permissions, 4 role definitions, and assigned super-admin to the
+  existing legacy ADMIN account that had no RBAC assignment. No customers promoted.
+- Regenerated Prisma client after stopping only the backend (Windows DLL lock).
+- GET /api/auth/me now returns current database-derived roles and permissions.
+- authenticateRequest checks current user existence/email/legacy role in DB;
+  revoked/deleted accounts are not trusted solely from old JWT claims.
+- Frontend authorization loads /auth/me first; requests management catalogues only
+  when permitted. Catalogue errors do not block unrelated authorized pages.
+- Explicit UI mappings: chat -> view customers; shipping/couriers/about/social/
+  footer/Facebook settings -> view settings; fraud-checker -> view orders.
+  These are UI mappings, not a claim that legacy backend APIs enforce granular RBAC.
+- Missing optional social-links configuration returns 200 null rather than 404.
+
+LIVE VERIFICATION (not mocks)
+Admin users/roles/permissions reads 200; customer users/roles reads 403;
+unauthenticated users read 401. Disposable role create 201, edit 200, assignment
+200, duplicate create 409, assigned-role delete 409, invalid name 400, missing
+role 404, unauthorized create 403, final role delete 200. Same JWT observed
+permission grant and revocation through /auth/me. Existing customer's original
+roles restored and disposable role deleted.
+Chromium over SSH-forwarded localhost: dashboard data visible, user list and
+assignment actions visible, role list and permission picker visible, mobile
+390px dashboard renders. Zero browser runtime errors; zero failed HTTP requests.
+Frontend lint on changed context/mapping files: exit 0.
+
+Operational notes:
+Backend restarted independently of SSH via Win32_Process at port 3001.
+Launcher/logs: C:\Users\aiuser\run-rbac-backend.cmd and rbac-backend-*.log.
+Existing legacy migration history was already incomplete. Do NOT run every old
+pending migration blindly: the old RBAC migration drops/recreates users.role.
+The additive repair avoids that operation; broader historical baselining is a
+separate maintenance task.
+Legacy non-RBAC backend endpoints may still authorize using ADMIN rather than
+individual permissions. Full application-wide granular enforcement remains a
+separate task; this repair fixes the reported dashboard outage and RBAC APIs.
+================================================================================
+
+================================================================================
+AUTHENTICATED-USER ENDPOINT CONSOLIDATION — 2026-10-17
+================================================================================
+Scope explicitly approved: frontend changes plus ONLY backend /api/account/me.
+Backend /api/auth/me was not modified or removed. No schema, middleware, shared
+backend service, or unrelated backend endpoint was changed for this task.
+
+Files changed:
+- backend/app/api/account/me/route.js
+- frontend/context/AuthContext.js
+- frontend/context/PermissionsContext.js
+- all api.txt (this update)
+
+Contract verified before editing:
+GET /api/account/me returned {success,message,data:{id,name,email,phone,image,
+role,joined_at,updated_at,addresses,stats}}. It did not expose RBAC information.
+GET /api/auth/me used userId rather than id and exposed roles/permissions.
+
+Account endpoint additions:
+- roles: string[] and permissions: string[] from existing
+  getUserRolesAndPermissions(user.id). No new rules or role-based shortcuts.
+- Cache-Control: no-store on successful account reads.
+- Existing envelope, lowercase legacy role, profile fields, address formatting,
+  statistics, and error responses retained.
+
+Frontend consolidation:
+- AuthContext remains the shared loader of GET /api/account/me using existing api
+  utility (Bearer token, credentials, expired-session event).
+- Its normalized user now retains roles and permissions. Missing permissions are
+  null (unverified), not an inferred grant from ADMIN.
+- PermissionsContext uses AuthContext.refresh(), validates data.id, and retains
+  its permission-driven catalogue requests, refresh polling, cancellation guards,
+  loading/error behavior and fail-closed checks.
+- Removed frontend's final legacy endpoint reference. The entire frontend source
+  scan found one reference before the change, zero afterwards (dependencies,
+  generated build output and logs excluded).
+- Shared loader ignores results after a concurrent logout/session-token change.
+
+Verification:
+- Targeted frontend ESLint: exit 0.
+- Live API checks (admin and customer): HTTP 200, original profile fields,
+  addresses and statistics retained, roles/permissions arrays exactly match the
+  legacy endpoint's current effective sets, and Cache-Control is no-store.
+- Missing and invalid Bearer tokens: HTTP 401.
+- Legacy backend endpoint still responds successfully (read-only comparison).
+- Live Chromium: dashboard data, users list/assignment controls, roles list and
+  permission picker, and mobile dashboard render successfully.
+- Browser request inspection: account requests carry Authorization: Bearer;
+  ZERO calls to the legacy endpoint, zero failed HTTP requests, zero JS errors.
+- Logout clears local session and redirects; logged-out admin navigation redirects
+  to the login page. No new login credentials were supplied; successful password
+  login was not re-tested. Login/logout endpoint paths and handlers are unchanged.
+- A transient Windows file-sharing error during hot reload was cleared by resaving
+  the frontend source; final browser run passed.
+================================================================================
+
+
+================================================================================
+INVENTORY MOVEMENTS PAGE — FRONTEND-ONLY STOCK OVERVIEW — 2026-10-17
+================================================================================
+User selected: connect existing stock APIs only; do not add a movement ledger.
+No backend source, route, database data, schema or permission definitions changed.
+
+Files changed:
+- frontend/app/(admin)/admin/inventory/movements/page.js
+- frontend/components/admin/AdminShell.js
+- all api.txt (this update)
+
+Navigation: Inventory movements now sits directly below Inventory in Catalogue.
+Existing manage inventory permission retained for sidebar, direct URL and reads.
+Inventory overview is an exact-match link so it does not also highlight on the
+movements page.
+
+Connected endpoints (existing backend handlers inspected):
+GET /api/admin/inventory/summary
+  {message:'success',data:{tracked_products,total_variants,units_on_hand,
+   units_reserved,low_stock,out_of_stock,stock_value,low_stock_threshold}}
+  Note: units_reserved is computed from held units by the actual handler.
+GET /api/admin/inventory/variants?filter=all&page=1&per_page=20&search=...
+  {message:'success',data:{current_page,data:[variant],has_more,per_page,total,
+   total_pages}}
+  Search covers product name, SKU and size/value (not colour).
+  Stock quantities used directly; available is stock minus held per backend.
+  Reserved and held displayed separately, never summed or reinterpreted.
+  Always filter=all: existing backend applies stock filters after pagination,
+  which would make global filtered counts misleading. No such filter invented.
+
+UI: current stock totals; paginated variant table with colour/size, on-hand,
+reserved, held, available, tracking/preorder/status flags, and variant-updated
+(timestamp explicitly NOT represented as a movement timestamp). Search submit,
+clear search, 20/50/100 page sizes, refresh, loading, empty and retry states.
+No unsupported write/adjustment controls or fabricated stock-history events.
+
+IMPORTANT: This page is a READ-ONLY CURRENT STOCK view. Neither API supplies
+receipts, deductions, reasons, movement dates or actor attribution. Backend has
+no movement-history route or movement-log model. This limitation is prominently
+stated on the page. True movement tracking remains unavailable by chosen scope.
+
+Verification:
+- ESLint changed JS files exit 0; Next.js page HTTP 200.
+- Live Chromium against the real frontend/backend: row count, stock and available
+  values match variants response; summary/variants requests carry Bearer token;
+  search empty state, clear search, page-size request and refresh passed.
+- Navigation is in Catalogue and only the correct Inventory entry is active.
+- Mobile 390px: no document horizontal overflow; table scroll stays contained.
+- Live portion: zero failed HTTP requests and zero JavaScript runtime errors.
+- Simulated HTTP 503 shows retry state. Simulated 21-row/two-page response verifies
+  next-page request and page-2 rendering. Live dataset has only 11 variants, so
+  actual next-page navigation cannot be exercised without changing test data.
+- Restricted customer lacks manage inventory: page denies access and sends no
+  inventory API requests. No role or inventory data was modified in these tests.
 ================================================================================

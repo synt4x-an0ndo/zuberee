@@ -19,7 +19,7 @@ import { useAsync } from "@/lib/useAsync";
 const tk = (value) => `৳${invoiceMoney(value)}`;
 
 /**
- * Invoice page (Eyara-style): on-screen printable invoice for one order,
+ * Invoice page (Zuberee-style): on-screen printable invoice for one order,
  * plus a premium PDF download. Print CSS in globals.css hides the admin
  * shell so Print -> Save as PDF produces the clean sheet only.
  */

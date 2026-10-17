@@ -63,7 +63,7 @@ export default function RegisterForm() {
 
   return (
     <AuthCard
-      eyebrow="Join Eyara"
+      eyebrow="Join Zuberee"
       title="Create your account"
       subtitle="Save your details for faster checkout and order tracking."
       footer={

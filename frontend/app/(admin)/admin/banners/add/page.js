@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Create Hero Banner (Eyara parity).
+ * Create Hero Banner (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/banners/add — "Create Hero Banner" form with
+ * Zuberee reference: GET /dashboard/banners/add — "Create Hero Banner" form with
  * one or more Image + Link rows ("+ Add More"), then "Create Banner".
  * Zuberee's Banners list page creates banners in a modal; this route is the
- * standalone page form so the Eyara URL structure is fully covered.
+ * standalone page form so the Zuberee URL structure is fully covered.
  *
  * FRONTEND ONLY (backend API to be wired by the backend dev, no UI change needed):
  *   POST /api/banners   multipart per banner: image, link, display_priority, is_active

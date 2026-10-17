@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Update Shipping Cost (Eyara parity).
+ * Update Shipping Cost (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/shipping/edit/:id — "Update Shipping Cost"
+ * Zuberee reference: GET /dashboard/shipping/edit/:id — "Update Shipping Cost"
  * form with the same Shipping Type / cost fields as the add page.
  * Zuberee's Shipping costs page edits a rate set inline in its history table;
- * this route is the standalone Eyara-style edit page.
+ * this route is the standalone Zuberee-style edit page.
  *
  * FRONTEND ONLY (backend APIs to be wired by the backend dev, no UI change needed):
  *   GET /api/admin/shipping-costs        -> rate rows (newest first); this page

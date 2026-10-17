@@ -1,5 +1,6 @@
 "use client";
 
+import ViewportPortal from "@/components/ViewportPortal";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { FiCheckCircle, FiInfo, FiXCircle } from "react-icons/fi";
 
@@ -93,6 +94,7 @@ export function FeedbackProvider({ children }) {
       </div>
 
       {dialog && (
+        <ViewportPortal>
         <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && closeDialog(false)}>
           <div className="dialog anim-scale-in" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title">
             <h2 id="dialog-title">{dialog.title}</h2>
@@ -112,6 +114,7 @@ export function FeedbackProvider({ children }) {
             </div>
           </div>
         </div>
+        </ViewportPortal>
       )}
     </FeedbackContext.Provider>
   );

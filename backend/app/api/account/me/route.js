@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/directory/prisma/prisma.js";
+import { getUserRolesAndPermissions } from "@/lib/permissions.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
 export async function GET(request) {
@@ -74,6 +75,8 @@ export async function GET(request) {
             },
         });
 
+        const access = await getUserRolesAndPermissions(user.id);
+
         return NextResponse.json(
             {
                 success: true,
@@ -85,6 +88,8 @@ export async function GET(request) {
                     phone: user.phone,
                     image: user.image,
                     role: user.role.toLowerCase(),
+                    roles: access.roles,
+                    permissions: access.permissions,
                     joined_at: user.createdAt,
                     updated_at: user.updatedAt,
                     addresses: user.addresses.map((addr) => ({
@@ -105,7 +110,7 @@ export async function GET(request) {
                     },
                 },
             },
-            { status: 200 }
+            { status: 200, headers: { "Cache-Control": "no-store" } }
         );
     } catch (error) {
         console.error("Get profile API error:", error);

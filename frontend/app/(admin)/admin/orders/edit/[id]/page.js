@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Edit order — full frontend form (Eyara-style).
+ * Edit order — full frontend form (Zuberee-style).
  *
  * Everything is displayed and editable. Saving sends ONE PATCH to
  * `api/admin/orders/:id` with the contract in

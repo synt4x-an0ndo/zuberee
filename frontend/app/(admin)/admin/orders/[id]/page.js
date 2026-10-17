@@ -17,7 +17,7 @@ import { downloadOrderInvoicePdf } from "@/lib/orderInvoicePdf";
 import { useAsync } from "@/lib/useAsync";
 
 /**
- * Order detail — Eyara-style three columns:
+ * Order detail — Zuberee-style three columns:
  * Ordered Products | Order Summary | Manage Order (status / payment / courier,
  * Edit, Invoice). Status + payment save through the existing PATCH endpoint
  * today; `courier_entry` rides along in the same payload for the extended

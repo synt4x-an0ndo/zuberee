@@ -171,7 +171,7 @@ Response:
     "data": {
         "id": 1,
         "image": "/api/banners/1/image",
-        "link": "https://eyarafashion.com/",
+        "link": "/",
         "display_priority": 2,
         "is_active": true,
         "created_at": "2026-10-07T18:04:06.659Z",

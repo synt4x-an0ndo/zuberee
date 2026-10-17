@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { FiChevronDown, FiMenu, FiSearch, FiShoppingBag, FiUser, FiX } from "react-icons/fi";
+import UserAvatar from "@/components/UserAvatar";
 import Img from "@/components/Img";
 import CategoryMenu from "@/components/site/CategoryMenu";
 import { cx } from "@/components/ui";
@@ -180,7 +181,7 @@ export default function Header() {
               aria-label={isAuthenticated ? `Account${user?.name ? `: ${user.name}` : ""}` : "Sign in"}
               title={isAuthenticated ? "My account" : "Sign in"}
             >
-              <FiUser aria-hidden="true" />
+              {isAuthenticated ? <UserAvatar image={user?.image} width={26} height={26} /> : <FiUser aria-hidden="true" />}
             </Link>
             <button type="button" className="icon-btn cart-btn" onClick={openDrawer} aria-label={`Cart, ${count} items`}>
               <FiShoppingBag aria-hidden="true" />

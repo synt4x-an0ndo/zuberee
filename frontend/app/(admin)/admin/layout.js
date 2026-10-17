@@ -1,21 +1,25 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import AdminShell from "@/components/admin/AdminShell";
-import { Button, Skeleton } from "@/components/ui";
+import { Skeleton } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
+import { PermissionsProvider } from "@/context/PermissionsContext";
 
-const LOGIN = "/login/admin/login_eyara_xyz";
+const LOGIN = "/login/admin/login_zuberee_xyz";
 
 export default function AdminLayout({ children }) {
-  const { user, loading, isAuthenticated, isAdmin, logout } = useAuth();
+  const { loading, isAuthenticated } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.replace(LOGIN);
+    if (loading) return;
+    if (!isAuthenticated) {
+      router.replace(LOGIN);
+      return;
+    }
+
   }, [loading, isAuthenticated, router]);
 
   if (loading || !isAuthenticated) {
@@ -27,22 +31,13 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="admin-gate">
-        <div className="card card-pad" style={{ maxWidth: 480, textAlign: "center" }}>
-          <h1 style={{ fontSize: "1.4rem" }}>Admin access required</h1>
-          <p className="muted" style={{ margin: "0.5rem 0 1.25rem" }}>
-            You are signed in as {user?.email}, which does not have admin access.
-          </p>
-          <div className="row" style={{ justifyContent: "center" }}>
-            <Button variant="outline" onClick={async () => { await logout(); router.replace(LOGIN); }}>Sign out</Button>
-            <Link href="/" className="btn btn-primary">Back to store</Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  return <AdminShell>{children}</AdminShell>;
+
+  // PermissionsProvider resolves the signed-in user's effective permissions and keeps them
+  // in sync, so the panel can hide what the caller may not use.
+  return (
+    <PermissionsProvider>
+      <AdminShell>{children}</AdminShell>
+    </PermissionsProvider>
+  );
 }

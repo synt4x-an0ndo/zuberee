@@ -1,5 +1,7 @@
+import { clearUpdateReads, observeUpdateRead } from "@/lib/chatUpdateCache";
+
 /**
- * API client for the Eyara Fashion backend (Next.js route handlers in /backend).
+ * API client for the Zuberee Fashion backend (Next.js route handlers in /backend).
  *
  * - Base URL comes from NEXT_PUBLIC_API_BASE_URL. It is never guessed: when it is
  *   empty, every request fails fast with ApiError code API_NOT_CONFIGURED.
@@ -13,7 +15,7 @@ const rawBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
 export const API_BASE = rawBase.replace(/\/+$/, "");
 export const API_CONFIGURED = Boolean(API_BASE);
 
-export const AUTH_EXPIRED_EVENT = "eyara:auth-expired";
+export const AUTH_EXPIRED_EVENT = "zuberee:auth-expired";
 const TOKEN_KEY = "token";
 
 /* ------------------------------------------------------------------ */
@@ -32,6 +34,7 @@ export function getToken() {
 }
 
 export function setToken(token) {
+  if (getToken() !== token) clearUpdateReads();
   if (typeof window === "undefined" || !token) return;
   try {
     window.localStorage.setItem(TOKEN_KEY, token);
@@ -44,6 +47,7 @@ export function setToken(token) {
 }
 
 export function clearToken() {
+  clearUpdateReads();
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(TOKEN_KEY);
@@ -138,7 +142,7 @@ function errorMessage(status, data) {
   return `Request failed (${status}).`;
 }
 
-export async function request(path, options = {}) {
+async function performRequest(path, options = {}) {
   const { method = "GET", body, auth = true, params, signal, headers: extra = {} } = options;
 
   if (!API_CONFIGURED) {
@@ -195,6 +199,13 @@ export async function request(path, options = {}) {
     throw new ApiError(errorMessage(response.status, data), response.status, data);
   }
   return data;
+}
+
+// Share in-flight reads and observe only the four update data sources. Other requests are unchanged.
+export function request(path, options = {}) {
+  if ((options.method || "GET") !== "GET") return performRequest(path, options);
+  const scope = getToken() || "guest";
+  return observeUpdateRead(scope, path, options.params, () => performRequest(path, options));
 }
 
 export const api = {

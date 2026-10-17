@@ -137,7 +137,7 @@ export function SiteProvider({ children }) {
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const name = (state.settings?.site_name || "").trim() || "Store";
+    const name = (state.settings?.site_name || "").trim() || "Zuberee";
     document.title = name;
     const faviconSource = state.settings?.favicon_path || state.footer?.company_logo || state.footer?.logo_path;
     if (faviconSource) {
@@ -193,7 +193,7 @@ export function SiteProvider({ children }) {
       error: state.error,
       backendAvailable: API_CONFIGURED && !state.error && !state.loading,
       settings,
-      siteName: (settings.site_name || "").trim(),
+      siteName: (settings.site_name || "").trim() || "Zuberee",
       logoSizes: normalizeLogoSizes(settings.logo_sizes),
       favicon: imgUrl(settings.favicon_path) || "",
       faviconZoom: clampFaviconZoom(settings.favicon_zoom),

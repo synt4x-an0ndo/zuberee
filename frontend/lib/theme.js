@@ -7,10 +7,10 @@
  */
 
 export const DEFAULT_BRAND = "#0e2b1b";
-export const THEME_STORAGE_KEY = "eyara:brand";
+export const THEME_STORAGE_KEY = "zuberee:brand";
 
 export const THEME_PRESETS = [
-  { name: "Eyara Green", hex: "#0e2b1b" },
+  { name: "Zuberee Green", hex: "#0e2b1b" },
   { name: "Ocean", hex: "#0b5d8a" },
   { name: "Terracotta", hex: "#b4532a" },
   { name: "Rose", hex: "#a8325e" },
@@ -87,4 +87,4 @@ export function applyPalette(palette) {
 }
 
 /** Inline script run before paint so returning visitors never see the default colour flash. */
-export const THEME_BOOT_SCRIPT = `(function(){try{var h=localStorage.getItem('${THEME_STORAGE_KEY}');if(!h||!/^#[0-9a-f]{6}$/i.test(h))return;var n=parseInt(h.slice(1),16);var r=(n>>16)&255,g=(n>>8)&255,b=n&255;var hex=function(f){return '#'+[r,g,b].map(function(c){return Math.max(0,Math.min(255,Math.round(f(c)))).toString(16).padStart(2,'0')}).join('')};var d=document.documentElement.style;d.setProperty('--brand',h);d.setProperty('--brand-rgb',r+' '+g+' '+b);d.setProperty('--brand-dark',hex(function(c){return c*0.75}));d.setProperty('--brand-deep',hex(function(c){return c*0.45}));d.setProperty('--brand-mid',hex(function(c){return c+(255-c)*0.6}));d.setProperty('--brand-soft',hex(function(c){return c+(255-c)*0.9}));d.setProperty('--brand-tint',hex(function(c){return c+(255-c)*0.95}));d.setProperty('--brand-contrast',(0.2126*r+0.7152*g+0.0722*b)/255>0.5?'#111812':'#ffffff');}catch(e){}})();`;
+export const THEME_BOOT_SCRIPT = `(function(){try{var k='${THEME_STORAGE_KEY}',legacy='eyara:brand',h=localStorage.getItem(k)||localStorage.getItem(legacy);if(!h||!/^#[0-9a-f]{6}$/i.test(h))return;localStorage.setItem(k,h);localStorage.removeItem(legacy);var n=parseInt(h.slice(1),16);var r=(n>>16)&255,g=(n>>8)&255,b=n&255;var hex=function(f){return '#'+[r,g,b].map(function(c){return Math.max(0,Math.min(255,Math.round(f(c)))).toString(16).padStart(2,'0')}).join('')};var d=document.documentElement.style;d.setProperty('--brand',h);d.setProperty('--brand-rgb',r+' '+g+' '+b);d.setProperty('--brand-dark',hex(function(c){return c*0.75}));d.setProperty('--brand-deep',hex(function(c){return c*0.45}));d.setProperty('--brand-mid',hex(function(c){return c+(255-c)*0.6}));d.setProperty('--brand-soft',hex(function(c){return c+(255-c)*0.9}));d.setProperty('--brand-tint',hex(function(c){return c+(255-c)*0.95}));d.setProperty('--brand-contrast',(0.2126*r+0.7152*g+0.0722*b)/255>0.5?'#111812':'#ffffff');}catch(e){}})();`;

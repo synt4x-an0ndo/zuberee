@@ -1,5 +1,6 @@
 "use client";
 
+import ViewportPortal from "@/components/ViewportPortal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,12 +10,24 @@ import { Badge, Button, EmptyState, ErrorState, Input, Pagination, Select, Skele
 import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
-import { badgePath } from "@/lib/customers";
+import { badgePath, badgeTone } from "@/lib/customers";
 import { ORDER_STATUS_OPTIONS, formatDateTime, formatOrderNumber, orderStatusMeta } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
 const EMPTY = { search: "", status: "", district: "", from: "", to: "" };
 const BADGE_OPTIONS = ["VIP", "Repeat Customer", "Priority", "High Value"];
+
+function assignedBadgeStyle(value) {
+  const name = String(value || "").trim().toLowerCase();
+  // VIP retains the existing gold palette; other badges use their customer tones.
+  if (!name || name === "vip") return undefined;
+  const key = { "repeat customer": "repeat", "high value": "high-value" }[name] || name;
+  if (key === "priority") return { color: "#7c3aed", background: "#f3e8ff" };
+  const tone = badgeTone(key);
+  return tone === "neutral"
+    ? { color: "var(--ink-2)", background: "var(--line-2)" }
+    : { color: `var(--${tone})`, background: `var(--${tone}-soft)` };
+}
 
 /** key accepted by PATCH /api/admin/customer-leaderboard/:key/badge */
 function customerKey(order) {
@@ -409,8 +422,7 @@ export default function AdminOrdersPage() {
                           <FiPrinter aria-hidden="true" /> <span>Invoice</span>
                         </button>
                         <button type="button" className="order-action-button order-action-badge" aria-label={`Assign badge to ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openBadgeDialog(o); }}>
-                          <FiTag aria-hidden="true" /> <span>Badge</span>
-                          {rowBadge && <span className="orders-assigned-badge">{rowBadge}</span>}
+                          <FiTag aria-hidden="true" /> <span className={rowBadge ? "orders-assigned-badge" : undefined} style={assignedBadgeStyle(rowBadge)}>{rowBadge || "Badge"}</span>
                         </button>
                         <button type="button" className="order-action-button order-action-courier" aria-label={`Open courier profile for ${o.name || "customer"}`} onClick={(event) => { event.stopPropagation(); openCourierDialog(o); }}>
                           <FiTruck aria-hidden="true" /> <span>Courier</span>
@@ -437,6 +449,7 @@ export default function AdminOrdersPage() {
         </>
       )}
     {activeDialog && activeOrder && (
+      <ViewportPortal>
       <div className="orders-modal-backdrop" onClick={(event) => event.target === event.currentTarget && closeActionDialog()}>
         <section className={`orders-modal ${activeDialog === "courier" ? "orders-modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="orders-action-modal-title">
           <header className="orders-modal-header">
@@ -507,6 +520,7 @@ export default function AdminOrdersPage() {
           )}
         </section>
       </div>
+      </ViewportPortal>
     )}
     </div>
   );

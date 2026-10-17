@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FiBox, FiCalendar, FiCheckCircle, FiClock, FiPhone, FiShield, FiUser } from "react-icons/fi";
-import Img from "@/components/Img";
+import { FiBox, FiCalendar, FiCheckCircle, FiClock, FiPhone, FiShield } from "react-icons/fi";
+import UserAvatar from "@/components/UserAvatar";
 import { Badge, Button, Card, CardHeader, EmptyState, Skeleton, Stat } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
-import { api, formatMoney, imgUrl } from "@/lib/api";
+import { api, formatMoney } from "@/lib/api";
 import { normalizeOrders } from "@/lib/order";
 import { formatDate, formatOrderNumber, orderStatusMeta } from "@/lib/format";
 
@@ -37,7 +37,7 @@ export default function AccountOverview() {
 
       <div className="profile-box">
         <div className="profile-box-avatar">
-          {imgUrl(user?.image) ? <Img src={imgUrl(user.image)} alt={user?.name || "Profile photo"} fill sizes="96px" /> : <FiUser aria-hidden="true" />}
+          <UserAvatar image={user?.image} alt={user?.name || "Profile photo"} fill sizes="96px" />
         </div>
         <h2 className="profile-box-name">{user?.name || "—"}</h2>
         {user?.email && <p className="profile-box-email">{user.email}</p>}

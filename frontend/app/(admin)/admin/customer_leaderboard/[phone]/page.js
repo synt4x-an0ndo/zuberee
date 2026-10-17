@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Customer details by phone (Eyara parity).
+ * Customer details by phone (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/customer_leaderboard/:phone — a customer
+ * Zuberee reference: GET /dashboard/customer_leaderboard/:phone — a customer
  * detail page reached from the leaderboard: name + New/Repeat badge, Total
  * Spent, Contact Information (Phone / Email / District / Address), Order
  * Statistics (Total Orders / First Order / Last Order) and an Order History
@@ -13,7 +13,7 @@
  * detail route. This is that page.
  *
  * FRONTEND ONLY (backend API to be wired by the backend dev, no UI change needed):
- *   GET /api/customers/:phone   (Eyara path; a Zuberee mount such as
+ *   GET /api/customers/:phone   (Zuberee path; a Zuberee mount such as
  *   GET /api/admin/customer-leaderboard/:phone or /api/admin/customers/:phone
  *   works too — this loader accepts any of these response shapes:)
  *     { data: { name, phone, email, district, address, badge_title|badge,
@@ -23,7 +23,7 @@
  *                          items: [{ title, qty, selected_size|size, unitPrice,
  *                                    totalPrice, image }] }] } }
  * Fields are read defensively (several alias keys per field), so the backend
- * dev can return the Eyara shape or extend the existing leaderboard row shape
+ * dev can return the Zuberee shape or extend the existing leaderboard row shape
  * with an `orders` array. Until the endpoint answers, the page renders its
  * full layout with the phone from the URL and empty states.
  */
@@ -39,7 +39,7 @@ import { api, formatMoney, imgUrl } from "@/lib/api";
 import { badgeLabel, badgeTone } from "@/lib/customers";
 import { formatDate, formatDateTime } from "@/lib/format";
 
-const EYARA_BADGE_LABELS = {
+const ZUBEREE_BADGE_LABELS = {
   black_list_customer: "Black List Customer",
   very_annoying_customer: "Very Annoying Customer",
   tester: "Tester",
@@ -116,7 +116,7 @@ export default function CustomerLeaderboardDetailPage() {
     };
   }, [phone]);
 
-  const badgeText = detail?.badge ? EYARA_BADGE_LABELS[detail.badge] || badgeLabel(detail.badge) || String(detail.badge) : "";
+  const badgeText = detail?.badge ? ZUBEREE_BADGE_LABELS[detail.badge] || badgeLabel(detail.badge) || String(detail.badge) : "";
   const isRepeat = (detail?.totalOrders || 0) > 1;
 
   return (

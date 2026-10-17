@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FiCamera, FiEdit2, FiMapPin, FiPlus, FiTrash2, FiUser } from "react-icons/fi";
-import Img from "@/components/Img";
+import { FiCamera, FiEdit2, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
+import UserAvatar from "@/components/UserAvatar";
+import { DEFAULT_AVATAR } from "@/lib/avatar";
 import PasswordInput from "@/components/PasswordInput";
 import { Button, Card, CardHeader, EmptyState, Field, Input, Modal } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
 import { useFeedback } from "@/context/FeedbackContext";
-import { api, imgUrl, isValidBdPhone, normalizePhone } from "@/lib/api";
+import { api, isValidBdPhone, normalizePhone } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 
 const EMPTY_ADDRESS = { fullName: "", phone: "", addressLine: "", city: "", postalCode: "", country: "Bangladesh" };
@@ -72,18 +73,18 @@ function PersonalCard({ user, refresh, toast }) {
     }
   };
 
-  const avatar = imgUrl(user?.image);
+  const hasCustomAvatar = Boolean(user?.image && user.image !== DEFAULT_AVATAR);
   return (
     <Card>
       <CardHeader title="Personal details" subtitle={user?.email} />
       <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
         <div className="avatar avatar-lg" style={{ position: "relative", width: 84, height: 84 }}>
-          {avatar ? <Img src={avatar} alt="" fill sizes="84px" /> : <FiUser aria-hidden="true" />}
+          <UserAvatar image={user?.image} alt="Profile photo" fill sizes="84px" />
         </div>
         <div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
           <Button variant="outline" size="sm" loading={uploading} onClick={() => fileRef.current?.click()}>
-            <FiCamera aria-hidden="true" /> {avatar ? "Change photo" : "Upload photo"}
+            <FiCamera aria-hidden="true" /> {hasCustomAvatar ? "Change photo" : "Upload photo"}
           </Button>
           <p className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>JPG or PNG, up to 5 MB.</p>
         </div>

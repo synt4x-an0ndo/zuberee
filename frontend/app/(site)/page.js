@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FiCreditCard, FiMessageCircle, FiTruck } from "react-icons/fi";
 import CategoryRow from "@/components/site/CategoryRow";
@@ -40,9 +39,6 @@ export default function HomePage() {
     };
   }, []);
 
-  const tiles = categories.flat
-    .filter((category) => category.homepage && (category.productCount == null || category.productCount > 0))
-    .slice(0, 8);
   const rows = [...categories.flat].sort((a, b) => Number(b.homepage) - Number(a.homepage));
   const hasCategoryNav = categories.flat.length > 0;
 
@@ -85,29 +81,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
-      {tiles.length > 0 && (
-        <section className="container section" style={{ paddingBottom: 0 }}>
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Browse</p>
-              <h2>Shop by category</h2>
-            </div>
-          </div>
-          {tiles.length > 0 && (
-            <div className="cat-grid stagger">
-              {tiles.map((category) => (
-                <Link key={category.id} href={`/${category.slug}`} className="cat-tile">
-                  <strong>{category.name}</strong>
-                  <span>
-                    {category.productCount != null ? `${category.productCount} products` : "View collection"} →
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
 
       {rows.map((category) => (
         <div key={category.id} className="container">

@@ -21,12 +21,8 @@ export async function GET() {
             orderBy: { createdAt: "asc" },
         });
 
-        if (!social) {
-            return Response.json(
-                { message: "Social links not configured." },
-                { status: 404 }
-            );
-        }
+        // Missing optional configuration is an empty resource, not a broken route.
+        if (!social) return Response.json(null);
 
         return Response.json(formatSocialLinks(social));
     } catch (error) {

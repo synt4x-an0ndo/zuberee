@@ -1,5 +1,6 @@
 "use client";
 
+import ViewportPortal from "@/components/ViewportPortal";
 import Link from "next/link";
 import { useEffect } from "react";
 import { FiChevronLeft, FiChevronRight, FiInbox, FiX } from "react-icons/fi";
@@ -207,6 +208,7 @@ export function Modal({ open, onClose, title, children, footer, width = "560px" 
 
   if (!open) return null;
   return (
+    <ViewportPortal>
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className="modal anim-scale-in" style={{ maxWidth: width }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
@@ -219,6 +221,7 @@ export function Modal({ open, onClose, title, children, footer, width = "560px" 
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
     </div>
+    </ViewportPortal>
   );
 }
 

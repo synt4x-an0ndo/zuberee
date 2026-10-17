@@ -40,7 +40,7 @@ export default function CategoryRow({ category }) {
       {state.error ? (
         <ErrorState message={state.error} />
       ) : state.loading ? (
-        <div className="product-grid is-compact">
+        <div className="product-grid shop-products-grid">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="card" style={{ padding: 0, overflow: "hidden" }}>
               <Skeleton style={{ aspectRatio: "4 / 5", width: "100%", borderRadius: 0 }} />
@@ -51,7 +51,7 @@ export default function CategoryRow({ category }) {
           ))}
         </div>
       ) : (
-        <div className="product-grid is-compact stagger">
+        <div className="product-grid shop-products-grid stagger">
           {state.products.map((product, i) => (
             <ProductCard key={product.id} product={product} index={i} />
           ))}

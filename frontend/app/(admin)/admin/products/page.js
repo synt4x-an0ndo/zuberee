@@ -1,5 +1,6 @@
 "use client";
 
+import ViewportPortal from "@/components/ViewportPortal";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { FiEdit2, FiEye, FiList, FiPlus, FiSearch, FiTrash2, FiVideo, FiX } from "react-icons/fi";
@@ -95,12 +96,12 @@ export default function ProductsPage() {
                 <td>
                   <div className="product-reference-image">{p.image && <Img src={p.image} alt="" fill sizes="52px" />}</div>
                 </td>
-                <td className="product-info-cell">
+                <td><div className="product-info-cell">
                   <strong>{p.title}</strong>
                   <span className="muted">Created: —</span>
                   <span className="price-now">Discount: {formatMoney(p.salePrice)}</span>
                   <span className="badge badge-warn">ID: {p.id}</span>
-                </td>
+                </div></td>
                 <td><span className="badge badge-neutral">{p.sku || "—"}</span></td>
                 <td>
                   <div className="product-color-list">
@@ -131,6 +132,7 @@ export default function ProductsPage() {
         </DataTable>
       )}
       {specProduct && (
+        <ViewportPortal>
         <div className="product-spec-modal-backdrop" onClick={(event) => event.target === event.currentTarget && setSpecProduct(null)}>
           <section className="product-spec-modal" role="dialog" aria-modal="true" aria-labelledby="product-spec-title">
             <header className="product-spec-modal-header">
@@ -170,6 +172,7 @@ export default function ProductsPage() {
             </footer>
           </section>
         </div>
+        </ViewportPortal>
       )}
     </div>
   );

@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Edit banner / Add Banner Images (Eyara parity).
+ * Edit banner / Add Banner Images (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/banners/edit/:id — "Add Banner Images" form
+ * Zuberee reference: GET /dashboard/banners/edit/:id — "Add Banner Images" form
  * with Select Type (Hero Section Slider / Slot / Category), Select category,
  * Select Slot, a Give link field and image upload, saved with Save.
  * Zuberee's Banners list page edits a banner's image/link/order/active flag
- * in a modal; this route is the standalone Eyara-style edit page.
+ * in a modal; this route is the standalone Zuberee-style edit page.
  *
  * FRONTEND ONLY (backend APIs to be wired by the backend dev, no UI change needed):
  *   GET  /api/banners/:id                 -> banner { id, image, link, type, ... }
@@ -142,7 +142,7 @@ export default function BannerEditPage() {
       <AdminHeader
         eyebrow="Storefront"
         title="Add Banner Images"
-        subtitle={`Banner #${id} — type, placement and image, as on Eyara's banner edit page.`}
+        subtitle={`Banner #${id} — type, placement and image, as on Zuberee's banner edit page.`}
         actions={
           <Button variant="ghost" href="/admin/banners">
             <FiArrowLeft aria-hidden="true" /> Banners

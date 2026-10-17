@@ -7,6 +7,7 @@ function formatUser(user) {
         id: user.id,
         name: user.name,
         email: user.email,
+        image: user.image,
         email_verified_at: null,
         created_at: user.createdAt,
         updated_at: user.updatedAt,

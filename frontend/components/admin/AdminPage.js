@@ -1,3 +1,4 @@
+import AlignedTable from "@/components/AlignedTable";
 import { cx } from "@/components/ui";
 
 /** Standard admin page heading: eyebrow, title, optional subtitle and action buttons. */
@@ -18,7 +19,7 @@ export function AdminHeader({ eyebrow, title, subtitle, actions }) {
 export function DataTable({ children, className = "" }) {
   return (
     <div className={cx("table-wrap", className)}>
-      <table className="table">{children}</table>
+      <AlignedTable className="table">{children}</AlignedTable>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { FiShoppingCart, FiX, FiZap } from "react-icons/fi";
+import { FiShoppingBag, FiShoppingCart, FiX } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import Img from "@/components/Img";
 import { useCart } from "@/context/CartContext";
@@ -286,13 +286,25 @@ export default function ProductCard({ product: raw, index = 0 }) {
           </div>
 
           <div className="product-card-actions" aria-label={`Quick actions for ${product.title}`}>
-            <button type="button" className="product-card-action is-buy" onClick={() => openQuickAction("buy")} disabled={unavailable || Boolean(busyAction)}>
-              <FiZap aria-hidden="true" />
-              <span>Buy Now</span>
+            <button
+              type="button"
+              className="product-card-action is-buy"
+              onClick={() => openQuickAction("buy")}
+              disabled={unavailable || Boolean(busyAction)}
+              aria-label={`Buy ${product.title} now`}
+              title={`Buy ${product.title} now`}
+            >
+              <FiShoppingBag aria-hidden="true" />
             </button>
-            <button type="button" className="product-card-action is-cart" onClick={() => openQuickAction("add")} disabled={unavailable || Boolean(busyAction)}>
+            <button
+              type="button"
+              className="product-card-action is-cart"
+              onClick={() => openQuickAction("add")}
+              disabled={unavailable || Boolean(busyAction)}
+              aria-label={`Add ${product.title} to cart`}
+              title={`Add ${product.title} to cart`}
+            >
               <FiShoppingCart aria-hidden="true" />
-              <span>Add to Cart</span>
             </button>
           </div>
         </div>

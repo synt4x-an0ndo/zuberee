@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Edit Customer (Eyara parity).
+ * Edit Customer (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/customers/edit/:id — "Edit Customer" form:
+ * Zuberee reference: GET /dashboard/customers/edit/:id — "Edit Customer" form:
  * Name, Phone, Badge (No badge / Black List Customer / Very Annoying Customer /
  * Tester / Owner / Silver Customer / Golden Customer), Email and Password
  * ("Fill email and password to create a user login for this customer.",
@@ -14,10 +14,10 @@
  * FRONTEND ONLY (backend APIs to be wired by the backend dev, no UI change needed):
  *   GET /api/admin/customer-profiles/:id  -> { data: { id, name, phone, email, badge_title, ... } }
  *   PUT /api/admin/customer-profiles/:id  <- { name, phone, email|null, badge_title|null, password? }
- * Eyara calls the same resource without the /admin prefix
+ * Zuberee calls the same resource without the /admin prefix
  * (GET/PUT /api/customer-profiles/:id) — either mount point works for this
  * page as long as the field names above are honoured. Note the badge values
- * here are Eyara `badge_title` strings; the backend dev should map them to
+ * here are Zuberee `badge_title` strings; the backend dev should map them to
  * whatever badge storage the Customers/Leaderboard badge flow uses.
  */
 
@@ -31,7 +31,7 @@ import { Button, Card, CardHeader, Field, Input, Select, Skeleton } from "@/comp
 import { useFeedback } from "@/context/FeedbackContext";
 import { api } from "@/lib/api";
 
-/** Badge options exactly as on the live Eyara Edit Customer page. */
+/** Badge options exactly as on the live Zuberee Edit Customer page. */
 const BADGE_TITLE_OPTIONS = [
   { value: "", label: "No badge" },
   { value: "black_list_customer", label: "Black List Customer" },

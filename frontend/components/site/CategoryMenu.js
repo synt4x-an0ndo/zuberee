@@ -8,7 +8,7 @@ import { cx } from "@/components/ui";
 import { useSite } from "@/context/SiteContext";
 
 /**
- * "All Categories" dropdown, replicating the eyarafashion.com pattern:
+ * "All Categories" dropdown, replicating the Zuberee storefront pattern:
  * a compact panel the same width as the button opens below it (on hover
  * for desktop pointers, on click for touch/keyboard); every root category
  * is a link, and hovering a category that has children flies its
@@ -63,7 +63,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
   useEffect(() => setOpen(false), [pathname]);
 
   // Measure (and keep measuring) the header panel's fixed position so the
-  // panel hugs the button exactly like Eyara (same width, flush below).
+  // panel hugs the button exactly like Zuberee (same width, flush below).
   useEffect(() => {
     if (!open || isBottomSheet) return undefined;
     const update = () => {
@@ -171,7 +171,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
               );
             }
 
-            // Desktop header (Eyara): the row itself is the link; children
+            // Desktop header (Zuberee): the row itself is the link; children
             // fly out to the right while the row is hovered.
             const isHovered = hovered === category.id;
             return (

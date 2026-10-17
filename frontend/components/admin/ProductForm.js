@@ -1,5 +1,6 @@
 "use client";
 
+import AlignedTable from "@/components/AlignedTable";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -332,7 +333,7 @@ export default function ProductForm({ mode, productId, initial }) {
               </div>
               {form.sizes.length > 0 && (
                 <div className="table-wrap">
-                  <table className="table">
+                  <AlignedTable className="table">
                     <thead><tr><th>Size</th><th>Stock</th><th>Price override (৳)</th><th /></tr></thead>
                     <tbody>
                       {form.sizes.map((s, i) => (
@@ -344,7 +345,7 @@ export default function ProductForm({ mode, productId, initial }) {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </AlignedTable>
                 </div>
               )}
             </div>

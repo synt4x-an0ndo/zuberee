@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * Add Shipping Cost (Eyara parity).
+ * Add Shipping Cost (Zuberee parity).
  *
- * Eyara reference: GET /dashboard/shipping/add — "Add Shipping Cost" form with
+ * Zuberee reference: GET /dashboard/shipping/add — "Add Shipping Cost" form with
  * Shipping Type (Inside/Outside Dhaka | One Shipping), Inside Dhaka Cost,
  * Outside Dhaka Cost, and "Shipping Cost: (Applicable For All District)".
  * Zuberee's Shipping costs page creates a rate set with an inline form; this
- * route is the standalone Eyara-style page.
+ * route is the standalone Zuberee-style page.
  *
  * FRONTEND ONLY (backend API to be wired by the backend dev, no UI change needed):
  *   POST /api/admin/shipping-costs

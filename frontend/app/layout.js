@@ -4,10 +4,10 @@ import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
 export const metadata = {
   title: {
-    default: "Store",
-    template: "%s | Store",
+    default: "Zuberee",
+    template: "%s | Zuberee",
   },
-  description: "Online store with cash on delivery.",
+  description: "Shop Zuberee online with cash on delivery.",
 };
 
 export const viewport = {

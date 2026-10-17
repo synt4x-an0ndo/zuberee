@@ -1,8 +1,9 @@
 "use client";
 
+import ChatUpdates from "@/components/site/ChatUpdates";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { FiChevronLeft, FiChevronRight, FiClock, FiCpu, FiLock, FiLogIn, FiMessageCircle, FiSend, FiUser, FiX, FiZap } from "react-icons/fi";
+import { FiChevronLeft, FiChevronRight, FiClock, FiCpu, FiLock, FiLogIn, FiHeadphones, FiSend, FiUser, FiX, FiZap } from "react-icons/fi";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useSite } from "@/context/SiteContext";
@@ -77,6 +78,7 @@ export default function ChatWidget() {
   const { drawerOpen } = useCart();
   const { siteName } = useSite();
   const [open, setOpen] = useState(false);
+  const [updatesDismissedFor, setUpdatesDismissedFor] = useState(null);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef(null);
   const closePanel = () => {
@@ -319,7 +321,7 @@ export default function ChatWidget() {
                 </>
               ) : (
                 <span className="chat-head-avatar" aria-hidden="true">
-                  <FiMessageCircle />
+                  <FiHeadphones />
                 </span>
               )}
               <span className="chat-head-text">
@@ -329,7 +331,7 @@ export default function ChatWidget() {
                     ? "Store team · live, session only"
                     : view === "ai"
                       ? "Shopping assistant · replies instantly"
-                      : "We usually reply within minutes"}
+                      : "AI assistant & store team"}
                 </small>
               </span>
               <button type="button" className="chat-close" onClick={closePanel} aria-label="Close chat">
@@ -338,8 +340,8 @@ export default function ChatWidget() {
             </div>
             {view === "menu" && (
               <div className="chat-hero">
-                <strong>Hi {user?.name ? user.name.split(" ")[0] : "there"} 👋</strong>
-                <span>Questions about an order, a product, or delivery? Pick how you&apos;d like to talk to us.</span>
+                <strong>Hi {user?.name ? user.name.split(" ")[0] : "there"}.</strong>
+                <span>How can we make your day easier?</span>
               </div>
             )}
           </div>
@@ -367,9 +369,9 @@ export default function ChatWidget() {
                 </span>
                 <span className="chat-choice-main">
                   <strong>Chat with Admin</strong>
-                  <small>Talk to a real person from the store team.</small>
+                  <small>Personal help with orders & delivery.</small>
                                     <span className="chat-choice-badge">
-                    <FiClock aria-hidden="true" /> Replies within minutes
+                    <FiClock aria-hidden="true" /> Store team
                   </span>
                   {adminUnread > 0 && (
                     <span className="chat-choice-unread">
@@ -387,9 +389,9 @@ export default function ChatWidget() {
                 </span>
                 <span className="chat-choice-main">
                   <strong>Chat with AI</strong>
-                  <small>Instant answers — ask for products by size, colour, price…</small>
+                  <small>Find your next favourite, instantly.</small>
                   <span className="chat-choice-badge">
-                    <FiZap aria-hidden="true" /> Instant · 24/7
+                    <FiZap aria-hidden="true" /> Instant answers
                   </span>
                 </span>
                 <span className="chat-choice-arrow" aria-hidden="true">
@@ -397,31 +399,33 @@ export default function ChatWidget() {
                 </span>
               </button>
               <div className="chat-quick">
-                <span className="chat-quick-label">Popular questions</span>
+                <span className="chat-quick-label">A quick start</span>
                 <div className="chat-quick-list">
-                  {SUGGESTIONS.map((s) => (
+                  {SUGGESTIONS.map((s, index) => (
                     <button
                       key={s}
                       type="button"
                       className="chat-quick-chip"
+                      title={s}
                       onClick={() => {
                         setView("ai");
                         sendAi(null, s);
                       }}
                     >
-                      {s}
+                      {["Offers & sales", "Bags under ৳2,000", "Available sizes", "Track my order"][index]}
                     </button>
                   ))}
                 </div>
               </div>
               <p className="chat-privacy">
                 <FiLock aria-hidden="true" />
-                <span>Admin chats are saved to your account for 7 days, so a reply finds you later. AI chats aren&apos;t saved.</span>
+                <span>Team chats stay for 7 days. AI chats aren&apos;t saved.</span>
               </p>
             </div>
           ) : view === "admin" ? (
             <>
               <div className="chat-body" ref={bodyRef}>
+
                 {adminError && <p className="chat-error">{adminError}</p>}
                                 {adminMessages.length === 0 && !adminError && (
                   <div className="chat-empty">
@@ -487,6 +491,7 @@ export default function ChatWidget() {
           ) : (
             <>
               <div className="chat-body" ref={bodyRef}>
+
                 {aiMessages.length === 0 && (
                                     <div className="chat-suggest-wrap">
                     <div className="chat-empty chat-empty-top">
@@ -498,7 +503,7 @@ export default function ChatWidget() {
                     </div>
                     <span className="chat-quick-label">Try asking</span>
                     <div className="chat-suggests">
-                      {SUGGESTIONS.map((s) => (
+                      {SUGGESTIONS.map((s, index) => (
                         <button key={s} type="button" className="chat-suggest" onClick={() => sendAi(null, s)}>
                           {s}
                         </button>
@@ -572,18 +577,34 @@ export default function ChatWidget() {
       )}
 
             {!drawerOpen && (
+      <div className="chat-launcher-anchor">
+        {!open && !closing && user && updatesDismissedFor !== user.id && (
+          <ChatUpdates key={`${user.id}:${(user.permissions || []).join(",")}`} user={user}
+            enabled={!open && !closing && !drawerOpen} paused={false} aiMessages={aiMessages}
+            onDismiss={() => setUpdatesDismissedFor(user.id)} />
+        )}
       <button
         type="button"
         className={`chat-fab${open ? " is-open" : ""}`}
         onClick={() => (open ? closePanel() : setOpen(true))}
-        aria-label={open ? "Close chat" : "Open chat"}
+        aria-label={open ? "Close chat" : "Open AI assistant and admin chat"}
         aria-expanded={open}
       >
                         {!open && <span className="chat-fab-ring" aria-hidden="true" />}
         {!open && <span className="chat-fab-label">Chat with us</span>}
+        {!open && <span className="chat-support-indicator" aria-hidden="true" />}
         {!open && adminUnread > 0 && <span className="chat-fab-badge">{adminUnread}</span>}
-                {open ? <FiX aria-hidden="true" /> : <FiMessageCircle aria-hidden="true" />}
+                {open ? <FiX aria-hidden="true" /> : (
+          <svg className="chat-support-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 13v-2a8 8 0 0 1 16 0v2" />
+            <rect x="3" y="11" width="4" height="7" rx="2" />
+            <rect x="17" y="11" width="4" height="7" rx="2" />
+            <path d="M19 18v.5a3 3 0 0 1-3 3h-3" />
+            <rect x="10" y="20" width="4" height="2" rx="1" fill="currentColor" stroke="none" />
+          </svg>
+        )}
       </button>
+      </div>
       )}
     </>
   );
