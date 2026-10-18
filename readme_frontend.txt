@@ -2169,3 +2169,170 @@ Frontend e button hide korle o, keu jodi Postman theke API hit kore, backend tak
 5. **Frontend Login & Test:**
    - `super-admin` token diye test koro (Sob API access pabe).
    - Onno user ke `order manager` (Role ID: 4) dao ebong tar token diye test koro (Sudhu Orders API access pabe, Users API e `403` pabe).
+
+
+   ==========================================
+Bhai, tomar frontend developer er jonno **Inventory Management (Stock History & Receive Stock)** er complete API documentation nicher moto kore likhe dicchi। Tumi direct copy kore take pathate parbe।
+
+---
+
+# Inventory Management API Documentation (For Frontend)
+
+Ei API gulo diye Admin Panel er Inventory page er **"Stock History"** table ebong **"Receive Stock"** modal kaj korbe।
+**Note:** Sob API te Authorization header (`Bearer <JWT_TOKEN>`) pathate hobe ebong user ke `ADMIN` hote hobe।
+
+---
+
+## 1. Receive Stock Dropdown (Product Search)
+
+- **API endpoint:** `GET /api/admin/inventory/products`
+- **Purpose:** "Receive Stock" modal e product search korar jonno ei API use hobe. User jokhon search box e type korbe, tokhon ei API hit kore dropdown e product list show korbe.
+- **Query params:**
+  - `search` (optional) = Product name ba SKU diye search korte.
+- **Response format:**
+  ```json
+  {
+    "message": "success",
+    "data": [
+      {
+        "id": 782,
+        "title": "BOXH1020 Fabric square-toe low-heeled slippers...",
+        "sku": "BOXH1020",
+        "track_inventory": false
+      }
+    ]
+  }
+  ```
+- **Frontend Integration:**
+  - Dropdown e `title` show korbe ebong backend e pathanor somoy `id` use korbe।
+  - **Important:** Jodi product tar onek gulo size/color (variant) thake, tahole user ke **abar ekta dropdown** dekhate hobe variant select korar jonno. Karon Stock Receive hobe **Variant ID** er upor base kore (nicher API dekho)।
+
+---
+
+## 2. Receive Stock API (Stock Add Kora)
+
+- **API endpoint:** `POST /api/admin/inventory/receive-stock`
+- **Purpose:** Jokhon user "Receive Units" button e click korbe, tokhon notun stock database e add hobe ebong ekta Stock History create hobe.
+- **Request body (JSON):**
+  ```json
+  {
+    "product_variant_id": 10490,
+    "quantity": 10,
+    "note": "Supplier invoice #2291"
+  }
+  ```
+  *(Note: `product_variant_id` holo specific size/color er ID, `product_id` na। Frontend ke variant list theke ei ID ta nite hobe).*
+- **Response format (Success - 200):**
+  ```json
+  {
+    "message": "success",
+    "data": {
+      "stock_after": 15
+    }
+  }
+  ```
+- **Response format (Error - 400/500):**
+  ```json
+  {
+    "message": "Valid product_variant_id is required."
+  }
+  ```
+
+---
+
+## 3. Stock History List (Movement List)
+
+- **API endpoint:** `GET /api/admin/inventory/movements`
+- **Purpose:** Inventory page er "Stock History" table er data load korar jonno ei API use hobe (jemon tomar screenshot e ache).
+- **Query params:**
+  - `page` (optional, default: 1)
+  - `per_page` (optional, default: 40)
+- **Response format:**
+  ```json
+  {
+    "message": "success",
+    "data": {
+      "current_page": 1,
+      "data": [
+        {
+          "id": 223,
+          "product_variant_id": 10490,
+          "product_id": 782,
+          "variant_label": "Beige / 40",
+          "type": "sale",
+          "quantity": -1,
+          "stock_after": -1,
+          "reserved_after": 0,
+          "note": "Order confirmed",
+          "created_at": "2026-10-17T12:11:23.000Z",
+          "product": {
+            "id": 782,
+            "title": "BOXH1020 Fabric square-toe...",
+            "sku": "BOXH1020"
+          },
+          "user": {
+            "id": 7,
+            "name": "Mehedi Hasan"
+          }
+        }
+      ],
+      "last_page": 6,
+      "per_page": 40,
+      "total": 223
+    }
+  }
+  ```
+- **Frontend Table Mapping (Tomar Screenshot Anujayi):**
+  - **WHEN:** `created_at` (Date format e convert koro)
+  - **PRODUCT:** `product.title` ebong `product.sku`
+  - **VARIANT:** `variant_label` (e.g., "Beige / 40")
+  - **TYPE:** `type` (jodi `sale` hoy tokhon Red badge, `purchase` hole Green badge, etc.)
+  - **CHANGE:** `quantity` (e.g., `-1`, `+10`)
+  - **STOCK AFTER:** `stock_after`
+  - **REFERENCE:** `note` (e.g., "Order confirmed", "Stock received")
+  - **BY:** `user.name` (jodi null hoy, "System" dekhao)
+
+---
+
+## 4. Inventory Summary (Dashboard Cards)
+
+- **API endpoint:** `GET /api/admin/inventory/summary`
+- **Purpose:** Tomar screenshot er upore jei 5 ta card ache (Available Units, Low Stock, Out of Stock, Tracked Products, Stock Value) segulo load korte ei API hit korbe।
+- **Response format:**
+  ```json
+  {
+    "message": "success",
+    "data": {
+      "tracked_products": 16,
+      "total_variants": 14862,
+      "units_on_hand": 1237,
+      "units_reserved": 1,
+      "low_stock": 59,
+      "out_of_stock": 14704,
+      "stock_value": 0,
+      "low_stock_threshold": 3
+    }
+  }
+  ```
+- **Card Mapping:**
+  - **AVAILABLE UNITS:** `units_on_hand - units_reserved`
+    - Subtitle: `${units_on_hand} on hand · ${units_reserved} held`
+  - **LOW STOCK:** `low_stock` (Subtitle: "At or below 3 units" -> `low_stock_threshold`)
+  - **OUT OF STOCK:** `out_of_stock` (Subtitle: "Nothing left to sell")
+  - **TRACKED PRODUCTS:** `tracked_products` (Subtitle: `${total_variants} colour/size rows`)
+  - **STOCK VALUE:** `stock_value` (Currency format e)
+
+---
+
+## ⚠️ Frontend Developer er jonno Important Note (Variant Handling)
+
+Tomar UI te jodi "Receive Stock" modal e sudhu ekta product dropdown thake (size/color er jonno alada dropdown na thake), tahole error ashbe (`Variant not found`)।
+
+Karon backend e stock update hoy **`ProductVariant` (specific size/color)** er upor base kore, sudhu `Product` er upore na।
+
+**Frontend Flow Hobe:**
+1. User Product select korbe (e.g., `Product ID: 782`)।
+2. Erpor `Product` tar moddhe jei **Variants** ache (e.g., `Variant ID: 10490 - Beige / 40`), segulo ekta dropdown e show korte hobe.
+3. User variant select korle tar `Variant ID` ta niye `receive-stock` API te pathate hobe।
+
+*(Jodi tomar `GET /api/admin/inventory/products` API ta product er sathe sathe variant info o return kore, tahole frontend developer subidha pabe. Tobe ekhonkar code e product list ashche, frontend ke `GET /api/products/:id` call kore variant list niye ashte hobe ba UI te product select korle next step e variant dropdown dekhate hobe).*
