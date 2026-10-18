@@ -492,13 +492,30 @@ export async function DELETE(request, { params }) {
             );
         }
 
+        const hardDeleteParam = new URL(request.url).searchParams.get("hardDelete");
+        const hardDeleteConfirmed =
+            hardDeleteParam === "true" || hardDeleteParam === "1";
+        const failureMessage =
+            `Failed to delete '${category.name}'. ` +
+            "Please try again or check whether this category is being used elsewhere.";
+
         // -----------------------------
-        // Delete category subtree and any products in it.
-        // The admin UI expects deleting a category to remove child categories too.
+        // Collect the category subtree before deciding whether it can be deleted.
+        // Product.categoryId and Category.parentId are ON DELETE CASCADE in
+        // the live database. Product-owned rows (images, variants, colors,
+        // specifications, FAQs, inventory and cart items) also cascade, while
+        // order_items.productId is ON DELETE RESTRICT. The transaction below
+        // therefore re-checks every rule before deleting anything, so an
+        // order-referenced product blocks the whole operation with no partial
+        // deletion or orphaned product records.
         // -----------------------------
 
-        const collectCategoryIds = async (currentCategoryId, accumulatedIds = []) => {
-            const childCategories = await prisma.category.findMany({
+        const collectCategoryIds = async (
+            currentCategoryId,
+            accumulatedIds = [],
+            client = prisma
+        ) => {
+            const childCategories = await client.category.findMany({
                 where: {
                     parentId: currentCategoryId,
                 },
@@ -515,37 +532,199 @@ export async function DELETE(request, { params }) {
 
             const nestedIds = await Promise.all(
                 childCategories.map((child) =>
-                    collectCategoryIds(child.id, nextIds)
+                    collectCategoryIds(child.id, nextIds, client)
                 )
             );
 
             return [...new Set(nestedIds.flat())];
         };
 
-        const categoryIdsToDelete = await collectCategoryIds(categoryId);
+        let deletion;
 
-        await prisma.$transaction(async (tx) => {
-            await tx.product.deleteMany({
-                where: {
-                    categoryId: {
-                        in: categoryIdsToDelete,
+        try {
+            deletion = await prisma.$transaction(async (tx) => {
+                const categoryIdsToDelete = await collectCategoryIds(
+                    categoryId,
+                    [],
+                    tx
+                );
+                const productCount = await tx.product.count({
+                    where: {
+                        categoryId: {
+                            in: categoryIdsToDelete,
+                        },
+                    },
+                });
+                const subCategoryCount = categoryIdsToDelete.length - 1;
+
+                // Root categories can never be hard-deleted while they contain
+                // products or sub-categories, even if hardDelete=true is sent.
+                if (
+                    category.parentId === null &&
+                    (productCount > 0 || subCategoryCount > 0)
+                ) {
+                    return {
+                        outcome: "root_blocked",
+                        productCount,
+                        subCategoryCount,
+                    };
+                }
+
+                // A sub-category containing products requires the explicit
+                // hard-delete confirmation used by the admin popup.
+                if (
+                    category.parentId !== null &&
+                    productCount > 0 &&
+                    !hardDeleteConfirmed
+                ) {
+                    return {
+                        outcome: "confirmation_required",
+                        productCount,
+                        subCategoryCount,
+                    };
+                }
+
+                let orderItemCount = 0;
+
+                if (productCount > 0) {
+                    const productsToDelete = await tx.product.findMany({
+                        where: {
+                            categoryId: {
+                                in: categoryIdsToDelete,
+                            },
+                        },
+                        select: {
+                            id: true,
+                        },
+                    });
+
+                    orderItemCount = await tx.orderItem.count({
+                        where: {
+                            productId: {
+                                in: productsToDelete.map((product) => product.id),
+                            },
+                        },
+                    });
+                }
+
+                // Preserve order history exactly as the existing product-delete
+                // endpoint does: order-referenced products cannot be removed.
+                if (orderItemCount > 0) {
+                    return {
+                        outcome: "blocked_by_order_items",
+                        productCount,
+                        subCategoryCount,
+                        orderItemCount,
+                    };
+                }
+
+                const deletedProducts = await tx.product.deleteMany({
+                    where: {
+                        categoryId: {
+                            in: categoryIdsToDelete,
+                        },
+                    },
+                });
+
+                const deletedCategories = await tx.category.deleteMany({
+                    where: {
+                        id: {
+                            in: categoryIdsToDelete,
+                        },
+                    },
+                });
+
+                return {
+                    outcome: "deleted",
+                    productCount,
+                    subCategoryCount,
+                    orderItemCount,
+                    deletedProductCount: deletedProducts.count,
+                    deletedCategoryCount: deletedCategories.count,
+                };
+            });
+        } catch (error) {
+            console.error("Delete category transaction error:", error);
+
+            return Response.json(
+                {
+                    success: false,
+                    code: "CATEGORY_DELETE_FAILED",
+                    message: failureMessage,
+                    data: null,
+                },
+                { status: 500 }
+            );
+        }
+
+        if (deletion.outcome === "root_blocked") {
+            return Response.json(
+                {
+                    success: false,
+                    code: "ROOT_CATEGORY_DELETE_BLOCKED",
+                    message:
+                        `You cannot delete '${category.name}' because it contains products and sub-categories. ` +
+                        "Please move the products to another category and delete the sub-categories first, or change the category status to Inactive.",
+                    data: null,
+                },
+                { status: 409 }
+            );
+        }
+
+        if (deletion.outcome === "confirmation_required") {
+            const productNoun =
+                deletion.productCount === 1 ? "product" : "products";
+            const nestedText =
+                deletion.subCategoryCount > 0
+                    ? `, its ${deletion.subCategoryCount} nested sub-categor${
+                          deletion.subCategoryCount === 1 ? "y" : "ies"
+                      },`
+                    : "";
+
+            return Response.json(
+                {
+                    success: false,
+                    code: "HARD_DELETE_CONFIRMATION_REQUIRED",
+                    message:
+                        `Warning: This will permanently delete '${category.name}'${nestedText} and all ${deletion.productCount} ${productNoun} associated with it. ` +
+                        "This action cannot be undone. Do you want to proceed?",
+                    data: {
+                        productCount: deletion.productCount,
+                        subCategoryCount: deletion.subCategoryCount,
+                        requiresHardDelete: true,
                     },
                 },
-            });
+                { status: 409 }
+            );
+        }
 
-            await tx.category.deleteMany({
-                where: {
-                    id: {
-                        in: categoryIdsToDelete,
+        if (deletion.outcome === "blocked_by_order_items") {
+            return Response.json(
+                {
+                    success: false,
+                    code: "CATEGORY_DELETE_FAILED",
+                    message: failureMessage,
+                    data: {
+                        productCount: deletion.productCount,
+                        subCategoryCount: deletion.subCategoryCount,
+                        orderItemCount: deletion.orderItemCount,
                     },
                 },
-            });
-        });
+                { status: 409 }
+            );
+        }
+
+        const successMessage =
+            category.parentId === null
+                ? "Category deleted successfully."
+                : deletion.productCount > 0
+                  ? `Sub-category '${category.name}' and its associated records have been deleted successfully.`
+                  : `Sub-category '${category.name}' has been deleted successfully.`;
 
         return Response.json(
             {
                 success: true,
-                message: "Category deleted successfully.",
+                message: successMessage,
                 data: null,
             },
             { status: 200 }

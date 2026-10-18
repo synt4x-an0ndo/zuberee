@@ -2,12 +2,17 @@ import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { cookies } from "next/headers";
 import { CART_COOKIE_NAME } from "@/lib/cart.js";
+import { requireValidOrderContact } from "@/lib/contactValidation.js";
+import { allocateOrderEntries } from "@/lib/preorder.js";
 
 const ORDER_INCLUDE = {
     items: {
         include: {
             product: {
                 select: { id: true, name: true, sku: true },
+            },
+            variant: {
+                select: { id: true, name: true, value: true },
             },
         },
     },
@@ -17,7 +22,8 @@ function formatOrder(order) {
     return {
         id: order.id,
         user_id: order.userId,
-        guest: order.userId ? null : { name: order.guestName, phone: order.guestPhone },
+        guest: order.userId ? null : { name: order.contactName || order.guestName, phone: order.contactPhone || order.guestPhone },
+        courier_entry: order.courierEntry || "",
         status: order.status.toLowerCase(),
         payment_status: order.paymentStatus.toLowerCase(),
         total_amount: Number(order.totalAmount),
@@ -29,10 +35,14 @@ function formatOrder(order) {
         items: order.items.map((item) => ({
             id: item.id,
             product_id: item.productId,
+            product_variant_id: item.variantId ?? null,
+            size: item.size || item.variant?.value || null,
             title: item.product?.name ?? null,
             sku: item.product?.sku ?? null,
             unit_price: Number(item.unitPrice),
             quantity: item.quantity,
+            is_preorder: Boolean(item.isPreorder || item.preorderQuantity > 0),
+            preorder_quantity: item.preorderQuantity || 0,
             subtotal: Number(item.unitPrice) * item.quantity,
         })),
         created_at: order.createdAt,
@@ -44,34 +54,57 @@ export async function POST(request) {
     try {
         const body = await request.json();
         const {
-            guestName, guestPhone, guestAddress, district, shippingAddressId, shippingAddress,
+            guestName, guestPhone, guestEmail, guestAddress,
+            name, phone, email, contactName, contactPhone, contactEmail,
+            district, shippingAddressId, shippingAddress,
             shippingFee = 0, advancePayment = 0, paymentMethod = "cash", items: bodyItems,
         } = body;
 
         const auth = await authenticateRequest(request);
         const isGuest = !auth.authenticated;
 
-        if (isGuest) {
-            if (!guestName || !String(guestName).trim()) return Response.json({ success: false, message: "Guest name is required." }, { status: 400 });
-            if (!guestPhone || !String(guestPhone).trim()) return Response.json({ success: false, message: "Guest phone is required." }, { status: 400 });
-            if (!guestAddress || !String(guestAddress).trim()) return Response.json({ success: false, message: "Guest address is required." }, { status: 400 });
-        }
-
         let finalShippingAddress = shippingAddress ? String(shippingAddress).trim() : null;
+        let addressRecord = null;
+        let accountProfile = null;
 
-        if (!isGuest && shippingAddressId) {
-            const addressRecord = await prisma.address.findFirst({
-                where: { id: Number(shippingAddressId), userId: auth.user.userId },
+        if (!isGuest) {
+            accountProfile = await prisma.user.findUnique({
+                where: { id: auth.user.userId },
+                select: { name: true, phone: true, email: true },
             });
-            if (!addressRecord) return Response.json({ success: false, message: "Shipping address not found." }, { status: 404 });
-            finalShippingAddress = [
-                addressRecord.fullName, addressRecord.phone, addressRecord.addressLine,
-                addressRecord.city, addressRecord.postalCode, addressRecord.country,
-            ].filter(Boolean).join(", ");
+
+            if (shippingAddressId) {
+                addressRecord = await prisma.address.findFirst({
+                    where: { id: Number(shippingAddressId), userId: auth.user.userId },
+                });
+                if (!addressRecord) return Response.json({ success: false, message: "Shipping address not found." }, { status: 404 });
+                finalShippingAddress = [
+                    addressRecord.fullName, addressRecord.phone, addressRecord.addressLine,
+                    addressRecord.city, addressRecord.postalCode, addressRecord.country,
+                ].filter(Boolean).join(", ");
+            }
         }
 
-        if (isGuest) finalShippingAddress = String(guestAddress).trim();
+        if (isGuest) {
+            if (!guestAddress || !String(guestAddress).trim()) return Response.json({ success: false, message: "Guest address is required." }, { status: 400 });
+            finalShippingAddress = String(guestAddress).trim();
+        }
         if (!finalShippingAddress) return Response.json({ success: false, message: "Shipping address is required." }, { status: 400 });
+
+        const finalContactName = String(
+            contactName ?? name ?? guestName ?? addressRecord?.fullName ?? accountProfile?.name ?? ""
+        ).trim();
+        if (!finalContactName) return Response.json({ success: false, message: "Customer name is required." }, { status: 400 });
+
+        let finalContact;
+        try {
+            finalContact = requireValidOrderContact({
+                phone: contactPhone ?? phone ?? guestPhone ?? addressRecord?.phone ?? accountProfile?.phone ?? "",
+                email: contactEmail ?? email ?? guestEmail ?? accountProfile?.email ?? "",
+            });
+        } catch (validationError) {
+            return Response.json({ success: false, message: validationError.message }, { status: validationError.status || 400 });
+        }
 
         let rawItems = Array.isArray(bodyItems) ? bodyItems : [];
         let cartId = null;
@@ -121,13 +154,27 @@ export async function POST(request) {
                 variant = product.variants.find((v) => v.id === Number(variantId));
                 if (!variant) return Response.json({ success: false, message: `Variant ${variantId} not found.` }, { status: 404 });
                 if (variant.price !== null) unitPrice = Number(variant.price);
-                if (variant.stock < quantity) return Response.json({ success: false, message: `Not enough stock for variant ${variant.value}.` }, { status: 400 });
-            } else if (product.stock < quantity) {
-                return Response.json({ success: false, message: `Not enough stock for ${product.name}.` }, { status: 400 });
             }
 
-            orderItemsData.push({ productId, variantId: variant ? variant.id : null, quantity, unitPrice });
+            orderItemsData.push({
+                product,
+                variant,
+                productId,
+                variantId: variant ? variant.id : null,
+                size: variant?.value ? String(variant.value) : raw.size ?? raw.selected_size ?? null,
+                quantity,
+                unitPrice,
+            });
             totalAmount += unitPrice * quantity;
+        }
+
+        try {
+            allocateOrderEntries(orderItemsData);
+        } catch (allocationError) {
+            return Response.json(
+                { success: false, message: allocationError.message },
+                { status: allocationError.status || 400 }
+            );
         }
 
         let computedShippingFee = null;
@@ -151,8 +198,11 @@ export async function POST(request) {
             const createdOrder = await tx.order.create({
                 data: {
                     userId: isGuest ? null : auth.user.userId,
-                    guestName: isGuest ? String(guestName).trim() : null,
-                    guestPhone: isGuest ? String(guestPhone).trim() : null,
+                    guestName: isGuest ? finalContactName : null,
+                    guestPhone: isGuest ? finalContact.phone : null,
+                    contactName: finalContactName,
+                    contactPhone: finalContact.phone,
+                    contactEmail: finalContact.email,
                     status: "PENDING",
                     paymentStatus: "PENDING",
                     totalAmount: totalAmount + finalShippingFee,
@@ -164,8 +214,12 @@ export async function POST(request) {
                     items: {
                         create: orderItemsData.map((item) => ({
                             productId: item.productId,
+                            variantId: item.variantId,
+                            size: item.size ? String(item.size) : null,
                             quantity: item.quantity,
                             unitPrice: item.unitPrice,
+                            isPreorder: item.isPreorder,
+                            preorderQuantity: item.preorderQuantity,
                         })),
                     },
                 },
@@ -173,30 +227,42 @@ export async function POST(request) {
             });
 
             for (const item of orderItemsData) {
-                if (item.variantId !== null) {
+                if (item.variantId !== null && item.stockQuantity > 0) {
                     const updatedVariant = await tx.productVariant.update({
                         where: { id: item.variantId },
-                        data: { stock: { decrement: item.quantity } },
+                        data: {
+                            stock: { decrement: item.stockQuantity },
+                            ...(item.preorderQuantity > 0
+                                ? { preorderCount: { increment: item.preorderQuantity } }
+                                : {}),
+                        },
                     });
 
                     await tx.stockMovement.create({
                         data: {
                             productVariantId: item.variantId,
                             type: "sale",
-                            quantity: -item.quantity,
+                            quantity: -item.stockQuantity,
                             stockAfter: updatedVariant.stock,
                             reservedAfter: updatedVariant.held,
                             orderId: createdOrder.id,
-                            note: "Order confirmed",
+                            note: "Order placed",
                             userId: isGuest ? null : auth.user.userId,
                         },
                     });
+                } else if (item.variantId !== null && item.preorderQuantity > 0) {
+                    await tx.productVariant.update({
+                        where: { id: item.variantId },
+                        data: { preorderCount: { increment: item.preorderQuantity } },
+                    });
                 }
 
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { decrement: item.quantity } },
-                });
+                if (item.stockQuantity > 0) {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { decrement: item.stockQuantity } },
+                    });
+                }
             }
 
             if (cartId) {

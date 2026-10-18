@@ -25,6 +25,9 @@ const ORDER_INCLUDE = {
                     },
                 },
             },
+            variant: {
+                select: { id: true, name: true, value: true },
+            },
         },
     },
 };
@@ -37,8 +40,8 @@ function formatOrder(order) {
         guest: order.userId
             ? null
             : {
-                name: order.guestName,
-                phone: order.guestPhone,
+                name: order.contactName || order.guestName,
+                phone: order.contactPhone || order.guestPhone,
             },
 
         status: order.status.toLowerCase(),
@@ -47,15 +50,23 @@ function formatOrder(order) {
         total_amount: Number(order.totalAmount),
         shipping_fee: Number(order.shippingFee),
         shipping_address: order.shippingAddress,
+        district: order.district,
+        advance_payment: Number(order.advancePayment),
+        payment_method: order.paymentMethod,
+        courier_entry: order.courierEntry || "",
 
         items: order.items.map((item) => ({
             id: item.id,
             product_id: item.productId,
+            product_variant_id: item.variantId ?? null,
+            size: item.size || item.variant?.value || null,
             title: item.product?.name ?? null,
             sku: item.product?.sku ?? null,
             image_url: item.product?.images?.[0]?.imageUrl ?? null,
             unit_price: Number(item.unitPrice),
             quantity: item.quantity,
+            is_preorder: Boolean(item.isPreorder || item.preorderQuantity > 0),
+            preorder_quantity: item.preorderQuantity || 0,
             subtotal: Number(item.unitPrice) * item.quantity,
         })),
 

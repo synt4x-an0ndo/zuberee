@@ -1,27 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  FiArrowDownRight,
+  FiArrowUpRight,
   FiCalendar,
   FiAward,
   FiChevronRight,
+  FiDollarSign,
   FiEye,
-  FiFilter,
   FiMail,
   FiMapPin,
   FiMessageCircle,
   FiPhone,
   FiRefreshCw,
   FiSearch,
+  FiShoppingBag,
+  FiStar,
   FiTag,
+  FiTrendingUp,
   FiUserCheck,
+  FiUserPlus,
   FiUsers,
-  FiX,
 } from "react-icons/fi";
 import Img from "@/components/Img";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
-import { Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field, Input, Modal, Pagination, Select, Skeleton, Stat } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field, Input, Modal, Pagination, Select, Skeleton } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney, imgUrl } from "@/lib/api";
 import { BADGE_OPTIONS, badgeKey, badgeLabel, badgePath, badgeTone } from "@/lib/customers";
@@ -33,10 +38,13 @@ import { useAsync } from "@/lib/useAsync";
  * Customer leaderboard — filter/sort toolbar, ranked table, per-row actions.
  *
  * GET /api/admin/customer-leaderboard   (admin JWT)
- *   query: search, sort (total_spent|total_orders|last_order|name), page, per_page (max 100)
+ *   query: search, district, date_from, date_to, order_count_sort, total_spent_sort,
+ *          page, per_page (max 100)
  *   -> { success, data:[{ name, phone, email, address, district, total_orders, total_spent,
  *                         last_order_date, last_ordered_products[], badge, assigned_badge }],
- *        pagination:{ current_page, per_page, total, last_page, from, to } }
+ *        summary:{ total_customers, total_orders, total_revenue, average_order_value,
+ *                  new_customers, repeat_customers, repeat_rate, changes },
+ *        districts:[], pagination:{ current_page, per_page, total, last_page, from, to } }
  *
  * PATCH /api/admin/customer-leaderboard/:key/badge   (admin JWT)
  *   :key is `user:<id>` or `guest:<phone>` (URL encoded); body { badge: string|null }
@@ -48,32 +56,31 @@ import { useAsync } from "@/lib/useAsync";
  *     (whose payload does return user_id / has_user_account). A prior version of this page rendered them
  *     with duplicate React keys and could badge the wrong record.
  *   - there is no latest-order id/number, so "Latest order" shows the product lines the response does
- *     return (last_ordered_products) rather than opening the order;
- *   - the route accepts no district and no date-range parameters, so those two controls narrow only the
- *     rows currently loaded on the page. The toolbar says so in plain words.
+ *     return (last_ordered_products) rather than opening the order.
  */
 
 const PER_PAGE_OPTIONS = [15, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }));
 
-const SORT_ORDER_OPTIONS = [{ value: "total_orders", label: "Most orders" }];
-const SORT_SPEND_OPTIONS = [{ value: "total_spent", label: "Highest spending" }];
-const SORT_OTHER_OPTIONS = [
-  { value: "last_order", label: "Most recent order" },
-  { value: "name", label: "Name (A–Z)" },
+const ORDER_SORT_OPTIONS = [
+  { value: "desc", label: "📈 Most Orders First" },
+  { value: "asc", label: "📉 Least Orders First" },
+];
+const SPEND_SORT_OPTIONS = [
+  { value: "desc", label: "💰 Highest Spent First" },
+  { value: "asc", label: "💸 Lowest Spent First" },
 ];
 
-const DEFAULT_DRAFT = {
+const DEFAULT_FILTERS = {
   search: "",
   district: "",
   from: "",
   to: "",
-  sortOrders: "",
-  sortSpending: "",
-  sortOther: "",
+  orderSort: "desc",
+  spendSort: "desc",
   perPage: "15",
 };
 
-const STATUS_TONES = { repeat: "brand", new: "neutral" };
+const STATUS_TONES = { repeat: "brand", new: "info" };
 
 function customerStatus(row) {
   const orders = Number(row.total_orders || 0);
@@ -86,8 +93,43 @@ function districtLabel(value) {
   return match ? match.label : String(value);
 }
 
-function sortFrom(draft) {
-  return draft.sortOrders || draft.sortSpending || draft.sortOther || "total_spent";
+function customerInitial(row) {
+  const source = String(row.name || row.phone || "G").trim();
+  return (source.charAt(0) || "G").toUpperCase();
+}
+
+function ChangeBadge({ value, label = "vs last month" }) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return <span className="lb-change is-empty">No last-month data</span>;
+  }
+
+  const numeric = Number(value);
+  const increasing = numeric >= 0;
+  const Arrow = increasing ? FiArrowUpRight : FiArrowDownRight;
+  return (
+    <span className={`lb-change ${increasing ? "is-up" : "is-down"}`}>
+      <Arrow aria-hidden="true" />
+      {Math.abs(numeric).toFixed(1)}%
+      <small>{label}</small>
+    </span>
+  );
+}
+
+function OverviewStat({ label, value, icon: Icon, tone = "brand", change, comparisonLabel }) {
+  return (
+    <div className={`stat lb-overview-stat lb-tone-${tone}`}>
+      <div className="stat-top">
+        <span className="stat-label">{label}</span>
+        {Icon && (
+          <span className="stat-icon">
+            <Icon aria-hidden="true" />
+          </span>
+        )}
+      </div>
+      <span className="stat-value">{value}</span>
+      <ChangeBadge value={change} label={comparisonLabel} />
+    </div>
+  );
 }
 
 function linesLastOrder(row) {
@@ -123,28 +165,56 @@ function LatestOrderBody({ row }) {
 
 export default function CustomerLeaderboardPage() {
   const { toast } = useFeedback();
-  const [draft, setDraft] = useState(DEFAULT_DRAFT);
-  const [applied, setApplied] = useState(DEFAULT_DRAFT);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [savingKey, setSavingKey] = useState(null);
   const [badgeDraft, setBadgeDraft] = useState("");
   const [openRow, setOpenRow] = useState(null);
   const [latestRow, setLatestRow] = useState(null);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters((current) =>
+        current.search === searchInput ? current : { ...current, search: searchInput }
+      );
+      setPage(1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   const { data, loading, error, reload } = useAsync(async () => {
-    const params = { sort: sortFrom(applied), page, per_page: Number(applied.perPage) || 15 };
-    if (applied.search.trim()) params.search = applied.search.trim();
+    const params = {
+      page,
+      per_page: Number(filters.perPage) || 15,
+      order_count_sort: filters.orderSort,
+      total_spent_sort: filters.spendSort,
+    };
+    if (filters.search.trim()) params.search = filters.search.trim();
+    if (filters.district) params.district = filters.district;
+    if (filters.from) params.date_from = filters.from;
+    if (filters.to) params.date_to = filters.to;
     const body = await api.get("api/admin/customer-leaderboard", { params });
     return {
       rows: Array.isArray(body.data) ? body.data : [],
       pagination: body.pagination || {},
+      summary: body.summary || {},
+      districts: Array.isArray(body.districts) ? body.districts : [],
     };
-  }, [applied, page]);
+  }, [filters, page]);
 
   const rows = useMemo(() => (Array.isArray(data?.rows) ? data.rows : []), [data]);
   const pagination = data?.pagination || {};
-  const perPage = Number(applied.perPage) || 15;
+  const summary = data?.summary || {};
+  const changes = summary.changes || {};
+  const perPage = Number(filters.perPage) || 15;
   const offset = ((pagination.current_page || page) - 1) * (pagination.per_page || perPage);
+  const repeatRate = Number(
+    summary.repeat_rate ??
+      (summary.total_customers
+        ? (Number(summary.repeat_customers || 0) / Number(summary.total_customers)) * 100
+        : 0)
+  );
 
   /** How many rows on this page derive the same badge key — more than one means it is ambiguous. */
   const keyCounts = useMemo(() => {
@@ -156,55 +226,28 @@ export default function CustomerLeaderboardPage() {
     return counts;
   }, [rows]);
 
-  const districtOptions = useMemo(() => {
+  const districtOptions = (() => {
     const seen = new Set(DISTRICTS.map((d) => d.value));
-    const found = rows
-      .map((row) => String(row.district || "").trim().toLowerCase())
-      .filter((value) => value && !seen.has(value))
+    const foundValues = [
+      ...(Array.isArray(data?.districts) ? data.districts : []),
+      ...rows.map((row) => row.district),
+    ];
+    const found = Array.from(
+      new Set(foundValues.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean))
+    )
+      .filter((value) => !seen.has(value))
       .map((value) => ({ value, label: districtLabel(value) }));
     return [...DISTRICTS, ...found].sort((a, b) => a.label.localeCompare(b.label));
-  }, [rows]);
+  })();
 
-  const clientFiltered = Boolean(applied.district || applied.from || applied.to);
-
-  const visibleRows = useMemo(() => {
-    if (!clientFiltered) return rows;
-    return rows.filter((row) => {
-      if (applied.district && String(row.district || "").trim().toLowerCase() !== applied.district) return false;
-      const day = String(row.last_order_date || "").slice(0, 10);
-      if (applied.from && (!day || day < applied.from)) return false;
-      if (applied.to && (!day || day > applied.to)) return false;
-      return true;
-    });
-  }, [rows, applied.district, applied.from, applied.to, clientFiltered]);
-
-  const totals = useMemo(() => {
-    const spent = visibleRows.reduce((sum, row) => sum + Number(row.total_spent || 0), 0);
-    const orders = visibleRows.reduce((sum, row) => sum + Number(row.total_orders || 0), 0);
-    return { spent, orders };
-  }, [visibleRows]);
-
-  const set = (key) => (event) => {
-    const value = event.target.value;
-    setDraft((current) => {
-      const next = { ...current, [key]: value };
-      // One server-side sort at a time: choosing one clears the other two.
-      if (key === "sortOrders" && value) next.sortSpending = next.sortOther = "";
-      if (key === "sortSpending" && value) next.sortOrders = next.sortOther = "";
-      if (key === "sortOther" && value) next.sortOrders = next.sortSpending = "";
-      return next;
-    });
-  };
-
-  const applyFilters = (event) => {
-    event.preventDefault();
+  const setFilter = (key) => (event) => {
+    setFilters((current) => ({ ...current, [key]: event.target.value }));
     setPage(1);
-    setApplied(draft);
   };
 
   const resetFilters = () => {
-    setDraft(DEFAULT_DRAFT);
-    setApplied(DEFAULT_DRAFT);
+    setSearchInput("");
+    setFilters(DEFAULT_FILTERS);
     setPage(1);
   };
 
@@ -234,68 +277,103 @@ export default function CustomerLeaderboardPage() {
 
   const openRowKey = openRow ? badgeKey(openRow) : null;
   const openRowShared = Boolean(openRowKey) && (keyCounts.get(openRowKey) || 0) > 1;
-  const activeFilters = [applied.search, applied.district, applied.from, applied.to].filter(Boolean).length;
+  const activeFilters = [filters.search, filters.district, filters.from, filters.to].filter(Boolean).length;
 
   return (
     <div className="stack" style={{ gap: "1.25rem" }}>
       <AdminHeader
         eyebrow="Customers"
-        title="Customer leaderboard"
-        subtitle="Your highest-value customers, ranked by spend, order count or recency."
+        title="Customer Leaderboard"
+        subtitle="Your highest-value customers, ranked by orders and lifetime spending."
         actions={<Button variant="ghost" onClick={reload}><FiRefreshCw aria-hidden="true" /> Refresh</Button>}
       />
 
+      {!data && loading ? (
+        <>
+          <div className="lb-overview-grid" aria-hidden="true">
+            {[1, 2, 3, 4, 5, 6].map((item) => <Skeleton key={item} style={{ height: 126 }} />)}
+          </div>
+          <Skeleton style={{ height: 112 }} />
+        </>
+      ) : data ? (
+        <>
+          <div className="lb-overview-grid stagger">
+            <OverviewStat label="Total Customers" value={summary.total_customers ?? pagination.total ?? rows.length} icon={FiUsers} tone="brand" change={changes.total_customers} comparisonLabel={summary.comparison_label} />
+            <OverviewStat label="Total Orders" value={summary.total_orders ?? 0} icon={FiShoppingBag} tone="success" change={changes.total_orders} comparisonLabel={summary.comparison_label} />
+            <OverviewStat label="Total Revenue" value={formatMoney(summary.total_revenue)} icon={FiDollarSign} tone="info" change={changes.total_revenue} comparisonLabel={summary.comparison_label} />
+            <OverviewStat label="Avg Order Value" value={formatMoney(summary.average_order_value)} icon={FiTrendingUp} tone="warn" change={changes.average_order_value} comparisonLabel={summary.comparison_label} />
+            <OverviewStat label="New Customers" value={summary.new_customers ?? 0} icon={FiUserPlus} tone="info" change={changes.new_customers} comparisonLabel={summary.comparison_label} />
+            <OverviewStat label="Repeat Customers" value={summary.repeat_customers ?? 0} icon={FiUserCheck} tone="brand" change={changes.repeat_customers} comparisonLabel={summary.comparison_label} />
+          </div>
+
+          <Card className="lb-insights">
+            <div className="card-pad lb-insights-inner">
+              <div className="lb-insights-top">
+                <div className="lb-insights-title">
+                  <span className="lb-insights-icon"><FiStar aria-hidden="true" /></span>
+                  <div>
+                    <h2>Customer Insights</h2>
+                    <p>Your business performance overview</p>
+                  </div>
+                </div>
+                <div className="lb-repeat-rate">
+                  <span>Repeat Rate</span>
+                  <strong>{repeatRate.toFixed(1)}%</strong>
+                </div>
+              </div>
+              <div
+                className="lb-progress"
+                role="progressbar"
+                aria-label="Customer repeat rate"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.min(100, Math.max(0, repeatRate))}
+              >
+                <span style={{ width: `${Math.min(100, Math.max(0, repeatRate))}%` }} />
+              </div>
+            </div>
+          </Card>
+        </>
+      ) : null}
+
       <Card>
         <CardHeader
-          title="Filter & sort customers"
-          subtitle={activeFilters ? `${activeFilters} filter${activeFilters === 1 ? "" : "s"} applied` : "Search, narrow and order the list below."}
+          title="Filter & Sort Customers"
+          subtitle={activeFilters ? `${activeFilters} filter${activeFilters === 1 ? "" : "s"} applied` : "Search, narrow and order the ranked list."}
+          actions={activeFilters ? <Button type="button" variant="ghost" onClick={resetFilters}><FiRefreshCw aria-hidden="true" /> Reset</Button> : null}
         />
-        <form onSubmit={applyFilters} className="lb-filters card-pad">
-          <Field label="Search customer" htmlFor="lb-search" hint="Name, phone or email.">
+        <div className="lb-filters card-pad">
+          <Field label="Search Customer" htmlFor="lb-search" hint="Name, phone or email.">
             <div className="search-input">
               <FiSearch aria-hidden="true" />
-              <Input id="lb-search" placeholder="Name, phone, or email..." value={draft.search} onChange={set("search")} />
+              <Input id="lb-search" placeholder="Name, phone, or email..." value={searchInput} onChange={(event) => setSearchInput(event.target.value)} />
             </div>
           </Field>
 
-          <Field label="District" htmlFor="lb-district" hint="Narrows the rows loaded on this page.">
-            <Select id="lb-district" placeholder="All districts" value={draft.district} onChange={set("district")} options={districtOptions} />
+          <Field label="District" htmlFor="lb-district">
+            <Select id="lb-district" placeholder="All Districts" value={filters.district} onChange={setFilter("district")} options={districtOptions} />
           </Field>
 
-          <Field label="Date range" htmlFor="lb-from" hint="Last order date, inclusive.">
+          <Field label="Sort by Orders" htmlFor="lb-sort-orders">
+            <Select id="lb-sort-orders" value={filters.orderSort} onChange={setFilter("orderSort")} options={ORDER_SORT_OPTIONS} />
+          </Field>
+
+          <Field label="Sort by Spending" htmlFor="lb-sort-spending">
+            <Select id="lb-sort-spending" value={filters.spendSort} onChange={setFilter("spendSort")} options={SPEND_SORT_OPTIONS} />
+          </Field>
+
+          <Field label="Date Range" htmlFor="lb-from" hint="Last order date, inclusive." className="lb-filter-date">
             <div className="lb-range">
-              <Input id="lb-from" type="date" aria-label="From date" value={draft.from} onChange={set("from")} />
+              <Input id="lb-from" type="date" aria-label="Start date" value={filters.from} onChange={setFilter("from")} />
               <span className="muted" aria-hidden="true">to</span>
-              <Input type="date" aria-label="To date" value={draft.to} onChange={set("to")} />
+              <Input type="date" aria-label="End date" value={filters.to} onChange={setFilter("to")} />
             </div>
           </Field>
 
-          <Field label="Sort by orders" htmlFor="lb-sort-orders">
-            <Select id="lb-sort-orders" placeholder="Select…" value={draft.sortOrders} onChange={set("sortOrders")} options={SORT_ORDER_OPTIONS} />
+          <Field label="Results per page" htmlFor="lb-per-page">
+            <Select id="lb-per-page" value={filters.perPage} onChange={setFilter("perPage")} options={PER_PAGE_OPTIONS} />
           </Field>
-
-          <Field label="Sort by spending" htmlFor="lb-sort-spending">
-            <Select id="lb-sort-spending" placeholder="Select…" value={draft.sortSpending} onChange={set("sortSpending")} options={SORT_SPEND_OPTIONS} />
-          </Field>
-
-          <Field label="Sort by date / name" htmlFor="lb-sort-other">
-            <Select id="lb-sort-other" placeholder="Select…" value={draft.sortOther} onChange={set("sortOther")} options={SORT_OTHER_OPTIONS} />
-          </Field>
-
-          <Field label="Per page" htmlFor="lb-per-page">
-            <Select id="lb-per-page" value={draft.perPage} onChange={set("perPage")} options={PER_PAGE_OPTIONS} />
-          </Field>
-
-          <div className="lb-filter-actions">
-            <Button type="submit" variant="primary"><FiFilter aria-hidden="true" /> Apply filters</Button>
-            <Button type="button" variant="outline" onClick={resetFilters}><FiRefreshCw aria-hidden="true" /> Reset</Button>
-          </div>
-        </form>
-        <p className="lb-note muted">
-          Search, sort and page size are applied by the API. District and date range are not parameters the
-          leaderboard endpoint accepts yet, so those two narrow only the {perPage} rows loaded on this page —
-          they are filed with the backend team.
-        </p>
+        </div>
       </Card>
 
       {error ? (
@@ -304,61 +382,36 @@ export default function CustomerLeaderboardPage() {
         <Skeleton style={{ height: 320 }} />
       ) : (
         <>
-          <div className="stat-grid stagger">
-            <Stat label="Customers on this page" value={visibleRows.length} icon={FiUsers} tone="brand" />
-            <Stat label="Total customers" value={pagination.total ?? visibleRows.length} icon={FiUsers} tone="info" />
-            <Stat label="Spend on this page" value={formatMoney(totals.spent)} icon={FiUserCheck} tone="success" />
-            <Stat label="Orders on this page" value={totals.orders} icon={FiUserCheck} tone="info" />
-          </div>
-
           <Card>
-            <CardHeader
-              title="Leaderboard"
-              subtitle={
-                clientFiltered && visibleRows.length !== rows.length
-                  ? `Showing ${visibleRows.length} of the ${rows.length} rows loaded here — ${pagination.total ?? rows.length} customers in total.`
-                  : `${pagination.total ?? visibleRows.length} customer${(pagination.total ?? visibleRows.length) === 1 ? "" : "s"} in total`
-              }
-            />
             {rows.length === 0 ? (
               <div className="card-pad">
                 <EmptyState
                   icon={FiUsers}
-                  title={applied.search ? "No customers match" : "No customers yet"}
-                  text={applied.search ? "Try a different search term." : "Customers appear here once orders are placed."}
-                />
-              </div>
-            ) : visibleRows.length === 0 ? (
-              <div className="card-pad">
-                <EmptyState
-                  icon={FiFilter}
-                  title="No rows on this page match the district / date filter"
-                  text="Those filters only see the rows already loaded. Reset them, or move to another page."
-                  action={<Button variant="ghost" onClick={resetFilters}>Reset filters</Button>}
+                  title={activeFilters ? "No customers match" : "No customers yet"}
+                  text={activeFilters ? "Try a different search or reset the filters." : "Customers appear here once orders are placed."}
+                  action={activeFilters ? <Button variant="ghost" onClick={resetFilters}>Reset filters</Button> : null}
                 />
               </div>
             ) : (
               <>
-                <DataTable>
+                <DataTable className="lb-table-wrap">
                   <thead>
                     <tr>
                       <th style={{ width: 76 }}>Rank</th>
                       <th>Customer</th>
                       <th>Contact</th>
                       <th>Statistics</th>
-                      <th className="text-right">Total spent</th>
+                      <th className="text-right">Total Spent</th>
                       <th>Status</th>
                       <th className="text-right" style={{ width: 140 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleRows.map((row, index) => {
+                    {rows.map((row, index) => {
                       const key = badgeKey(row);
                       // A key can only repeat when an account entry and a guest entry share one phone
                       // number; the row position keeps the React key unique in every case.
-                      const shared = Boolean(key) && (keyCounts.get(key) || 0) > 1;
-                      const serverIndex = rows.indexOf(row);
-                      const rank = offset + (serverIndex < 0 ? index : serverIndex) + 1;
+                      const rank = offset + index + 1;
                       const badge = row.badge || row.assigned_badge || "";
                       const status = customerStatus(row);
                       const last = linesLastOrder(row);
@@ -376,8 +429,13 @@ export default function CustomerLeaderboardPage() {
                           </td>
                           <td>
                             <div className="lb-cust">
-                              <strong>{row.name || "Guest"}</strong>
-                              <span className="muted lb-meta"><FiCalendar aria-hidden="true" /> {row.last_order_date ? formatDateTime(row.last_order_date) : "No orders"}</span>
+                              <div className="lb-customer-main">
+                                <span className="lb-avatar" aria-hidden="true">{customerInitial(row)}</span>
+                                <div className="lb-customer-copy">
+                                  <strong>{row.name || "Guest"}</strong>
+                                  <span className="muted lb-meta"><FiCalendar aria-hidden="true" /> {row.last_order_date ? formatDateTime(row.last_order_date) : "No orders"}</span>
+                                </div>
+                              </div>
                               {thumbs.length > 0 && (
                                 <span className="lb-thumbs" aria-label={`${thumbs.length} product image${thumbs.length === 1 ? "" : "s"} from the last order`}>
                                   {thumbs.map((src, i) => (
@@ -400,9 +458,9 @@ export default function CustomerLeaderboardPage() {
                           </td>
                           <td>
                             <div className="lb-stats">
-                              <Badge tone="brand">{row.total_orders ?? 0} Orders</Badge>
+                              <Badge tone="info"><FiShoppingBag aria-hidden="true" /> {row.total_orders ?? 0} Orders</Badge>
                               <button type="button" className="lb-link" onClick={() => setLatestRow(row)}>
-                                View latest order <FiChevronRight aria-hidden="true" />
+                                View Latest Order <FiChevronRight aria-hidden="true" />
                               </button>
                             </div>
                           </td>
@@ -430,7 +488,7 @@ export default function CustomerLeaderboardPage() {
                                 </a>
                               )}
                               {row.phone && (
-                                <a className="icon-btn" href={`https://wa.me/${row.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${row.name || row.phone}`}>
+                                <a className="icon-btn lb-whatsapp" href={`https://wa.me/${row.phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${row.name || row.phone}`}>
                                   <FiMessageCircle aria-hidden="true" />
                                 </a>
                               )}

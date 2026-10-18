@@ -1,19 +1,11 @@
 "use client";
 
 /**
- * Edit order — full frontend form (Zuberee-style).
- *
- * Everything is displayed and editable. Saving sends ONE PATCH to
- * `api/admin/orders/:id` with the contract in
- * frontend/ORDER_API_FRONTEND_CONTRACT.md:
- *   { status, paymentStatus, courier_entry, name, phone, email, address,
- *     district, payment_method, shipping_cost, advance_payment,
- *     delivery_notes, items: [{ id, product_id, qty, unitPrice, size }] }
- *
- * Today's backend only persists `status` + `paymentStatus`; the other fields
- * ride along and are verified against the PATCH response. Anything the API
- * did not store is reported honestly on this page (never faked as saved) so
- * the backend dev can wire the extended fields without a UI change here.
+ * Edit order. Saving sends one PATCH to `api/admin/orders/:id` containing
+ * status/payment, customer contact and delivery details, courier, charges,
+ * notes and items. The response is compared with the submitted values; if a
+ * future API change causes a field not to persist, the page keeps the draft
+ * and names the affected section instead of reporting a false success.
  */
 
 import Link from "next/link";
@@ -23,7 +15,7 @@ import { FiArrowLeft, FiPlus, FiSave, FiTrash2, FiPrinter } from "react-icons/fi
 import { AdminHeader } from "@/components/admin/AdminPage";
 import { Button, Card, CardHeader, ErrorState, Field, Input, Select, Skeleton, Textarea } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
-import { api, formatMoney, request } from "@/lib/api";
+import { api, formatMoney, isValidBdPhone, isValidEmail, normalizeEmail, normalizePhone, request } from "@/lib/api";
 import { COURIER_OPTIONS, courierOptionsWith } from "@/lib/couriers";
 import { DISTRICTS } from "@/lib/districts";
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS, formatOrderNumber, orderStatusMeta } from "@/lib/format";
@@ -70,6 +62,7 @@ function formFromOrder(order) {
       key: String(item.key),
       id: typeof item.key === "number" ? item.key : null,
       product_id: item.productId,
+      variant_id: item.variantId ?? null,
       title: item.title,
       sku: item.sku || "",
       size: item.size || "",
@@ -118,7 +111,7 @@ export default function AdminOrderEditPage() {
   }
 
   const original = formFromOrder(order);
-  const itemsChanged = JSON.stringify(original.items.map((i) => [i.id, i.product_id, i.qty, i.unitPrice, i.size])) !== JSON.stringify(form.items.map((i) => [i.id, i.product_id, i.qty, i.unitPrice, i.size]));
+  const itemsChanged = JSON.stringify(original.items.map((i) => [i.id, i.product_id, i.variant_id, i.qty, i.unitPrice, i.size])) !== JSON.stringify(form.items.map((i) => [i.id, i.product_id, i.variant_id, i.qty, i.unitPrice, i.size]));
   const extendedChanged =
     form.name !== original.name || form.phone !== original.phone || form.email !== original.email ||
     form.address !== original.address || form.district !== original.district ||
@@ -144,6 +137,7 @@ export default function AdminOrderEditPage() {
         key: `new-${product.id}-${Date.now()}`,
         id: null,
         product_id: product.id,
+        variant_id: null,
         title: product.title || product.name || "Product",
         sku: product.sku || "",
         size: "",
@@ -162,7 +156,16 @@ export default function AdminOrderEditPage() {
     setFormError("");
     setSaveNote("");
     if (!form.name.trim()) return setFormError("Customer name is required.");
-    if (!form.phone.trim()) return setFormError("Customer phone is required.");
+    const submittedPhone = normalizePhone(form.phone);
+    if (!submittedPhone) return setFormError("Customer phone is required.");
+    if (submittedPhone !== normalizePhone(original.phone) && !isValidBdPhone(submittedPhone)) {
+      return setFormError("Enter a valid Bangladeshi mobile number (01XXXXXXXXX).");
+    }
+    const submittedEmail = normalizeEmail(form.email);
+    if (!submittedEmail && normalizeEmail(original.email)) return setFormError("Customer email cannot be cleared.");
+    if (submittedEmail && submittedEmail !== normalizeEmail(original.email) && !isValidEmail(submittedEmail)) {
+      return setFormError("Enter a valid email address.");
+    }
     if (!form.address.trim()) return setFormError("Delivery address is required.");
     if (form.items.length === 0) return setFormError("An order needs at least one item. Add a product before saving.");
     if (form.items.some((item) => !(Number(item.qty) >= 1) || !(Number(item.unitPrice) >= 0))) return setFormError("Every item needs a quantity of at least 1 and a price of 0 or more.");
@@ -173,55 +176,108 @@ export default function AdminOrderEditPage() {
       if (!ok) return;
     }
 
-    const body = {
-      status: form.status.toUpperCase(),
-      paymentStatus: form.paymentStatus.toUpperCase(),
-      courier_entry: form.courier,
+    const submitted = {
+      ...form,
       name: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
+      phone: submittedPhone,
+      email: submittedEmail,
       address: form.address.trim(),
-      district: form.district,
-      payment_method: form.paymentMethod,
-      shipping_cost: Number(form.shippingCost) || 0,
-      advance_payment: Number(form.advancePayment) || 0,
-      delivery_notes: form.deliveryNotes.trim(),
-      items: form.items.map((item) => ({
+      deliveryNotes: form.deliveryNotes.trim(),
+    };
+
+    const body = {
+      status: submitted.status.toUpperCase(),
+      paymentStatus: submitted.paymentStatus.toUpperCase(),
+      courier_entry: submitted.courier,
+      name: submitted.name,
+      phone: submitted.phone,
+      email: submitted.email,
+      address: submitted.address,
+      district: submitted.district,
+      payment_method: submitted.paymentMethod,
+      shipping_cost: Number(submitted.shippingCost) || 0,
+      advance_payment: Number(submitted.advancePayment) || 0,
+      delivery_notes: submitted.deliveryNotes,
+      items: submitted.items.map((item) => ({
         id: item.id,
         product_id: item.product_id,
+        variant_id: item.variant_id || undefined,
         qty: Number(item.qty) || 1,
         unitPrice: Number(item.unitPrice) || 0,
         size: item.size || undefined,
       })),
     };
 
+    const textMismatch = (savedValue, submittedValue) => String(savedValue ?? "").trim() !== String(submittedValue ?? "").trim();
+    const lowerMismatch = (savedValue, submittedValue) => String(savedValue ?? "").trim().toLowerCase() !== String(submittedValue ?? "").trim().toLowerCase();
+    const moneyMismatch = (savedValue, submittedValue) => Math.abs((Number(savedValue) || 0) - (Number(submittedValue) || 0)) > 0.005;
+    // Variant/size are checked separately below: older rows may gain a
+    // backfilled variant (and therefore a derived size) during this save.
+    const itemSignature = (items) => items
+      .map((item) => [Number(item.product_id) || 0, Number(item.qty) || 0, Number(item.unitPrice) || 0].join("|"))
+      .sort()
+      .join("||");
+
     setSaving(true);
     try {
       const res = await request(`api/admin/orders/${id}`, { method: "PATCH", body });
       const saved = res?.data ? formFromOrder(res.data) : null;
-      setDraft(null);
-      if (extendedChanged && saved) {
-        const notStored =
-          saved.name !== form.name || saved.phone !== form.phone || saved.address !== form.address ||
-          String(saved.district).toLowerCase() !== String(form.district).toLowerCase() ||
-          Number(saved.shippingCost) !== Number(form.shippingCost) || Number(saved.advancePayment) !== Number(form.advancePayment) ||
-          saved.items.length !== form.items.length ||
-          saved.items.some((item, index) => Number(item.qty) !== Number(form.items[index]?.qty) || Number(item.unitPrice) !== Number(form.items[index]?.unitPrice));
-        if (notStored) {
-          setSaveNote("Status/payment were saved. Customer, item, charge or courier edits were sent but the current order API does not store them yet — they will save automatically once the backend implements ORDER_API_FRONTEND_CONTRACT.md. Nothing was faked.");
-          toast.info("Saved — some fields still need the extended order API.");
-          reload();
-          return;
-        }
+      if (!saved) {
+        setSaveNote("The order could not be verified after saving. Your entered values are still shown; reload the order before trying again.");
+        toast.info("Saved changes could not be verified.");
+        reload();
+        return;
       }
+
+      const unsaved = [];
+      if (statusChanged && lowerMismatch(saved.status, submitted.status)) unsaved.push("order status");
+      if (paymentChanged && lowerMismatch(saved.paymentStatus, submitted.paymentStatus)) unsaved.push("payment status");
+
+      const customerChanged =
+        textMismatch(submitted.name, original.name) ||
+        normalizePhone(submitted.phone) !== normalizePhone(original.phone) ||
+        normalizeEmail(submitted.email) !== normalizeEmail(original.email) ||
+        textMismatch(submitted.address, original.address) ||
+        lowerMismatch(submitted.district, original.district);
+      const customerMismatch =
+        textMismatch(saved.name, submitted.name) ||
+        normalizePhone(saved.phone) !== normalizePhone(submitted.phone) ||
+        normalizeEmail(saved.email) !== normalizeEmail(submitted.email) ||
+        textMismatch(saved.address, submitted.address) ||
+        lowerMismatch(saved.district, submitted.district);
+      if (customerChanged && customerMismatch) unsaved.push("customer details");
+
+      if (submitted.paymentMethod !== original.paymentMethod && lowerMismatch(saved.paymentMethod, submitted.paymentMethod)) unsaved.push("payment method");
+      if (submitted.courier !== original.courier && textMismatch(saved.courier, submitted.courier)) unsaved.push("courier assignment");
+      if ((moneyMismatch(submitted.shippingCost, original.shippingCost) && moneyMismatch(saved.shippingCost, submitted.shippingCost)) ||
+          (moneyMismatch(submitted.advancePayment, original.advancePayment) && moneyMismatch(saved.advancePayment, submitted.advancePayment))) {
+        unsaved.push("charges");
+      }
+      if (submitted.deliveryNotes !== original.deliveryNotes && textMismatch(saved.deliveryNotes, submitted.deliveryNotes)) unsaved.push("delivery notes");
+      const originalItemsById = new Map(original.items.filter((item) => item.id).map((item) => [item.id, item]));
+      const savedItemsById = new Map(saved.items.filter((item) => item.id).map((item) => [item.id, item]));
+      const sizeUnsaved = submitted.items.some((item) => {
+        if (!item.id) return false;
+        const submittedSize = String(item.size || "").trim().toLowerCase();
+        const originalSize = String(originalItemsById.get(item.id)?.size || "").trim().toLowerCase();
+        const savedItem = savedItemsById.get(item.id);
+        const savedSize = String(savedItem?.size || savedItem?.variant || "").trim().toLowerCase();
+        return Boolean(submittedSize && submittedSize !== originalSize && savedSize !== submittedSize);
+      });
+      if ((itemsChanged && itemSignature(saved.items) !== itemSignature(submitted.items)) || sizeUnsaved) unsaved.push("items");
+
+      if (unsaved.length) {
+        setSaveNote(`Some changes could not be saved: ${unsaved.join(", ")}. Your entered values are still shown so you can review them.`);
+        toast.info("Some changes could not be saved.");
+        reload();
+        return;
+      }
+
+      setDraft(null);
       toast.success("Order saved.");
       router.push(`/admin/orders/${id}`);
     } catch (err) {
-      if (extendedChanged && !statusChanged && !paymentChanged) {
-        setFormError(`${err.message} The current order API only saves status/payment for now; customer, item, charge and courier fields are ready in this form for the extended API (ORDER_API_FRONTEND_CONTRACT.md).`);
-      } else {
-        setFormError(err.message || "The order could not be saved.");
-      }
+      setFormError(err.message || "The order could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -245,10 +301,7 @@ export default function AdminOrderEditPage() {
         )}
       />
 
-      <p className="notice notice-info" role="note" style={{ margin: 0 }}>
-        Status and payment status save through the current API today. Customer, item, shipping/advance, payment-method and courier fields are fully editable here and are sent in the same save — the backend dev can persist them per <strong>ORDER_API_FRONTEND_CONTRACT.md</strong> without any further frontend change.
-      </p>
-      {saveNote && <p className="notice notice-info" role="status" style={{ margin: 0 }}>{saveNote}</p>}
+      {saveNote && <p className="notice notice-warn" role="status" style={{ margin: 0 }}>{saveNote}</p>}
       {formError && <p className="notice notice-danger" role="alert" style={{ margin: 0 }}>{formError}</p>}
 
       <div className="grid-2" style={{ alignItems: "start" }}>
@@ -258,8 +311,8 @@ export default function AdminOrderEditPage() {
             <div className="stack" style={{ padding: "0 1.25rem 1.25rem" }}>
               <Field label="Customer name" htmlFor="eo-name" required><Input id="eo-name" value={form.name} onChange={set("name")} /></Field>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Field label="Phone" htmlFor="eo-phone" required><Input id="eo-phone" className="num" value={form.phone} onChange={set("phone")} /></Field>
-                <Field label="Email" htmlFor="eo-email"><Input id="eo-email" type="email" value={form.email} onChange={set("email")} /></Field>
+                <Field label="Phone" htmlFor="eo-phone" required><Input id="eo-phone" className="num" inputMode="tel" autoComplete="tel" value={form.phone} onChange={set("phone")} /></Field>
+                <Field label="Email" htmlFor="eo-email" hint="Must be valid if entered."><Input id="eo-email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={set("email")} /></Field>
               </div>
               <Field label="Address" htmlFor="eo-address" required><Textarea id="eo-address" rows={2} value={form.address} onChange={set("address")} /></Field>
               <Field label="District" htmlFor="eo-district">

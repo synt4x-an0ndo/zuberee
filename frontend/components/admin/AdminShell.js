@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FiActivity, FiBarChart2, FiBox, FiExternalLink, FiFileText, FiGrid, FiImage, FiLayers, FiLogOut, FiMenu, FiMessageCircle, FiPackage, FiSettings, FiShield, FiShoppingBag, FiTag, FiTruck, FiUserCheck, FiUsers, FiX } from "react-icons/fi";
 import Img from "@/components/Img";
+import RoleBadges from "@/components/RoleBadges";
 import { requiredAdminPermission } from "@/lib/adminAccess";
 import { Button, ErrorState, Skeleton } from "@/components/ui";
 import { cx } from "@/components/ui";
@@ -180,6 +181,7 @@ export default function AdminShell({ children }) {
               <strong>{user?.name || "Admin"}</strong>
               <span className="muted">{user?.email}</span>
             </span>
+            <RoleBadges roles={user?.roles} max={1} showOverflow={false} className="admin-role-badges" />
           </div>
         </header>
         <main className="admin-content page-enter" key={pathname}>

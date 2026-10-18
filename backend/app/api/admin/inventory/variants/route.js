@@ -52,7 +52,7 @@ function formatVariant(variant) {
         position: variant.position,
         created_at: variant.createdAt,
         updated_at: variant.updatedAt,
-        label: `${color?.name ?? ""} / ${variant.value}`,
+        label: color?.name ? `${color.name} / ${variant.value}` : variant.value,
         low_stock: isLowStock,
         product: variant.product
             ? {
@@ -209,7 +209,7 @@ export async function GET(request) {
                         case "low_stock":
                             return v.low_stock === true;
                         case "preorder":
-                            return v.allow_preorder === true;
+                            return v.allow_preorder === true || v.product?.status === "pre-order";
                         case "tracked":
                             return trackInv === true;
                         default:

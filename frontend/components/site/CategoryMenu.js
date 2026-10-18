@@ -3,39 +3,54 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { FiChevronDown, FiChevronRight, FiMenu } from "react-icons/fi";
+import { FiChevronDown, FiMenu } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import { useSite } from "@/context/SiteContext";
 
 /**
  * "All Categories" dropdown, replicating the Zuberee storefront pattern:
  * a compact panel the same width as the button opens below it (on hover
- * for desktop pointers, on click for touch/keyboard); every root category
- * is a link, and hovering a category that has children flies its
- * sub-categories out in a card to the right (recursively for deeper
- * levels). The mobile bottom-nav variant keeps a tap-to-expand sheet.
+ * for desktop pointers, on click for touch/keyboard); every category is
+ * a link, and one that has children shows a down chevron — hovering the
+ * row (or pressing the chevron) expands its sub-categories inline under
+ * it, recursively for deeper levels. The mobile bottom-nav variant keeps
+ * a tap-to-expand sheet.
  * Closes on outside click, Escape or navigation, and renders nothing
  * when the store has no categories yet.
  */
 
-function FlyoutRows({ items }) {
+function InlineRows({ items }) {
   const [hovered, setHovered] = useState(null);
+  const [toggled, setToggled] = useState(null);
   return items.map((category) => {
     const hasChildren = category.children.length > 0;
+    const isOpen = hovered === category.id || toggled === category.id;
     return (
       <div
         key={category.id}
-        className="category-menu-flyout-group"
+        className={cx("category-menu-group", isOpen && "is-open")}
         onMouseEnter={() => setHovered(category.id)}
         onMouseLeave={() => setHovered((current) => (current === category.id ? null : current))}
       >
-        <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
-          <span>{category.name}</span>
-          {hasChildren && <FiChevronRight aria-hidden="true" />}
-        </Link>
-        {hasChildren && hovered === category.id && (
-          <div className="category-menu-flyout">
-            <FlyoutRows items={category.children} />
+        <div className="category-menu-row">
+          <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
+            <span>{category.name}</span>
+          </Link>
+          {hasChildren && (
+            <button
+              type="button"
+              className="category-menu-toggle"
+              aria-expanded={isOpen}
+              aria-label={`Toggle ${category.name} sub-categories`}
+              onClick={() => setToggled((current) => (current === category.id ? null : category.id))}
+            >
+              <FiChevronDown aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {hasChildren && isOpen && (
+          <div className="category-menu-sub-inline anim-fade-in">
+            <InlineRows items={category.children} />
           </div>
         )}
       </div>
@@ -103,6 +118,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
   const closeAll = () => {
     setOpen(false);
     setHovered(null);
+    setExpanded(null);
   };
 
   return (
@@ -171,23 +187,37 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
               );
             }
 
-            // Desktop header (Zuberee): the row itself is the link; children
-            // fly out to the right while the row is hovered.
+            // Desktop header: the row itself is the link; children expand
+            // inline under the row (down chevron) while it is hovered, or
+            // stay open when the chevron is pressed.
             const isHovered = hovered === category.id;
+            const isOpen = isHovered || expanded === category.id;
             return (
               <div
                 key={category.id}
-                className={cx("category-menu-group", isHovered && "is-hovered")}
+                className={cx("category-menu-group", isHovered && "is-hovered", isOpen && "is-open")}
                 onMouseEnter={() => setHovered(category.id)}
                 onMouseLeave={() => setHovered((current) => (current === category.id ? null : current))}
               >
-                <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
-                  <span>{category.name}</span>
-                  {hasChildren && <FiChevronRight aria-hidden="true" />}
-                </Link>
-                {hasChildren && isHovered && (
-                  <div className="category-menu-flyout">
-                    <FlyoutRows items={category.children} />
+                <div className="category-menu-row">
+                  <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
+                    <span>{category.name}</span>
+                  </Link>
+                  {hasChildren && (
+                    <button
+                      type="button"
+                      className="category-menu-toggle"
+                      aria-expanded={isOpen}
+                      aria-label={`Toggle ${category.name} sub-categories`}
+                      onClick={() => setExpanded((current) => (current === category.id ? null : category.id))}
+                    >
+                      <FiChevronDown aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+                {hasChildren && isOpen && (
+                  <div className="category-menu-sub-inline anim-fade-in">
+                    <InlineRows items={category.children} />
                   </div>
                 )}
               </div>

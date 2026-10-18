@@ -115,6 +115,7 @@ export default function CartDrawer() {
                   <h3 style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</h3>
                   <div className="meta">
                     {item.variant?.label && <span>Size {item.variant.label}</span>}
+                    {item.isPreorder && <span>Pre-order</span>}
                     {item.color && <span>{item.color.name}</span>}
                     <span className="num">{formatMoney(item.unitPrice)}</span>
                   </div>
@@ -124,7 +125,7 @@ export default function CartDrawer() {
                         <FiMinus aria-hidden="true" />
                       </button>
                       <span className="num">{item.quantity}</span>
-                      <button type="button" onClick={() => change(item, item.quantity + 1)} aria-label="Increase quantity">
+                      <button type="button" onClick={() => change(item, item.quantity + 1)} disabled={item.maxQuantity !== null && item.maxQuantity !== undefined && item.quantity >= item.maxQuantity} aria-label="Increase quantity">
                         <FiPlus aria-hidden="true" />
                       </button>
                     </div>

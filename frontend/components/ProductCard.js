@@ -116,7 +116,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
     ? selectedSize.price
     : product.salePrice;
   const canPurchase = !unavailable && (!product.sizes.length || Boolean(selectedSize)) &&
-    !(product.tracked && selectedSize && selectedSize.stock <= 0) && !busyAction;
+    !(selectedSize && selectedSize.orderCapacity === 0) && !busyAction;
 
   const runAction = async (intent) => {
     if (unavailable || busyAction) return;
@@ -125,8 +125,10 @@ export default function ProductCard({ product: raw, index = 0 }) {
       toast.info("Choose a size to continue.");
       return;
     }
-    if (product.tracked && selectedSize && selectedSize.stock <= 0) {
-      toast.error("That size is out of stock. Please choose another size.");
+    if (selectedSize && selectedSize.orderCapacity === 0) {
+      toast.error(selectedSize.allowPreorder
+        ? "That size has reached its pre-order limit. Please choose another size."
+        : "That size is out of stock. Please choose another size.");
       return;
     }
 
@@ -214,7 +216,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
                 </div>
                 <div className="quick-add-sizes">
                   {product.sizes.map((size) => {
-                    const soldOut = product.tracked && size.stock <= 0;
+                    const soldOut = size.orderCapacity === 0;
                     return (
                       <button
                         key={size.id ?? size.label}
@@ -223,7 +225,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
                         onClick={() => setSelectedSizeId(size.id)}
                         disabled={soldOut}
                         aria-pressed={String(selectedSizeId) === String(size.id)}
-                        title={soldOut ? "Out of stock" : size.label}
+                        title={soldOut ? (size.allowPreorder ? "Pre-order limit reached" : "Out of stock") : size.label}
                       >
                         {size.label || "Size"}
                       </button>

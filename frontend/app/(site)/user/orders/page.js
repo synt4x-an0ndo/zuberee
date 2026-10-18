@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FiImage } from "react-icons/fi";
+import { FiImage, FiTruck } from "react-icons/fi";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, EmptyState, ErrorState, Pagination, Skeleton, cx } from "@/components/ui";
 import Img from "@/components/Img";
@@ -88,7 +88,12 @@ export default function MyOrdersPage() {
                 </ul>
                 <footer className="order-card-foot">
                   <span className="muted" style={{ fontSize: "0.9rem" }}>{order.shipping_address}</span>
-                  <span className="num" style={{ fontWeight: 700 }}>Total {formatMoney(order.total_amount)}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span className="num" style={{ fontWeight: 700 }}>Total {formatMoney(order.total_amount)}</span>
+                    <Button href={`/track-order?order=${order.id}`} variant="outline" size="sm" icon={FiTruck}>
+                      Track shipment
+                    </Button>
+                  </span>
                 </footer>
               </article>
             );

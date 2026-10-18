@@ -44,6 +44,7 @@ export function getInvoiceData(order = {}) {
     return {
       key: item.id ?? `${index}-${item.product_id ?? item.title ?? "item"}`,
       productId: item.product_id ?? item.productId ?? null,
+      variantId: item.product_variant_id ?? item.variant_id ?? item.variantId ?? null,
       title: item.title || item.name || item.product?.name || "Product",
       sku: item.sku || item.product?.sku || "",
       variant: [item.color_name || item.color, item.size || item.selected_size || item.variant].filter(Boolean).join(" / "),
@@ -74,9 +75,9 @@ export function getInvoiceData(order = {}) {
     paymentStatus,
     paymentMethod: order.payment_method || "cash",
     customer: {
-      name: order.name || order.guest?.name || "Guest",
-      phone: order.phone || order.guest?.phone || "",
-      email: order.email || "",
+      name: order.name || order.contact_name || order.contactName || order.guest?.name || "Guest",
+      phone: order.phone || order.contact_phone || order.contactPhone || order.guest?.phone || "",
+      email: order.email || order.contact_email || order.contactEmail || order.guest?.email || "",
       address: order.address || order.shipping_address || "",
       district: order.district || "",
       type: order.customer_type || "",

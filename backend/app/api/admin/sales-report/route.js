@@ -132,32 +132,55 @@ export async function GET(request) {
             }
         }
 
-        const productMap = new Map();
+        const createProductEntry = (productId, product) => ({
+            product_id: productId,
+            title: product?.name ?? "Unknown",
+            sku: product?.sku ?? null,
+            product_status: product?.status
+                ? product.status.toLowerCase().replaceAll("_", "-")
+                : null,
+            image: product?.images?.[0]?.imageUrl ?? null,
+            order_count: 0,
+            customer_count: 0,
+            quantity_sold: 0,
+            gross_sales: 0,
+            average_unit_price: 0,
+            last_ordered_at: null,
+            customerSet: new Set(),
+        });
+
+        // The web report's "Complete catalog" table starts with every current
+        // product, then overlays this period's sales. Unsold products remain
+        // visible with zero metrics; consumers that only want sellers (such
+        // as the PDF) already filter those rows out.
+        const catalogProducts = await prisma.product.findMany({
+            select: {
+                id: true,
+                name: true,
+                sku: true,
+                status: true,
+                images: {
+                    orderBy: { isPrimary: "desc" },
+                    take: 1,
+                    select: { imageUrl: true },
+                },
+            },
+            orderBy: { name: "asc" },
+        });
+
+        const productMap = new Map(
+            catalogProducts.map((product) => [
+                product.id,
+                createProductEntry(product.id, product),
+            ])
+        );
 
         for (const o of validOrders) {
             for (const item of o.items) {
                 const key = item.productId;
 
                 if (!productMap.has(key)) {
-                    const firstImage =
-                        item.product?.images?.[0]?.imageUrl ?? null;
-
-                    productMap.set(key, {
-                        product_id: key,
-                        title: item.product?.name ?? "Unknown",
-                        sku: item.product?.sku ?? null,
-                        product_status: item.product?.status
-                            ? item.product.status.toLowerCase().replaceAll("_", "-")
-                            : null,
-                        image: firstImage,
-                        order_count: 0,
-                        customer_count: 0,
-                        quantity_sold: 0,
-                        gross_sales: 0,
-                        average_unit_price: 0,
-                        last_ordered_at: null,
-                        customerSet: new Set(),
-                    });
+                    productMap.set(key, createProductEntry(key, item.product));
                 }
 
                 const entry = productMap.get(key);
@@ -198,11 +221,23 @@ export async function GET(request) {
         }));
 
         if (sort === "revenue") {
-            products.sort((a, b) => b.gross_sales - a.gross_sales);
+            products.sort(
+                (a, b) =>
+                    b.gross_sales - a.gross_sales ||
+                    a.title.localeCompare(b.title)
+            );
         } else if (sort === "quantity") {
-            products.sort((a, b) => b.quantity_sold - a.quantity_sold);
+            products.sort(
+                (a, b) =>
+                    b.quantity_sold - a.quantity_sold ||
+                    a.title.localeCompare(b.title)
+            );
         } else if (sort === "orders") {
-            products.sort((a, b) => b.order_count - a.order_count);
+            products.sort(
+                (a, b) =>
+                    b.order_count - a.order_count ||
+                    a.title.localeCompare(b.title)
+            );
         }
 
         if (productSearch) {

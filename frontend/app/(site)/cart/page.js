@@ -46,7 +46,7 @@ export default function CartPage() {
   };
 
   const changeQty = (item, next) => {
-    const max = item.variant && item.variant.stock > 0 ? item.variant.stock : 99;
+    const max = item.maxQuantity === null || item.maxQuantity === undefined ? 99 : item.maxQuantity;
     if (next < 1 || next > max) return;
     run(item.id, async () => {
       await updateItem(item.id, next);
@@ -111,7 +111,7 @@ export default function CartPage() {
         <ul className="cart-list stagger" style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {cart.items.map((item) => {
             const busy = pending === item.id;
-            const max = item.variant && item.variant.stock > 0 ? item.variant.stock : 99;
+            const max = item.maxQuantity === null || item.maxQuantity === undefined ? 99 : item.maxQuantity;
             return (
               <li key={item.id} className="cart-line" aria-busy={busy}>
                 <Link href={`/product-page/${item.productId}`} className="cart-thumb">
@@ -121,6 +121,7 @@ export default function CartPage() {
                   <Link href={`/product-page/${item.productId}`} className="cart-title">{item.title}</Link>
                   <div className="cart-meta">
                     {item.variant?.label && <span>Size {item.variant.label}</span>}
+                    {item.isPreorder && <span>Pre-order</span>}
                     {item.color?.name && (
                       <span className="cart-color">
                         {item.color.code && <i style={{ background: item.color.code }} aria-hidden="true" />}

@@ -1,5 +1,7 @@
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import { requireValidOrderContact } from "@/lib/contactValidation.js";
+import { allocateOrderEntries } from "@/lib/preorder.js";
 
 const VALID_STATUSES = [
     "pending",
@@ -24,6 +26,9 @@ const ORDER_INCLUDE = {
                         select: { imageUrl: true },
                     },
                 },
+            },
+            variant: {
+                select: { id: true, name: true, value: true },
             },
         },
     },
@@ -50,16 +55,17 @@ function formatOrderItem(item) {
         sku: item.product?.sku ?? null,
         unitPrice: Number(item.unitPrice),
         qty: item.quantity,
-        is_preorder: false,
-        inventory_state: "committed",
+        is_preorder: Boolean(item.isPreorder || item.preorderQuantity > 0),
+        preorder_quantity: item.preorderQuantity || 0,
+        inventory_state: item.preorderQuantity > 0 ? "preorder" : "committed",
         colorImage: firstImage,
-        selected_size: null,
+        selected_size: item.size || item.variant?.value || null,
         totalPrice: Number(item.unitPrice) * item.quantity,
         created_at: item.createdAt,
         updated_at: item.createdAt,
         color_name: "",
-        size: null,
-        variant: null,
+        size: item.size || item.variant?.value || null,
+        variant: item.variant ? item.variant.value || item.variant.name || null : null,
     };
 }
 
@@ -71,12 +77,13 @@ function formatOrder(order) {
         id: order.id,
         order_number: `ORD-${String(order.id).padStart(5, "0")}`,
         user_id: order.userId,
-        name: order.user
+        name: order.contactName || (order.user
             ? order.user.name
-            : order.guestName ?? "Guest",
-        phone: order.user
+            : order.guestName ?? "Guest"),
+        phone: order.contactPhone || (order.user
             ? order.user.phone
-            : order.guestPhone ?? null,
+            : order.guestPhone ?? null),
+        email: order.contactEmail || order.user?.email || null,
         address: order.shippingAddress,
         district: order.district,
         shipping_cost: Number(order.shippingFee),
@@ -84,9 +91,10 @@ function formatOrder(order) {
         total: Number(order.totalAmount),
         advance_payment: Number(order.advancePayment),
         payment_method: order.paymentMethod,
-        delivery_notes: null,
+        delivery_notes: order.deliveryNotes || "",
         status: order.status.toLowerCase(),
-        courier_entry: 0,
+        payment_status: order.paymentStatus.toLowerCase(),
+        courier_entry: order.courierEntry || "",
         created_at: order.createdAt,
         updated_at: order.updatedAt,
         customer_type: order.userId ? "Repeat Customer" : "New",
@@ -135,36 +143,24 @@ export async function GET(request) {
         const where = {};
 
         if (search) {
+            const insensitive = { contains: search, mode: "insensitive" };
             where.OR = [
-                {
-                    user: {
-                        name: {
-                            contains: search,
-                            mode: "insensitive",
-                        },
-                    },
-                },
-                {
-                    user: {
-                        phone: {
-                            contains: search,
-                            mode: "insensitive",
-                        },
-                    },
-                },
-                {
-                    guestName: {
-                        contains: search,
-                        mode: "insensitive",
-                    },
-                },
-                {
-                    guestPhone: {
-                        contains: search,
-                        mode: "insensitive",
-                    },
-                },
+                { user: { name: insensitive } },
+                { user: { phone: insensitive } },
+                { user: { email: insensitive } },
+                { guestName: insensitive },
+                { guestPhone: insensitive },
+                { contactName: insensitive },
+                { contactPhone: insensitive },
+                { contactEmail: insensitive },
             ];
+
+            // "Order number" in the UI is the numeric order id, displayed as
+            // ORD-00037 (and sometimes typed as #37) — accept all three forms.
+            const orderNumber = search.replace(/^#/, "").replace(/^ord-?/i, "").trim();
+            if (/^\d+$/.test(orderNumber)) {
+                where.OR.push({ id: Number(orderNumber) });
+            }
         }
 
         if (status && VALID_STATUSES.includes(status.toLowerCase())) {
@@ -264,7 +260,14 @@ export async function POST(request) {
             userId,
             guestName,
             guestPhone,
+            guestEmail,
             guestAddress,
+            name,
+            phone,
+            email,
+            contactName,
+            contactPhone,
+            contactEmail,
             district,
             shippingAddress,
             shippingFee = 0,
@@ -285,6 +288,7 @@ export async function POST(request) {
 
         let finalName = null;
         let finalPhone = null;
+        let finalEmail = null;
         let finalUserId = null;
         let finalShippingAddress = shippingAddress
             ? String(shippingAddress).trim()
@@ -293,7 +297,7 @@ export async function POST(request) {
         if (userId) {
             const user = await prisma.user.findUnique({
                 where: { id: Number(userId) },
-                select: { id: true, name: true, phone: true },
+                select: { id: true, name: true, phone: true, email: true },
             });
 
             if (!user) {
@@ -307,35 +311,39 @@ export async function POST(request) {
             }
 
             finalUserId = user.id;
-            finalName = user.name;
-            finalPhone = user.phone;
+            finalName = contactName ?? name ?? guestName ?? user.name;
+            finalPhone = contactPhone ?? phone ?? guestPhone ?? user.phone;
+            finalEmail = contactEmail ?? email ?? guestEmail ?? user.email;
         } else {
-            if (!guestName || !String(guestName).trim()) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "Customer name is required.",
-                    },
-                    { status: 400 }
-                );
-            }
-
-            if (!guestPhone || !String(guestPhone).trim()) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "Customer phone is required.",
-                    },
-                    { status: 400 }
-                );
-            }
-
-            finalName = String(guestName).trim();
-            finalPhone = String(guestPhone).trim();
+            finalName = contactName ?? name ?? guestName;
+            finalPhone = contactPhone ?? phone ?? guestPhone;
+            finalEmail = contactEmail ?? email ?? guestEmail;
 
             if (guestAddress) {
                 finalShippingAddress = String(guestAddress).trim();
             }
+        }
+
+        finalName = finalName ? String(finalName).trim() : "";
+        if (!finalName) {
+            return Response.json(
+                {
+                    success: false,
+                    message: "Customer name is required.",
+                },
+                { status: 400 }
+            );
+        }
+
+        try {
+            const contact = requireValidOrderContact({ phone: finalPhone, email: finalEmail });
+            finalPhone = contact.phone;
+            finalEmail = contact.email;
+        } catch (validationError) {
+            return Response.json(
+                { success: false, message: validationError.message },
+                { status: validationError.status || 400 }
+            );
         }
 
         if (!finalShippingAddress) {
@@ -427,13 +435,25 @@ export async function POST(request) {
             }
 
             orderItemsData.push({
+                product,
+                variant,
                 productId,
                 variantId: variant ? variant.id : null,
+                size: variant?.value ? String(variant.value) : raw.size ?? raw.selected_size ?? null,
                 quantity,
                 unitPrice,
             });
 
             totalAmount += unitPrice * quantity;
+        }
+
+        try {
+            allocateOrderEntries(orderItemsData);
+        } catch (allocationError) {
+            return Response.json(
+                { success: false, message: allocationError.message },
+                { status: allocationError.status || 400 }
+            );
         }
 
         const finalShippingFee = Number(shippingFee) || 0;
@@ -445,6 +465,9 @@ export async function POST(request) {
                     userId: finalUserId,
                     guestName: finalUserId ? null : finalName,
                     guestPhone: finalUserId ? null : finalPhone,
+                    contactName: finalName,
+                    contactPhone: finalPhone,
+                    contactEmail: finalEmail,
 
                     status: "PENDING",
                     paymentStatus: "PENDING",
@@ -462,8 +485,12 @@ export async function POST(request) {
                     items: {
                         create: orderItemsData.map((item) => ({
                             productId: item.productId,
+                            variantId: item.variantId,
+                            size: item.size ? String(item.size) : null,
                             quantity: item.quantity,
                             unitPrice: item.unitPrice,
+                            isPreorder: item.isPreorder,
+                            preorderQuantity: item.preorderQuantity,
                         })),
                     },
                 },
@@ -471,23 +498,45 @@ export async function POST(request) {
             });
 
             for (const item of orderItemsData) {
-                if (item.variantId !== null) {
+                if (item.variantId !== null && item.stockQuantity > 0) {
+                    const updatedVariant =
+                        await tx.productVariant.update({
+                            where: { id: item.variantId },
+                            data: {
+                                stock: { decrement: item.stockQuantity },
+                                ...(item.preorderQuantity > 0
+                                    ? { preorderCount: { increment: item.preorderQuantity } }
+                                    : {}),
+                            },
+                        });
+
+                    await tx.stockMovement.create({
+                        data: {
+                            productVariantId: item.variantId,
+                            type: "sale",
+                            quantity: -item.stockQuantity,
+                            stockAfter: updatedVariant.stock,
+                            reservedAfter: updatedVariant.held,
+                            orderId: createdOrder.id,
+                            note: "Order placed",
+                            userId: auth.user.userId,
+                        },
+                    });
+                } else if (item.variantId !== null && item.preorderQuantity > 0) {
                     await tx.productVariant.update({
                         where: { id: item.variantId },
-                        data: {
-                            stock: {
-                                decrement: item.quantity,
-                            },
-                        },
+                        data: { preorderCount: { increment: item.preorderQuantity } },
                     });
                 }
 
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: {
-                        stock: { decrement: item.quantity },
-                    },
-                });
+                if (item.stockQuantity > 0) {
+                    await tx.product.update({
+                        where: { id: item.productId },
+                        data: {
+                            stock: { decrement: item.stockQuantity },
+                        },
+                    });
+                }
             }
 
             return createdOrder;

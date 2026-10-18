@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FiCamera, FiEdit2, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
+import RoleBadges from "@/components/RoleBadges";
 import UserAvatar from "@/components/UserAvatar";
 import { DEFAULT_AVATAR } from "@/lib/avatar";
 import PasswordInput from "@/components/PasswordInput";
@@ -86,6 +87,7 @@ function PersonalCard({ user, refresh, toast }) {
           <Button variant="outline" size="sm" loading={uploading} onClick={() => fileRef.current?.click()}>
             <FiCamera aria-hidden="true" /> {hasCustomAvatar ? "Change photo" : "Upload photo"}
           </Button>
+          <RoleBadges roles={user?.roles} className="profile-role-badges" />
           <p className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>JPG or PNG, up to 5 MB.</p>
         </div>
       </div>

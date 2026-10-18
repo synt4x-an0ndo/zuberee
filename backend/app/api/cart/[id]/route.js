@@ -4,6 +4,12 @@ import {
     formatCart,
     CART_INCLUDE,
 } from "@/lib/cartFormatter.js";
+import {
+    getProductOrderCapacity,
+    getVariantOrderCapacity,
+    isPreorderEligible,
+    isProductUnavailable,
+} from "@/lib/preorder.js";
 
 export async function PUT(request, { params }) {
     try {
@@ -59,21 +65,48 @@ export async function PUT(request, { params }) {
             )
             : null;
 
+        if (isProductUnavailable(existingItem.product)) {
+            return Response.json(
+                { success: false, message: "Product is not available." },
+                { status: 400 }
+            );
+        }
+
         const trackInventory =
             existingItem.product.inventory?.trackInventory ?? false;
 
-        const availableStock = variant
-            ? variant.stock
-            : existingItem.product.stock;
+        const capacity = variant
+            ? getVariantOrderCapacity(existingItem.product, variant)
+            : getProductOrderCapacity(existingItem.product);
+        const preorderEligible = isPreorderEligible(existingItem.product, variant);
+        const enforceCapacity = trackInventory || (preorderEligible && capacity !== null);
 
-        if (trackInventory && qty > availableStock) {
-            return Response.json(
-                {
-                    success: false,
-                    message: `Only ${availableStock} item(s) available in stock.`,
+        if (enforceCapacity && capacity !== null) {
+            const otherItems = await prisma.cartItem.findMany({
+                where: {
+                    cartId: cart.id,
+                    productId: existingItem.productId,
+                    variantId: existingItem.variantId,
+                    NOT: { id: cartItemId },
                 },
-                { status: 400 }
+                select: { quantity: true },
+            });
+            const otherQuantity = otherItems.reduce(
+                (sum, item) => sum + item.quantity,
+                0
             );
+
+            if (otherQuantity + qty > capacity) {
+                return Response.json(
+                    {
+                        success: false,
+                        message: preorderEligible
+                            ? `Only ${capacity} item(s) can be ordered, including pre-order.`
+                            : `Only ${capacity} item(s) available in stock.`,
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         await prisma.cartItem.update({

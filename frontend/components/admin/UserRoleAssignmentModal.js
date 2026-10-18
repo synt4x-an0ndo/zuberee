@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Modal } from "@/components/ui";
 import { permissionsForRoles } from "@/lib/permissions";
+import { formatRoleLabel, isDefaultRole } from "@/lib/roleBadges";
 
 /**
  * Assign roles to one user.
@@ -95,9 +96,10 @@ export default function UserRoleAssignmentModal({ open, user, roles = [], onClos
                   disabled={busy}
                 />
                 <span className="role-option-body">
-                  <strong>{role.name}</strong>
+                  <strong>{formatRoleLabel(role.name)}</strong>
                   <span className="muted">
                     {role.permissions.length} permission{role.permissions.length === 1 ? "" : "s"}
+                    {isDefaultRole(role.name) ? " · default profile (no badge)" : ""}
                   </span>
                 </span>
               </label>

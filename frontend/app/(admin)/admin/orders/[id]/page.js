@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { FiArrowLeft, FiPhone, FiMapPin, FiTruck, FiImage, FiEdit2, FiPrinter, FiDownload, FiSave } from "react-icons/fi";
+import { FiArrowLeft, FiPhone, FiMail, FiMapPin, FiTruck, FiImage, FiEdit2, FiPrinter, FiDownload, FiSave } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
 import Img from "@/components/Img";
 import { Badge, Button, Card, CardHeader, ErrorState, Field, Select, Skeleton } from "@/components/ui";
@@ -19,9 +19,8 @@ import { useAsync } from "@/lib/useAsync";
 /**
  * Order detail — Zuberee-style three columns:
  * Ordered Products | Order Summary | Manage Order (status / payment / courier,
- * Edit, Invoice). Status + payment save through the existing PATCH endpoint
- * today; `courier_entry` rides along in the same payload for the extended
- * order-update API (see frontend/ORDER_API_FRONTEND_CONTRACT.md).
+ * Edit, Invoice). All three controls save through PATCH api/admin/orders/:id;
+ * the courier response is verified before the selection is cleared.
  */
 export default function AdminOrderDetail() {
   const { id } = useParams();
@@ -69,12 +68,11 @@ export default function AdminOrderDetail() {
       const savedCourier = typeof res?.data?.courier_entry === "string" ? res.data.courier_entry : null;
       setStatus(null);
       setPayment(null);
-      setCourier(null);
       if (courierChanged && savedCourier !== currentCourier) {
-        // Today's API ignores courier_entry — be honest rather than pretend it saved.
-        setNotice("Order status/payment saved. Courier assignment is ready in the UI but the current order API does not store courier_entry yet (see ORDER_API_FRONTEND_CONTRACT.md).");
-        toast.info("Saved — courier assignment still needs the extended order API.");
+        setNotice(`${statusChanged || paymentChanged ? "Order status/payment saved. " : ""}Courier assignment could not be saved. Your selection is still shown so you can try again.`);
+        toast.info("Courier assignment could not be saved.");
       } else {
+        setCourier(null);
         toast.success("Order updated.");
       }
       reload();
@@ -146,6 +144,11 @@ export default function AdminOrderDetail() {
                     </div>
                     <p className="num" style={{ margin: 0 }}>Qty: {item.qty} × {formatMoney(item.unitPrice)} = <strong>{formatMoney(item.total)}</strong></p>
                     {(item.size || item.variant) && <p className="muted" style={{ margin: 0 }}>Size: {item.size || item.variant}</p>}
+                    {source?.is_preorder && (
+                      <p style={{ margin: 0 }}>
+                        <Badge tone="info">Pre-order{Number(source.preorder_quantity || 0) > 0 ? ` · ${source.preorder_quantity} awaiting stock` : ""}</Badge>
+                      </p>
+                    )}
                   </li>
                 );
               })}
@@ -173,6 +176,7 @@ export default function AdminOrderDetail() {
             <ul className="detail-list" style={{ listStyle: "none", padding: "0 1.25rem 1.25rem", margin: 0, display: "grid", gap: 12 }}>
               <li><strong>{inv.customer.name || "Guest"}</strong>{inv.customer.type && <span className="muted" style={{ marginLeft: 8, fontSize: "0.85rem" }}>{inv.customer.type}</span>}</li>
               {inv.customer.phone && <li><a href={`tel:${inv.customer.phone}`} className="num"><FiPhone aria-hidden="true" /> {inv.customer.phone}</a></li>}
+              {inv.customer.email && <li><a href={`mailto:${inv.customer.email}`}><FiMail aria-hidden="true" /> {inv.customer.email}</a></li>}
               <li style={{ color: "var(--ink-2)" }}><FiMapPin aria-hidden="true" /> {inv.customer.address}{inv.customer.district ? ` (${inv.customer.district})` : ""}</li>
               {inv.courier && <li style={{ color: "var(--ink-2)" }}><FiTruck aria-hidden="true" /> Courier: {courierLabel(inv.courier)}</li>}
               {inv.deliveryNotes && <li style={{ color: "var(--ink-2)" }}>Note: {inv.deliveryNotes}</li>}

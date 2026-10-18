@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { FiBox, FiCalendar, FiCheckCircle, FiClock, FiPhone, FiShield } from "react-icons/fi";
+import RoleBadges from "@/components/RoleBadges";
 import UserAvatar from "@/components/UserAvatar";
 import { Badge, Button, Card, CardHeader, EmptyState, Skeleton, Stat } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -46,11 +47,7 @@ export default function AccountOverview() {
             <FiPhone aria-hidden="true" /> {user.phone}
           </p>
         )}
-        {isAdmin && (
-          <span className="profile-box-badge">
-            <FiShield aria-hidden="true" /> Admin
-          </span>
-        )}
+        <RoleBadges roles={user?.roles} className="profile-box-badges" badgeClassName="profile-box-badge" />
         <p className="profile-box-meta">
           <FiCalendar aria-hidden="true" /> Member since {user?.joinedAt ? formatDate(user.joinedAt) : "—"}
         </p>

@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
 
 function formatSearchProduct(product) {
     return {
@@ -9,6 +10,9 @@ function formatSearchProduct(product) {
         discount:
             product.discount === null ? null : Number(product.discount),
         status: product.status.toLowerCase().replaceAll("_", "-"),
+        stock: product.stock,
+        allow_preorder: isProductPreorder(product),
+        order_capacity: getProductOrderCapacity(product),
         short_description: product.shortDescription,
         description: product.description,
         video_url: product.videoUrl,
@@ -34,6 +38,12 @@ function formatSearchProduct(product) {
                         ? null
                         : Number(variant.price),
                 stock: variant.stock,
+                allow_preorder: isPreorderEligible(product, variant),
+                variant_allow_preorder: variant.allowPreorder,
+                preorder_limit: variant.preorderLimit,
+                preorder_count: variant.preorderCount,
+                preorder_available: getPreorderRemaining(variant),
+                order_capacity: getVariantOrderCapacity(product, variant),
             },
         })),
         track_inventory:

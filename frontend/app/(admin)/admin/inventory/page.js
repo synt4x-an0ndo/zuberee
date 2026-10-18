@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FiAlertTriangle, FiImage, FiSearch } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Pagination, Skeleton, Stat, Toggle, cx } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Modal, Pagination, Select, Skeleton, Stat, Toggle, cx } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney, imgUrl } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
@@ -20,11 +20,18 @@ import { useAsync } from "@/lib/useAsync";
  *   GET api/admin/inventory/variants ?search&filter&page&per_page
  *        filter: all | in_stock | low_stock | out_of_stock | preorder | tracked
  *   GET/PUT api/admin/site-settings  -> inventory_enforcement_enabled ("Counting only" toggle)
+ *   GET api/admin/inventory/products ?search -> { data: [{ id, title, sku, track_inventory }] }
+ *        (Receive Stock modal, product search; backend commit cf971f5)
+ *   POST api/admin/inventory/receive-stock { product_variant_id, quantity, note? }
+ *        -> { data: { stock_after } } and writes a StockMovement row
+ *   Stock History button -> /admin/inventory/movements (GET inventory/movements ledger)
  *
- * Not wired (no backend endpoint exists yet — buttons show an honest notice):
- *   Receive Stock, Stock History, per-variant Adjust (the product PUT replaces all
- *   variants, so it is not safe for a single-variant stock edit; Grid opens the
- *   product editor where stock per size can be saved).
+ * Stock is received against a ProductVariant (a specific colour/size), never a
+ * bare product, so the modal always resolves product -> variant before posting.
+ * Variants for the chosen product come from the inventory/variants endpoint
+ * above (filtered to the selected product id). "Grid" still opens the product
+ * editor for full variant edits; there is no decrease/adjust endpoint, so the
+ * per-row action is Receive (add stock) only.
  */
 
 const FILTERS = [
@@ -55,6 +62,122 @@ export default function InventoryPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [savingMode, setSavingMode] = useState(false);
+
+  /* ---- Receive Stock modal ---- */
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [receiveLocked, setReceiveLocked] = useState(false);
+  const [productQuery, setProductQuery] = useState("");
+  const [productOptions, setProductOptions] = useState([]);
+  const [productSearching, setProductSearching] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [variantOptions, setVariantOptions] = useState([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantId, setVariantId] = useState("");
+  const [receiveQty, setReceiveQty] = useState("1");
+  const [receiveNote, setReceiveNote] = useState("");
+  const [receiveError, setReceiveError] = useState("");
+  const [receiving, setReceiving] = useState(false);
+
+  // inventory/variants labels look like " / 32" when the variant has no colour.
+  const cleanVariantLabel = (row) =>
+    (row.label || `${row.color?.name ? `${row.color.name} / ` : ""}${row.size?.size || row.id}`).replace(/^\s*\/\s*/, "");
+
+  const resetReceive = () => {
+    setProductQuery("");
+    setProductOptions([]);
+    setSelectedProduct(null);
+    setVariantOptions([]);
+    setVariantId("");
+    setReceiveQty("1");
+    setReceiveNote("");
+    setReceiveError("");
+  };
+
+  const openReceive = () => {
+    resetReceive();
+    setReceiveLocked(false);
+    setReceiveOpen(true);
+  };
+
+  const openReceiveForVariant = (row) => {
+    resetReceive();
+    setReceiveLocked(true);
+    setSelectedProduct(row.product ? { id: row.product.id, title: row.product.title, sku: row.product.sku } : null);
+    setVariantOptions([{ id: row.id, label: cleanVariantLabel(row), stock: row.stock }]);
+    setVariantId(String(row.id));
+    setReceiveOpen(true);
+  };
+
+  // Product search for the modal (debounced; empty query loads the first products).
+  useEffect(() => {
+    if (!receiveOpen || receiveLocked) return undefined;
+    let alive = true;
+    setProductSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const params = productQuery.trim() ? { search: productQuery.trim() } : {};
+        const body = await api.get("api/admin/inventory/products", { params });
+        if (alive) setProductOptions(Array.isArray(body?.data) ? body.data : []);
+      } catch {
+        if (alive) setProductOptions([]);
+      } finally {
+        if (alive) setProductSearching(false);
+      }
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [receiveOpen, receiveLocked, productQuery]);
+
+  const selectProduct = async (product) => {
+    setSelectedProduct(product);
+    setVariantId("");
+    setVariantOptions([]);
+    setReceiveError("");
+    setVariantsLoading(true);
+    try {
+      const body = await api.get("api/admin/inventory/variants", {
+        params: { search: product.sku || product.title, filter: "all", page: 1, per_page: 100 },
+      });
+      const rows = Array.isArray(body?.data?.data) ? body.data.data : [];
+      const mine = rows.filter((row) => (row.product_id ?? row.product?.id) === product.id);
+      setVariantOptions(mine.map((row) => ({
+        id: row.id,
+        label: cleanVariantLabel(row),
+        stock: row.stock,
+      })));
+      if (mine.length === 1) setVariantId(String(mine[0].id));
+    } catch (err) {
+      setReceiveError(err.message);
+    } finally {
+      setVariantsLoading(false);
+    }
+  };
+
+  const submitReceive = async (event) => {
+    event?.preventDefault?.();
+    const qty = Number(receiveQty);
+    if (!variantId) return setReceiveError("Choose the colour/size variant that is receiving stock.");
+    if (!Number.isInteger(qty) || qty <= 0) return setReceiveError("Enter a whole quantity of at least 1.");
+    setReceiving(true);
+    setReceiveError("");
+    try {
+      const body = await api.post("api/admin/inventory/receive-stock", {
+        product_variant_id: Number(variantId),
+        quantity: qty,
+        note: receiveNote.trim() || "Stock received",
+      });
+      const stockAfter = body?.data?.stock_after;
+      toast.success(stockAfter !== undefined && stockAfter !== null
+        ? `Stock received. New on hand: ${fmt(stockAfter)}.`
+        : "Stock received.");
+      setReceiveOpen(false);
+      summary.reload();
+      list.reload();
+    } catch (err) {
+      setReceiveError(err.message);
+    } finally {
+      setReceiving(false);
+    }
+  };
 
   const summary = useAsync(async () => {
     const [sum, site] = await Promise.all([
@@ -99,19 +222,16 @@ export default function InventoryPage() {
     }
   };
 
-  const notWired = (feature) => () =>
-    toast.info(`${feature} needs a dedicated backend endpoint that does not exist yet.`);
-
   return (
     <div className="stack" style={{ gap: "1.25rem" }}>
       <AdminHeader
         eyebrow="Catalogue"
         title="Inventory"
-        subtitle="Stock is held when an order is placed and deducted once you mark it Order Confirmed. Cancelling or returning puts it back."
+        subtitle="Stock is deducted when an order is placed and put back if that order is cancelled (or an undelivered order is deleted)."
         actions={
           <div className="row" style={{ gap: 8 }}>
-            <Button variant="ghost" size="sm" onClick={notWired("Stock history")}>Stock History</Button>
-            <Button variant="primary" size="sm" onClick={notWired("Receiving stock")}>Receive Stock</Button>
+            <Button variant="ghost" size="sm" href="/admin/inventory/movements">Stock History</Button>
+            <Button variant="primary" size="sm" onClick={openReceive}>Receive Stock</Button>
           </div>
         }
       />
@@ -206,7 +326,7 @@ export default function InventoryPage() {
                     <td><Badge tone={status.tone}>{status.label}</Badge></td>
                     <td>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <Button type="button" variant="outline" size="sm" onClick={notWired("Per-variant stock adjustment")}>Adjust</Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => openReceiveForVariant(v)}>Receive</Button>
                         {v.product?.id ? (
                           <Button type="button" variant="primary" size="sm" href={`/admin/products/${v.product.id}`}>Grid</Button>
                         ) : (
@@ -224,6 +344,81 @@ export default function InventoryPage() {
           </div>
         </>
       )}
+
+      <Modal
+        open={receiveOpen}
+        onClose={() => setReceiveOpen(false)}
+        title="Receive Stock"
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setReceiveOpen(false)}>Cancel</Button>
+            <Button variant="primary" loading={receiving} disabled={!variantId || variantsLoading} onClick={submitReceive}>Receive Units</Button>
+          </>
+        )}
+      >
+        <form onSubmit={submitReceive} className="stack" noValidate>
+          {receiveError && <p className="notice notice-danger" role="alert">{receiveError}</p>}
+
+          {receiveLocked ? (
+            <Field label="Product" htmlFor="recv-product-locked">
+              <Input id="recv-product-locked" value={selectedProduct ? `${selectedProduct.title || "Product"}${selectedProduct.sku ? ` (${selectedProduct.sku})` : ""}` : ""} disabled readOnly />
+            </Field>
+          ) : (
+            <>
+              <Field label="Product" htmlFor="recv-product-search" hint="Search by product name or SKU, then pick a product." required>
+                <Input id="recv-product-search" value={productQuery} onChange={(e) => setProductQuery(e.target.value)} placeholder="Search products…" autoComplete="off" />
+              </Field>
+              {productSearching ? (
+                <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>Searching…</p>
+              ) : productOptions.length > 0 ? (
+                <div className="stack" style={{ gap: 6, maxHeight: 220, overflowY: "auto" }} aria-label="Product search results">
+                  {productOptions.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => selectProduct(p)}
+                      style={{
+                        textAlign: "left",
+                        width: "100%",
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid var(--line)",
+                        background: selectedProduct?.id === p.id ? "var(--brand-soft, #e4ebe6)" : "transparent",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <strong>{p.title || "Product"}</strong>
+                      <span className="muted" style={{ display: "block", fontSize: "0.8rem" }}>{p.sku || "No SKU"}{p.track_inventory ? " · tracked" : ""}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>No products match that search.</p>
+              )}
+            </>
+          )}
+
+          <Field label="Colour / Size variant" htmlFor="recv-variant" required>
+            <Select
+              id="recv-variant"
+              value={variantId}
+              onChange={(e) => setVariantId(e.target.value)}
+              placeholder={variantsLoading ? "Loading variants…" : selectedProduct ? "Choose colour / size" : "Pick a product first"}
+              options={variantOptions.map((v) => ({ value: v.id, label: `${v.label} (on hand ${fmt(v.stock)})` }))}
+            />
+          </Field>
+          {selectedProduct && !variantsLoading && variantOptions.length === 0 && (
+            <p className="notice notice-info" role="note">This product has no colour/size variants, so there is nothing to receive stock against. Add variants in the product editor (Grid) first.</p>
+          )}
+
+          <Field label="Quantity received" htmlFor="recv-qty" required>
+            <Input id="recv-qty" type="number" min="1" step="1" value={receiveQty} onChange={(e) => setReceiveQty(e.target.value)} />
+          </Field>
+          <Field label="Reference / note" htmlFor="recv-note" hint="Optional. Shown in Stock History.">
+            <Input id="recv-note" value={receiveNote} onChange={(e) => setReceiveNote(e.target.value)} placeholder="Supplier invoice #2291" />
+          </Field>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { FiArrowLeft, FiPlus, FiTrash2 } from "react-icons/fi";
 import { AdminHeader } from "@/components/admin/AdminPage";
 import { Button, Card, CardHeader, ErrorState, Field, Input, Select, Skeleton, Textarea } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
-import { api, formatMoney, isValidBdPhone, normalizePhone } from "@/lib/api";
+import { api, formatMoney, isValidBdPhone, isValidEmail, normalizeEmail, normalizePhone } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 import { useAsync } from "@/lib/useAsync";
 
@@ -15,10 +15,10 @@ import { useAsync } from "@/lib/useAsync";
  *
  * Backend contract (backend/app/api/admin/orders/route.js — POST handler, ADMIN only):
  *   POST /api/admin/orders
- *     { guestName, guestPhone, guestAddress, shippingAddress, district,
+ *     { guestName, guestPhone, guestEmail, guestAddress, shippingAddress, district,
  *       shippingFee, advancePayment, paymentMethod, items: [{ productId, quantity }] }
  *   -> 201 { success, message: "Order created successfully.", data: <formatted order> }
- *   - omitting `userId` makes the backend create a guest order and require guestName + guestPhone;
+ *   - omitting `userId` makes the backend create a guest order and require a valid guestName, guestPhone and guestEmail;
  *   - shippingFee, advancePayment and paymentMethod default to 0 / 0 / "cash" on the backend;
  *   - the backend ignores any client price: each line is priced from the product row
  *     (`discount` when it is set, otherwise `price`) inside a transaction that also decrements stock.
@@ -56,7 +56,7 @@ export default function CreateOrderPage() {
   const rateRow = reference.data?.rates || null;
   const districtOptions = useMemo(() => districtOptionsFrom(reference.data?.districts), [reference.data]);
 
-  const [form, setForm] = useState({ name: "", phone: "", address: "", district: "", fee: "", advance: "" });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", district: "", fee: "", advance: "" });
   const [feeTouched, setFeeTouched] = useState(false);
   const [lines, setLines] = useState([{ ...EMPTY_LINE }]);
   const [errors, setErrors] = useState({});
@@ -99,6 +99,9 @@ export default function CreateOrderPage() {
     const phone = normalizePhone(form.phone);
     if (!phone) next.phone = "Enter the customer phone number.";
     else if (!isValidBdPhone(phone)) next.phone = "Enter a valid Bangladeshi mobile number (e.g. 01712345678).";
+    const email = normalizeEmail(form.email);
+    if (!email) next.email = "Enter the customer email address.";
+    else if (!isValidEmail(email)) next.email = "Enter a valid email address.";
     if (!form.address.trim()) next.address = "Enter the delivery address.";
     if (!form.district) next.district = "Choose the delivery district.";
     const fee = form.fee === "" ? 0 : Number(form.fee);
@@ -111,7 +114,7 @@ export default function CreateOrderPage() {
       next.items = "Every line needs a whole quantity of 1 or more.";
     }
     setErrors(next);
-    return Object.keys(next).length ? null : { fee, advance, items };
+    return Object.keys(next).length ? null : { fee, advance, items, phone, email };
   };
 
   const submit = async (event) => {
@@ -123,7 +126,13 @@ export default function CreateOrderPage() {
     try {
       const body = await api.post("api/admin/orders", {
         guestName: form.name.trim(),
-        guestPhone: normalizePhone(form.phone),
+        guestPhone: payload.phone,
+        guestEmail: payload.email,
+        contactName: form.name.trim(),
+        contactPhone: payload.phone,
+        contactEmail: payload.email,
+        phone: payload.phone,
+        email: payload.email,
         guestAddress: form.address.trim(),
         shippingAddress: form.address.trim(),
         district: form.district,
@@ -135,7 +144,7 @@ export default function CreateOrderPage() {
       const order = body.data || null;
       setCreated(order);
       toast.success(order?.order_number ? `Order ${order.order_number} created.` : "Order created.");
-      setForm({ name: "", phone: "", address: "", district: "", fee: "", advance: "" });
+      setForm({ name: "", phone: "", email: "", address: "", district: "", fee: "", advance: "" });
       setFeeTouched(false);
       setLines([{ ...EMPTY_LINE }]);
     } catch (err) {
@@ -194,13 +203,16 @@ export default function CreateOrderPage() {
 
       <form className="stack" style={{ gap: "1.25rem" }} onSubmit={submit} noValidate>
         <Card>
-          <CardHeader title="Customer" subtitle="Guest orders use the name and phone entered here." />
+          <CardHeader title="Customer" subtitle="Guest orders use the name, phone and email entered here." />
           <div className="grid" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
             <Field label="Full name" htmlFor="co-name" required error={errors.name}>
               <Input id="co-name" value={form.name} onChange={set("name")} autoComplete="name" aria-invalid={!!errors.name} />
             </Field>
             <Field label="Phone" htmlFor="co-phone" required error={errors.phone} hint="Used by the courier, and required to track the order.">
-              <Input id="co-phone" value={form.phone} onChange={set("phone")} inputMode="tel" autoComplete="tel" aria-invalid={!!errors.phone} />
+              <Input id="co-phone" value={form.phone} onChange={set("phone")} inputMode="tel" autoComplete="tel" aria-invalid={!!errors.phone} required />
+            </Field>
+            <Field label="Email" htmlFor="co-email" required error={errors.email} hint="Required for order confirmation and updates.">
+              <Input id="co-email" type="email" value={form.email} onChange={set("email")} inputMode="email" autoComplete="email" placeholder="customer@example.com" aria-invalid={!!errors.email} required />
             </Field>
             <Field label="District" htmlFor="co-district" required error={errors.district}>
               <Select id="co-district" value={form.district} onChange={set("district")} placeholder="Choose a district" options={districtOptions} />

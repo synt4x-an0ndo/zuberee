@@ -103,25 +103,50 @@ export function normalizeProduct(raw) {
     image: imgUrl(color?.image),
   }));
 
+  const rawStatus = String(raw.status || "in-stock").toLowerCase().replaceAll("_", "-");
+  const productPreorder = rawStatus === "pre-order" || rawStatus === "preorder";
+
   const sizes = (Array.isArray(raw.sizes) ? raw.sizes : []).map((size) => {
     const pivot = size?.pivot || {};
     const sizePrice = pivot.price === null || pivot.price === undefined ? null : num(pivot.price);
+    const stock = num(pivot.stock, 0);
+    const allowPreorder = Boolean(pivot.allow_preorder ?? pivot.allowPreorder ?? productPreorder);
+    const preorderLimit = pivot.preorder_limit === null || pivot.preorder_limit === undefined ? null : num(pivot.preorder_limit, 0);
+    const preorderCount = num(pivot.preorder_count, 0);
+    const preorderAvailable = pivot.preorder_available === null || pivot.preorder_available === undefined
+      ? preorderLimit === null ? null : Math.max(0, preorderLimit - preorderCount)
+      : num(pivot.preorder_available, 0);
+    const orderCapacity = pivot.order_capacity === undefined
+      ? allowPreorder ? (preorderAvailable === null ? null : Math.max(0, stock) + preorderAvailable) : Math.max(0, stock)
+      : pivot.order_capacity === null ? null : num(pivot.order_capacity, 0);
     return {
       id: size?.id ?? null,
       label: size?.size ?? size?.value ?? "",
-      stock: num(pivot.stock, 0),
+      stock,
       price: sizePrice,
+      allowPreorder,
+      preorderLimit,
+      preorderCount,
+      preorderAvailable,
+      orderCapacity,
     };
   });
 
   const category = Array.isArray(raw.category) ? raw.category[0] : raw.category;
-  const status = String(raw.status || "in-stock").toLowerCase().replaceAll("_", "-");
+  const status = rawStatus;
   const tracked = Boolean(raw.track_inventory ?? raw.inventory?.track_inventory);
+  const stock = num(raw.stock, 0);
+  const orderCapacity = raw.order_capacity === undefined
+    ? productPreorder ? null : Math.max(0, stock)
+    : raw.order_capacity === null ? null : num(raw.order_capacity, 0);
+  const hasSizeCapacity = sizes.some((size) => size.orderCapacity === null || size.orderCapacity > 0);
 
   let availability = "in-stock";
-  if (status === "pre-order" || status === "preorder" || status === "pre_order") availability = "pre-order";
+  if (productPreorder) availability = sizes.length === 0 || hasSizeCapacity ? "pre-order" : "sold-out";
   else if (status === "out-of-stock" || status === "sold-out") availability = "sold-out";
+  else if (sizes.length > 0 && sizes.every((size) => size.stock <= 0) && hasSizeCapacity) availability = "pre-order";
   else if (tracked && sizes.length > 0 && sizes.every((size) => size.stock <= 0)) availability = "sold-out";
+  else if (tracked && sizes.length === 0 && orderCapacity === 0) availability = "sold-out";
 
   return {
     id: raw.id,
@@ -133,6 +158,8 @@ export function normalizeProduct(raw) {
     salePrice,
     status,
     availability,
+    stock,
+    orderCapacity,
     shortDescription: raw.short_description || "",
     description: raw.description || "",
     videoUrl: raw.video_url || "",

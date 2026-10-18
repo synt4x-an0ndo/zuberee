@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FiFilter, FiSearch, FiX } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp, FiFilter, FiSearch, FiX } from "react-icons/fi";
 import ProductCard from "@/components/ProductCard";
 import { Button, cx, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { useSite } from "@/context/SiteContext";
@@ -11,6 +11,7 @@ import { api, listOf } from "@/lib/api";
 import { normalizeProduct } from "@/lib/format";
 
 const PER_PAGE = 12;
+const SIZE_PREVIEW_COUNT = 12;
 const STATUS_FILTERS = [
   { value: "", label: "All" },
   { value: "in-stock", label: "In stock" },
@@ -36,6 +37,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   const [minDraft, setMinDraft] = useState(min);
   const [maxDraft, setMaxDraft] = useState(max);
   const [availableSizes, setAvailableSizes] = useState([]);
+  const [sizesExpanded, setSizesExpanded] = useState(false);
   const [products, setProducts] = useState([]);
   const [meta, setMeta] = useState({ total: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
@@ -130,6 +132,11 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     () => [...new Set([...availableSizes, ...discoveredSizes])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })),
     [availableSizes, discoveredSizes]
   );
+  const visibleSizeOptions = useMemo(() => {
+    if (sizesExpanded || sizeOptions.length <= SIZE_PREVIEW_COUNT) return sizeOptions;
+    const preview = sizeOptions.slice(0, SIZE_PREVIEW_COUNT);
+    return sizeFilter && !preview.includes(sizeFilter) ? [...preview, sizeFilter] : preview;
+  }, [sizeOptions, sizeFilter, sizesExpanded]);
 
   useEffect(() => {
     const id = ++requestRef.current;
@@ -270,21 +277,52 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
       )}
 
       {sizeOptions.length > 0 && (
-        <div className="filter-group">
-          <h4>Size</h4>
+        <div className="filter-group filter-size-group">
+          <div className="filter-size-head">
+            <h4>Size</h4>
+            {sizeFilter && (
+              <button type="button" className="filter-size-clear" onClick={() => update({ size: "" })}>
+                Clear
+              </button>
+            )}
+          </div>
+          {sizeFilter && (
+            <p className="filter-size-selected">
+              Selected: <strong>{sizeFilter}</strong>
+            </p>
+          )}
           <div className="filter-size-list" role="group" aria-label="Filter by size">
-            {sizeOptions.map((size) => (
+            {visibleSizeOptions.map((size) => (
               <button
                 key={size}
                 type="button"
                 className={cx(sizeFilter === size && "is-active")}
                 onClick={() => update({ size: sizeFilter === size ? "" : size })}
                 aria-pressed={sizeFilter === size}
+                title={size}
               >
                 {size}
               </button>
             ))}
           </div>
+          {sizeOptions.length > SIZE_PREVIEW_COUNT && (
+            <button
+              type="button"
+              className="filter-size-toggle"
+              onClick={() => setSizesExpanded((current) => !current)}
+              aria-expanded={sizesExpanded}
+            >
+              {sizesExpanded ? (
+                <>
+                  Show fewer sizes <FiChevronUp aria-hidden="true" />
+                </>
+              ) : (
+                <>
+                  Show all {sizeOptions.length} sizes <FiChevronDown aria-hidden="true" />
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 

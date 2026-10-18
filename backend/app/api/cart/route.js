@@ -4,6 +4,12 @@ import {
     formatCart,
     CART_INCLUDE,
 } from "@/lib/cartFormatter.js";
+import {
+    getProductOrderCapacity,
+    getVariantOrderCapacity,
+    isPreorderEligible,
+    isProductUnavailable,
+} from "@/lib/preorder.js";
 
 export async function GET(request) {
     try {
@@ -76,7 +82,7 @@ export async function POST(request) {
             );
         }
 
-        if (!product.isActive) {
+        if (!product.isActive || isProductUnavailable(product)) {
             return Response.json(
                 { success: false, message: "Product is not available." },
                 { status: 400 }
@@ -84,13 +90,14 @@ export async function POST(request) {
         }
 
         let resolvedVariantId = null;
+        let selectedVariant = null;
 
         if (finalVariantId !== null) {
-            const variant = product.variants.find(
+            selectedVariant = product.variants.find(
                 (v) => v.id === Number(finalVariantId)
             );
 
-            if (!variant) {
+            if (!selectedVariant) {
                 return Response.json(
                     {
                         success: false,
@@ -100,20 +107,40 @@ export async function POST(request) {
                 );
             }
 
-            if (variant.stock < finalQuantity) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "Not enough stock for this variant.",
-                    },
-                    { status: 400 }
-                );
-            }
+            resolvedVariantId = selectedVariant.id;
+        }
 
-            resolvedVariantId = variant.id;
-        } else if (product.stock < finalQuantity) {
+        const { cart } = await resolveCart(request);
+
+        // The same product/variant can appear on more than one cart line
+        // (for example with different colours), so capacity is checked
+        // against the cart total rather than only this add request.
+        const sameLineItems = await prisma.cartItem.findMany({
+            where: {
+                cartId: cart.id,
+                productId: finalProductId,
+                variantId: resolvedVariantId,
+            },
+            select: { quantity: true },
+        });
+        const existingQuantity = sameLineItems.reduce(
+            (sum, item) => sum + item.quantity,
+            0
+        );
+        const capacity = selectedVariant
+            ? getVariantOrderCapacity(product, selectedVariant)
+            : getProductOrderCapacity(product);
+
+        if (capacity !== null && existingQuantity + finalQuantity > capacity) {
             return Response.json(
-                { success: false, message: "Not enough stock." },
+                {
+                    success: false,
+                    message: selectedVariant
+                        ? isPreorderEligible(product, selectedVariant)
+                            ? `Only ${capacity} item(s) can be ordered for this variant, including pre-order.`
+                            : "Not enough stock for this variant."
+                        : "Not enough stock.",
+                },
                 { status: 400 }
             );
         }
@@ -140,8 +167,6 @@ export async function POST(request) {
 
             resolvedColorId = color.id;
         }
-
-        const { cart } = await resolveCart(request);
 
         const existing = await prisma.cartItem.findFirst({
             where: {

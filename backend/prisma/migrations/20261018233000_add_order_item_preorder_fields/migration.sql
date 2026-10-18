@@ -1,0 +1,3 @@
+ALTER TABLE "order_items"
+ADD COLUMN "isPreorder" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "preorderQuantity" INTEGER NOT NULL DEFAULT 0;

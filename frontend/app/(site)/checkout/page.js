@@ -7,12 +7,12 @@ import { Button, EmptyState, Field, Input, Select, Skeleton, Textarea } from "@/
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useFeedback } from "@/context/FeedbackContext";
-import { api, formatMoney, isValidBdPhone, normalizePhone, unwrap } from "@/lib/api";
+import { api, formatMoney, isValidBdPhone, isValidEmail, normalizeEmail, normalizePhone, unwrap } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
 import { fetchShippingRates, shippingQuote } from "@/lib/shipping";
 import { formatDateTime, formatOrderNumber } from "@/lib/format";
 
-const EMPTY_FORM = { name: "", phone: "", district: "", address: "", addressId: "" };
+const EMPTY_FORM = { name: "", phone: "", email: "", district: "", address: "", addressId: "" };
 
 /** Saved addresses store a city; map it onto a district value when it matches one. */
 function districtFromCity(city) {
@@ -42,7 +42,7 @@ export default function CheckoutPage() {
   const { toast } = useFeedback();
 
   const savedAddresses = useMemo(() => user?.addresses || [], [user]);
-  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, name: "", phone: "" }));
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM }));
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState(null);
@@ -56,6 +56,7 @@ export default function CheckoutPage() {
       ...form,
       name: form.name || user?.name || "",
       phone: form.phone || user?.phone || first?.phone || "",
+      email: form.email || user?.email || "",
       addressId: form.addressId || (first ? String(first.id) : ""),
       district: form.district || districtFromCity(first?.city),
     };
@@ -131,7 +132,12 @@ export default function CheckoutPage() {
   const validate = () => {
     const next = {};
     if (!effective.name.trim()) next.name = "Please enter your full name.";
-    if (!isValidBdPhone(effective.phone)) next.phone = "Enter a valid Bangladeshi mobile number (01XXXXXXXXX).";
+    const phone = normalizePhone(effective.phone);
+    if (!phone) next.phone = "Please enter your mobile number.";
+    else if (!isValidBdPhone(phone)) next.phone = "Enter a valid Bangladeshi mobile number (01XXXXXXXXX).";
+    const email = normalizeEmail(effective.email);
+    if (!email) next.email = "Please enter your email address.";
+    else if (!isValidEmail(email)) next.email = "Enter a valid email address.";
     if (!effective.district) next.district = "Please choose your district.";
     if (!usingSavedAddress && (!effective.address.trim() || effective.address.trim().length < 8)) next.address = "Enter your full delivery address.";
     setErrors(next);
@@ -145,9 +151,17 @@ export default function CheckoutPage() {
 
     const districtLabel = DISTRICTS.find((d) => d.value === effective.district)?.label || effective.district;
     const fullAddress = `${effective.address.trim()}, ${districtLabel}`;
+    const contactPhone = normalizePhone(effective.phone);
+    const contactEmail = normalizeEmail(effective.email);
     const payload = {
       guestName: effective.name.trim(),
-      guestPhone: normalizePhone(effective.phone),
+      guestPhone: contactPhone,
+      contactName: effective.name.trim(),
+      contactPhone,
+      phone: contactPhone,
+      contactEmail,
+      email: contactEmail,
+      ...(isAuthenticated ? {} : { guestEmail: contactEmail }),
       guestAddress: fullAddress,
       district: effective.district,
       shippingFee,
@@ -252,7 +266,10 @@ export default function CheckoutPage() {
               <Input id="ck-name" autoComplete="name" value={effective.name} onChange={set("name")} aria-invalid={!!errors.name} />
             </Field>
             <Field label="Mobile number" htmlFor="ck-phone" required error={errors.phone} hint="We use this to confirm your order.">
-              <Input id="ck-phone" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" value={effective.phone} onChange={set("phone")} aria-invalid={!!errors.phone} />
+              <Input id="ck-phone" inputMode="tel" autoComplete="tel" placeholder="01XXXXXXXXX" value={effective.phone} onChange={set("phone")} aria-invalid={!!errors.phone} required />
+            </Field>
+            <Field label="Email address" htmlFor="ck-email" required error={errors.email} hint="For your order confirmation and updates." className="span-2">
+              <Input id="ck-email" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={effective.email} onChange={set("email")} aria-invalid={!!errors.email} required />
             </Field>
           </div>
 
@@ -290,6 +307,7 @@ export default function CheckoutPage() {
                 <span>
                   {item.title} <span className="muted">× {item.quantity}</span>
                   {item.variant?.label && <span className="muted" style={{ display: "block", fontSize: "0.84rem" }}>Size {item.variant.label}</span>}
+                  {item.isPreorder && <span className="muted" style={{ display: "block", fontSize: "0.84rem" }}>Pre-order — delivery time will be confirmed after ordering</span>}
                 </span>
                 <span className="num">{formatMoney(item.subtotal)}</span>
               </li>

@@ -1,81 +1,197 @@
-# Order admin — frontend ⇄ backend contract
+# Order API contract
 
-The admin **order detail**, **edit order** and **invoice** frontend is complete.
-Everything below is what the frontend already sends/reads, so the backend dev
-can implement persistence without any further frontend change.
+This document describes the order fields and validation implemented by the
+storefront/admin frontend and backend. It is no longer a list of pending
+backend work: the extended admin order update described below is implemented
+by `PATCH /api/admin/orders/:id`.
 
-## Already working (do not change)
+## Mandatory customer contact on new orders
 
-- `GET  /api/admin/orders/:id` — order detail. Frontend reads:
-  `id, order_number, name, phone, email?, address, district, status,
-  payment_status, payment_method, shipping_cost, subtotal, total,
-  advance_payment, customer_type, courier_entry?, delivery_notes?,
-  created_at, updated_at, order_items[] / items[]`
-  with items `{ id, product_id, title, sku, unitPrice, qty, totalPrice,
-  colorImage?, color_name?, size? }`.
-- `GET  /api/admin/orders/product-options` — `data: [{ id, title, sku }]`
-  (used by the Edit page's "Add product" picker).
-- `PATCH /api/admin/orders/:id` with `{ status, paymentStatus }`
-  (uppercase enums) — status/payment editing already saves today.
+Every order-creation path requires:
 
-## To implement: extended `PATCH /api/admin/orders/:id`
+- a customer name;
+- a valid Bangladeshi mobile number matching `01[3-9]XXXXXXXX` after
+  normalising an optional `880` country code; and
+- a syntactically valid email address (stored trimmed and lower-case).
 
-The Edit page sends **one** PATCH containing every edited field:
+The frontend blocks submission before calling the API, and the backend
+independently returns `400` before creating an order or changing stock.
+
+### `POST /api/orders` (storefront)
+
+The checkout sends the legacy guest names plus explicit contact-snapshot
+aliases:
 
 ```jsonc
 {
-  // existing (already persisted)
-  "status": "CONFIRMED",              // PENDING|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED
-  "paymentStatus": "PAID",            // PENDING|PAID|FAILED|REFUNDED
+  "guestName": "Customer Name",
+  "guestPhone": "01712345678",
+  "guestEmail": "customer@example.com", // guest checkout
+  "contactName": "Customer Name",
+  "contactPhone": "01712345678",
+  "contactEmail": "customer@example.com",
+  "phone": "01712345678",
+  "email": "customer@example.com",
+  "guestAddress": "House, road, area, Dhaka",
+  "district": "dhaka",
+  "shippingFee": 80,
+  "advancePayment": 0,
+  "paymentMethod": "cash"
+}
+```
 
-  // new fields to persist
-  "courier_entry": "pathao",          // "" = none; slugs: pathao, redx, steadfast,
-                                      // eCourier, sundarban, sa-paribahan, paperfly,
-                                      // in-house, other  (free string is fine)
-  "name": "Eahtasam",                 // guest name (registered users: see note)
-  "phone": "01846836737",
-  "email": "",
+For an authenticated shopper, missing contact fields may fall back to the
+selected saved address (name/phone) and account profile (name/phone/email),
+but the final phone and email are still validated. The order stores:
+
+- `guestName` / `guestPhone` for guest orders (existing aggregation fields);
+- `contactName` / `contactPhone` / `contactEmail` for both guest and account
+  orders.
+
+Email is intentionally **not** added to the public order-detail response.
+Admin order responses expose it as `email`.
+
+### `POST /api/admin/orders` (manual admin order)
+
+The admin Create Order form uses the same validation and sends
+`guestEmail`/`contactEmail`/`email` in addition to the existing name and phone
+fields. If `userId` is supplied to the API, explicit contact values win;
+otherwise the linked user's profile values are used and then validated.
+
+## Admin order reads
+
+`GET /api/admin/orders/:id` and the admin order list return the effective
+order contact snapshot, falling back to the linked user or legacy guest
+fields for older rows:
+
+```jsonc
+{
+  "id": 12,
+  "order_number": "ORD-00012",
+  "name": "Customer Name",
+  "phone": "01712345678",
+  "email": "customer@example.com",
+  "address": "Luxmibazar, Sutrapur, Dhaka",
+  "district": "Dhaka",
+  "status": "confirmed",
+  "payment_status": "paid",
+  "payment_method": "cash",
+  "courier_entry": "pathao",      // always a string; "" means none
+  "delivery_notes": "Call first", // always a string
+  "shipping_cost": 80,
+  "subtotal": 1390,
+  "total": 1470,
+  "advance_payment": 0,
+  "order_items": [
+    {
+      "id": 501,
+      "product_id": 42,
+      "product_variant_id": 9,
+      "size": "38",
+      "qty": 1,
+      "unitPrice": 1390
+    }
+  ]
+}
+```
+
+New order lines persist `OrderItem.variantId` and a printable `size`
+snapshot. Older lines may have `variantId: null`; stock handling for those
+lines falls back to the stock-movement ledger when it is unambiguous.
+
+## Extended `PATCH /api/admin/orders/:id`
+
+The order detail and Edit Order pages send one PATCH. All fields below are
+optional at the API level; supplied fields are validated and persisted in one
+transaction:
+
+```jsonc
+{
+  "status": "CONFIRMED",
+  "paymentStatus": "PAID",
+  "courier_entry": "pathao",
+  "name": "Customer Name",
+  "phone": "01712345678",
+  "email": "customer@example.com",
   "address": "Luxmibazar, Sutrapur, Dhaka",
   "district": "Dhaka",
   "payment_method": "cash",
   "shipping_cost": 80,
   "advance_payment": 0,
-  "delivery_notes": "",
+  "delivery_notes": "Call before delivery",
   "items": [
-    { "id": 501, "product_id": 42, "qty": 1, "unitPrice": 1390, "size": "38" },
-    { "id": null, "product_id": 77, "qty": 2, "unitPrice": 990 }   // id null = new line
+    { "id": 501, "product_id": 42, "variant_id": 9, "qty": 1, "unitPrice": 1390, "size": "38" },
+    { "id": null, "product_id": 77, "qty": 2, "unitPrice": 990 }
   ]
 }
 ```
 
-Server responsibilities on save:
+Behaviour:
 
-1. Validate like the create-order endpoint (products exist/active, qty ≥ 1).
-2. Replace the order's item set with `items` (update rows with an `id`,
-   create rows with `id: null`, delete rows that are missing), adjusting
-   product/variant stock for quantity deltas where inventory is tracked.
-3. Recompute: `subtotal = Σ qty × unitPrice`,
-   `totalAmount = subtotal + shipping_cost` (ignore any client-sent total).
-4. Persist `shippingFee = shipping_cost`, `advancePayment = advance_payment`,
-   `paymentMethod`, `district`, `shippingAddress = address`,
-   `delivery_notes`, and the courier slug (`courier_entry`, or a dedicated
-   `courier` column returned under either name — the frontend reads
-   `courier_entry` first).
-5. Customer identity: for guest orders write `guestName/guestPhone`; for
-   registered-user orders either ignore name/phone/email or update the linked
-   user — but **return what was actually stored**, because the frontend
-   compares the PATCH response with the form and honestly reports any field
-   the API did not persist (it never fakes a save).
-6. Return the same shape as `GET /api/admin/orders/:id`
-   (`{ success: true, data: formatOrder(order) }`), including `courier_entry`
-   and `delivery_notes` in `formatOrder`.
+1. Customer edits update the order's contact snapshot. Guest orders also
+   update `guestName`/`guestPhone` for existing reports. Editing an account
+   order does **not** rename or change the linked login user.
+2. A changed phone must be a valid Bangladeshi mobile number. On an existing
+   order, email is not retroactively mandatory: an empty legacy email may
+   remain empty, but a newly entered/changed non-empty email must be valid.
+3. `items`, when present, replaces the order's item set: existing IDs update,
+   `id: null` creates, and omitted existing IDs delete.
+4. Totals are recalculated on the server as
+   `Σ(qty × unitPrice) + shipping_cost`; `advance_payment` may not exceed the
+   resulting total.
+5. Item quantity changes on an active order adjust product/variant stock and
+   write `sale`/`release` stock-movement rows. Quantity/product changes are
+   rejected with `409` on cancelled/delivered orders and must be saved
+   separately from a cancel/reactivate transition, preventing double stock
+   movements.
+6. `courier_entry` is persisted as the courier slug and returned as a string.
+   This is courier assignment only; courier tracking IDs, ETA, current
+   location and scan events remain covered by
+   `COURIER_TRACKING_API_CONTRACT.md`.
+7. The response uses the same shape as `GET /api/admin/orders/:id`, allowing
+   the frontend to verify that every submitted section actually persisted.
 
-Until this lands, changing only customer/items/charges/courier in the UI
-returns `400 "No valid fields to update."` (or saves status/payment only) —
-the Edit page surfaces that message instead of pretending success.
+## Pre-order behaviour
+
+A product whose status is `PRE_ORDER` can be ordered beyond its current
+physical stock. A size can also opt in independently with
+`allow_preorder`; `preorder_limit` caps the number of units sold beyond
+physical stock, while a null limit means no cap. Product and cart responses
+expose the combined `order_capacity` (`null` when unlimited), so the
+storefront does not disable a zero-stock pre-order size.
+
+At order creation each line is split into a physical-stock portion and a
+pre-order portion. Only the physical portion decrements stock and writes a
+`sale` stock movement. The pre-order portion is stored as
+`preorder_quantity` on the order item (with `is_preorder: true`) and, for a
+variant line, increments `product_variants.preorderCount`. Cancelling or
+deleting an active order releases the physical portion and removes its
+pre-order count; reactivating it checks both again.
+
+When an order with remaining `preorder_quantity` is moved to `SHIPPED` or
+`DELIVERED`, the API first requires enough received stock, deducts that
+stock with a `sale` movement, clears the remaining pre-order quantity, and
+only then saves the status. If stock is still insufficient the PATCH is
+rejected with `409` and no part of the update is saved.
+
+## Database migration
+
+`20261018214500_add_order_contact_and_extended_fields` adds:
+
+- `orders.contactName`, `orders.contactPhone`, `orders.contactEmail`;
+- `orders.courierEntry`, `orders.deliveryNotes`;
+- `order_items.variantId` (FK to `product_variants`, `ON DELETE SET NULL`);
+- `order_items.size`.
+
+It backfills contact snapshots from guest fields or the linked user where
+available. Legacy guest orders have no email to backfill.
+
+`20261018233000_add_order_item_preorder_fields` adds
+`order_items.isPreorder` and `order_items.preorderQuantity` for the
+pre-order allocation snapshot described above.
 
 ## Invoice
 
-No backend work needed. The invoice page (`/admin/orders/invoice/:id`) and the
-invoice PDF are generated entirely in the frontend from the existing
-`GET /api/admin/orders/:id` response.
+No separate invoice API is required. The invoice page and PDF use the admin
+order response above, including the now-persisted email, courier assignment,
+delivery notes, item variant and size.

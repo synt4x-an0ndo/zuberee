@@ -124,7 +124,8 @@ export default function ProductPage() {
   const unavailable = product.availability === "sold-out";
   const preorder = product.availability === "pre-order";
   const stockLeft = size ? size.stock : product.sizes.reduce((sum, s) => sum + s.stock, 0);
-  const maxQty = product.tracked && size ? Math.max(1, size.stock) : 99;
+  const selectedCapacity = size ? size.orderCapacity : product.orderCapacity;
+  const maxQty = selectedCapacity === null || selectedCapacity === undefined ? 99 : Math.max(1, selectedCapacity);
 
   // Price: a size may carry its own price; otherwise the product sale price applies.
   const sizeOwnPrice = size && size.price !== null && size.price !== product.price ? size.price : null;
@@ -136,6 +137,12 @@ export default function ProductPage() {
   const addToCart = async (then) => {
     if (!sizeSelected) {
       toast.error("Please choose a size first.");
+      return;
+    }
+    if (selectedCapacity !== null && selectedCapacity !== undefined && qty > selectedCapacity) {
+      toast.error(size?.allowPreorder || preorder
+        ? `Only ${selectedCapacity} can be ordered, including pre-order.`
+        : `Only ${selectedCapacity} available in stock.`);
       return;
     }
     if (busy) return;
@@ -287,15 +294,17 @@ export default function ProductPage() {
                   <span className="req">*</span>Sizes:
                   <span className="pd2-chosen">
                     {size
-                      ? product.tracked && size.stock <= 5 && size.stock > 0
-                        ? `Only ${size.stock} left`
-                        : size.label
+                      ? size.stock <= 0 && size.allowPreorder
+                        ? `${size.label} · Pre-order`
+                        : product.tracked && size.stock <= 5 && size.stock > 0
+                          ? `Only ${size.stock} left`
+                          : size.label
                       : "Select a size"}
                   </span>
                 </div>
                 <div className="pd2-sizes" role="radiogroup" aria-label="Size">
                   {product.sizes.map((s) => {
-                    const out = product.tracked && s.stock <= 0;
+                    const out = s.orderCapacity === 0;
                     return (
                       <button
                         key={s.id ?? s.label}
@@ -359,7 +368,7 @@ export default function ProductPage() {
               )}
             </div>
 
-            {product.tracked && stockLeft <= 0 && !unavailable && (
+            {product.tracked && stockLeft <= 0 && !unavailable && !preorder && (
               <p className="notice notice-warn" style={{ margin: "12px 0 0" }}>
                 This product is currently out of stock.
               </p>

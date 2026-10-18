@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { FiAlertCircle, FiBox, FiDollarSign, FiRefreshCw, FiShoppingBag, FiUsers } from "react-icons/fi";
 import { AdminHeader } from "@/components/admin/AdminPage";
+import SalesTrendChart from "@/components/admin/SalesTrendChart";
 import { Badge, Card, CardHeader, EmptyState, ErrorState, Select, Skeleton, Stat } from "@/components/ui";
 import { useAsync } from "@/lib/useAsync";
 import { api, formatMoney } from "@/lib/api";
@@ -71,9 +72,9 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid-2" style={{ alignItems: "start" }}>
-            <Card>
+            <Card className="sales-trend-card">
               <CardHeader title="Sales trend" subtitle="Revenue movement" />
-              <SalesChart points={data.sales_trend} />
+              <SalesTrendChart points={data.sales_trend} />
             </Card>
             <Card>
               <CardHeader title="Status distribution" subtitle="Order pipeline" />
@@ -112,59 +113,80 @@ export default function DashboardPage() {
   );
 }
 
-function SalesChart({ points }) {
-  if (!points.length) return <EmptyState title="No sales yet" text="Sales will chart here once orders come in." />;
-  const max = Math.max(...points.map((p) => p.sales), 1);
-  const width = 720;
-  const height = 250;
-  const padX = 18;
-  const padY = 24;
-  const step = points.length > 1 ? (width - padX * 2) / (points.length - 1) : 0;
-  const coords = points.map((point, index) => ({
-    x: padX + index * step,
-    y: height - padY - (Number(point.sales || 0) / max) * (height - padY * 2),
-    point,
-  }));
-  const line = coords.map((point) => `${point.x},${point.y}`).join(" ");
-  const area = `${padX},${height - padY} ${line} ${width - padX},${height - padY}`;
-  return (
-    <div className="line-chart" role="img" aria-label={`Sales across ${points.length} days`}>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="sales-area" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((ratio) => <line key={ratio} x1={padX} x2={width - padX} y1={height - padY - ratio * (height - padY * 2)} y2={height - padY - ratio * (height - padY * 2)} className="chart-gridline" />)}
-        <polygon points={area} fill="url(#sales-area)" />
-        <polyline points={line} className="chart-line" />
-        {coords.map(({ x, y, point }) => <circle key={point.date} cx={x} cy={y} r="4" className="chart-point"><title>{`${point.date}: ${formatMoney(point.sales)} (${point.orders} orders)`}</title></circle>)}
-      </svg>
-      <div className="line-chart-axis">{points.filter((_, index) => index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 4) === 0).map((p) => <span key={p.date}>{p.date.slice(5)}</span>)}</div>
-    </div>
-  );
-}
-
 function StatusChart({ rows }) {
+  const [activeIndex, setActiveIndex] = useState(null);
   const total = rows.reduce((sum, row) => sum + Number(row.orders || 0), 0);
-  let offset = 0;
-  const colors = ["var(--brand)", "var(--brand-mid)", "#d99bcf", "#e2b7dc", "#a74bb0"];
-  const segments = rows.map((row, index) => {
-    const start = offset;
-    offset += Number(row.percentage || 0);
-    return `${colors[index % colors.length]} ${start}% ${offset}%`;
-  });
+  const colors = ["var(--brand)", "var(--brand-mid)", "#d99bcf", "#e2b7dc", "#a74bb0", "#8a6bc9"];
+  const GAP = rows.length > 1 ? 1.4 : 0;
+
+  const segments = rows.reduce(
+    (acc, row, index) => {
+      const orders = Number(row.orders || 0);
+      const pct = total > 0 ? (orders / total) * 100 : 0;
+      const drawn = pct <= 0 ? 0 : pct <= GAP ? pct * 0.6 : pct - GAP;
+      const segment = {
+        key: row.status || `status-${index}`,
+        label: orderStatusMeta(row.status).label,
+        orders,
+        pct,
+        start: acc.offset,
+        drawn,
+        color: colors[index % colors.length],
+      };
+      return { offset: acc.offset + pct, items: [...acc.items, segment] };
+    },
+    { offset: 0, items: [] }
+  ).items;
+
+  const active = activeIndex != null ? segments[activeIndex] : null;
+
   return (
     <div className="donut-layout">
-      <div className="donut-chart" style={{ background: `conic-gradient(${segments.join(", ")})` }}>
-        <div><strong>{total}</strong><span>orders</span></div>
+      <div className="donut-chart">
+        <svg viewBox="0 0 200 200" className="donut-ring" role="img" aria-label={`Order status distribution, ${total} orders`} focusable="false">
+          <circle cx="100" cy="100" r="80" className="donut-track" />
+          {segments.map((segment, index) => (
+            <circle
+              key={segment.key}
+              cx="100"
+              cy="100"
+              r="80"
+              pathLength={100}
+              stroke={segment.color}
+              strokeDasharray={`${segment.drawn} ${Math.max(0, 100 - segment.drawn)}`}
+              strokeDashoffset={-segment.start}
+              transform="rotate(-90 100 100)"
+              className={`donut-seg${activeIndex === index ? " is-active" : ""}${activeIndex != null && activeIndex !== index ? " is-dim" : ""}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+            />
+          ))}
+        </svg>
+        <div className="donut-center">
+          <strong>{active ? active.orders : total}</strong>
+          <span style={active ? { color: active.color, fontWeight: 700 } : undefined}>{active ? active.label : "orders"}</span>
+          {active && <small>{Math.round(active.pct)}% of orders</small>}
+        </div>
       </div>
       <ul className="donut-legend">
-        {rows.map((row, index) => {
-          const meta = orderStatusMeta(row.status);
-          return <li key={row.status}><span className="legend-dot" style={{ background: colors[index % colors.length] }} /><span>{meta.label}</span><strong>{row.percentage}%</strong></li>;
-        })}
+        {segments.map((segment, index) => (
+          <li key={segment.key}>
+            <button
+              type="button"
+              className={`donut-legend-row${activeIndex === index ? " is-active" : ""}`}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(null)}
+              onFocus={() => setActiveIndex(index)}
+              onBlur={() => setActiveIndex(null)}
+              onClick={() => setActiveIndex(activeIndex === index ? null : index)}
+            >
+              <span className="legend-dot" style={{ background: segment.color }} />
+              <span>{segment.label}</span>
+              <span className="donut-legend-count">{segment.orders}</span>
+              <strong>{Math.round(segment.pct)}%</strong>
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
   );

@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const VALID_STATUSES = [
@@ -7,6 +8,20 @@ const VALID_STATUSES = [
     "PRE_ORDER",
     "SOLD_OUT",
 ];
+
+
+function parseAllowPreorder(size, fallback = false) {
+    const value = size?.allow_preorder ?? size?.allowPreorder ?? size?.pivot?.allow_preorder;
+    return value === undefined ? fallback : Boolean(value);
+}
+
+function parsePreorderLimit(size, fallback = null) {
+    const value = size?.preorder_limit ?? size?.preorderLimit ?? size?.pivot?.preorder_limit;
+    if (value === undefined) return fallback;
+    if (value === null || value === "") return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
 
 function formatProduct(product) {
     return {
@@ -17,6 +32,9 @@ function formatProduct(product) {
         discount:
             product.discount === null ? null : Number(product.discount),
         status: product.status.toLowerCase().replaceAll("_", "-"),
+        stock: product.stock,
+        allow_preorder: isProductPreorder(product),
+        order_capacity: getProductOrderCapacity(product),
         short_description: product.shortDescription,
         description: product.description,
         video_url: product.videoUrl,
@@ -38,6 +56,12 @@ function formatProduct(product) {
                         ? Number(product.price)
                         : Number(variant.price),
                 stock: variant.stock,
+                allow_preorder: isPreorderEligible(product, variant),
+                variant_allow_preorder: variant.allowPreorder,
+                preorder_limit: variant.preorderLimit,
+                preorder_count: variant.preorderCount,
+                preorder_available: getPreorderRemaining(variant),
+                order_capacity: getVariantOrderCapacity(product, variant),
             },
         })),
         category: product.category
@@ -368,6 +392,8 @@ export async function POST(request) {
                             stock: Number(
                                 size.stock ?? size.pivot?.stock ?? 0
                             ),
+                            allowPreorder: parseAllowPreorder(size),
+                            preorderLimit: parsePreorderLimit(size),
                         }))
                         : [],
                 },

@@ -33,6 +33,98 @@ function formatCustomer(c) {
     };
 }
 
+function customerKey(order) {
+    return order.userId
+        ? `user:${order.userId}`
+        : `guest:${order.guestPhone ?? "unknown"}`;
+}
+
+function summarizeOrders(source) {
+    const orderCounts = new Map();
+    let validOrders = 0;
+    let totalRevenue = 0;
+
+    for (const order of source) {
+        const key = customerKey(order);
+        orderCounts.set(key, (orderCounts.get(key) || 0) + 1);
+
+        if (order.status !== "CANCELLED") {
+            validOrders += 1;
+            totalRevenue += Number(order.totalAmount || 0);
+        }
+    }
+
+    let newCustomers = 0;
+    let repeatCustomers = 0;
+
+    for (const count of orderCounts.values()) {
+        if (count >= 2) repeatCustomers += 1;
+        else newCustomers += 1;
+    }
+
+    const totalCustomers = orderCounts.size;
+    const averageOrderValue = validOrders > 0 ? totalRevenue / validOrders : 0;
+
+    return {
+        total_customers: totalCustomers,
+        total_orders: source.length,
+        total_revenue: Math.round(totalRevenue),
+        average_order_value: Number(averageOrderValue.toFixed(4)),
+        new_customers: newCustomers,
+        repeat_customers: repeatCustomers,
+        repeat_rate:
+            totalCustomers > 0
+                ? Number(((repeatCustomers / totalCustomers) * 100).toFixed(1))
+                : 0,
+    };
+}
+
+function percentChange(current, previous) {
+    if (!previous) return null;
+    return Number((((current - previous) / previous) * 100).toFixed(1));
+}
+
+function buildSummary(source) {
+    const current = summarizeOrders(source);
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonth = summarizeOrders(
+        source.filter((order) => new Date(order.createdAt) < currentMonthStart)
+    );
+
+    return {
+        ...current,
+        changes: {
+            total_customers: percentChange(
+                current.total_customers,
+                previousMonth.total_customers
+            ),
+            total_orders: percentChange(
+                current.total_orders,
+                previousMonth.total_orders
+            ),
+            total_revenue: percentChange(
+                current.total_revenue,
+                previousMonth.total_revenue
+            ),
+            average_order_value: percentChange(
+                current.average_order_value,
+                previousMonth.average_order_value
+            ),
+            new_customers: percentChange(
+                current.new_customers,
+                previousMonth.new_customers
+            ),
+            repeat_customers: percentChange(
+                current.repeat_customers,
+                previousMonth.repeat_customers
+            ),
+        },
+        previous_month: previousMonth,
+        comparison_label: "vs last month",
+    };
+}
+
 export async function GET(request) {
     try {
         const auth = await authenticateRequest(request);
@@ -48,6 +140,21 @@ export async function GET(request) {
 
         const search = searchParams.get("search")?.trim();
         const sort = searchParams.get("sort")?.trim() ?? "total_spent";
+        const district = searchParams.get("district")?.trim().toLowerCase();
+        const dateFrom = (
+            searchParams.get("date_from") || searchParams.get("from") || ""
+        ).trim();
+        const dateTo = (
+            searchParams.get("date_to") || searchParams.get("to") || ""
+        ).trim();
+        const orderCountSort = searchParams
+            .get("order_count_sort")
+            ?.trim()
+            .toLowerCase();
+        const totalSpentSort = searchParams
+            .get("total_spent_sort")
+            ?.trim()
+            .toLowerCase();
         const page = Math.max(1, Number(searchParams.get("page") ?? 1));
         const perPage = Math.min(
             100,
@@ -197,6 +304,14 @@ export async function GET(request) {
         }
 
         let customers = Array.from(customerMap.values());
+        const summary = buildSummary(orders);
+        const availableDistricts = Array.from(
+            new Set(
+                customers
+                    .map((c) => String(c.district || "").trim())
+                    .filter(Boolean)
+            )
+        ).sort((a, b) => a.localeCompare(b));
 
         if (search) {
             const searchLower = search.toLowerCase();
@@ -210,7 +325,47 @@ export async function GET(request) {
             });
         }
 
-        if (sort === "total_spent") {
+        if (district) {
+            customers = customers.filter(
+                (c) => String(c.district || "").trim().toLowerCase() === district
+            );
+        }
+
+        if (dateFrom || dateTo) {
+            customers = customers.filter((c) => {
+                const day = c.lastOrderDate
+                    ? formatDate(c.lastOrderDate).slice(0, 10)
+                    : "";
+                if (dateFrom && (!day || day < dateFrom)) return false;
+                if (dateTo && (!day || day > dateTo)) return false;
+                return true;
+            });
+        }
+
+        const orderDirection = ["asc", "desc"].includes(orderCountSort)
+            ? orderCountSort
+            : null;
+        const spentDirection = ["asc", "desc"].includes(totalSpentSort)
+            ? totalSpentSort
+            : null;
+
+        if (orderDirection || spentDirection) {
+            customers.sort((a, b) => {
+                if (orderDirection) {
+                    const direction = orderDirection === "asc" ? 1 : -1;
+                    const difference = (a.totalOrders - b.totalOrders) * direction;
+                    if (difference) return difference;
+                }
+
+                if (spentDirection) {
+                    const direction = spentDirection === "asc" ? 1 : -1;
+                    const difference = (a.totalSpent - b.totalSpent) * direction;
+                    if (difference) return difference;
+                }
+
+                return new Date(b.lastOrderDate) - new Date(a.lastOrderDate);
+            });
+        } else if (sort === "total_spent") {
             customers.sort((a, b) => b.totalSpent - a.totalSpent);
         } else if (sort === "total_orders") {
             customers.sort((a, b) => b.totalOrders - a.totalOrders);
@@ -232,6 +387,8 @@ export async function GET(request) {
         return Response.json({
             success: true,
             data: paginated.map(formatCustomer),
+            summary,
+            districts: availableDistricts,
             pagination: {
                 current_page: page,
                 per_page: perPage,

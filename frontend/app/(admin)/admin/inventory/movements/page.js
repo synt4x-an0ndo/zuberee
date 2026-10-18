@@ -2,137 +2,152 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { FiAlertTriangle, FiBox, FiLayers, FiRefreshCw, FiSearch } from "react-icons/fi";
+import { FiActivity, FiBox, FiRefreshCw } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, Pagination, Select, Skeleton, Stat } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Field, Pagination, Select, Skeleton } from "@/components/ui";
 import { usePermissions } from "@/context/PermissionsContext";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-const quantity = (value) => typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US") : "—";
+/**
+ * Stock History (admin) — the movement ledger behind the Inventory page.
+ *
+ * Endpoint (backend, commit "feat: stock history & stock recived"):
+ *   GET api/admin/inventory/movements ?page&per_page
+ *     -> { message, data: { current_page, data: [movement...], last_page, per_page, total } }
+ *     movement: { id, product_variant_id, product_id, variant_label, type, quantity,
+ *                 stock_after, reserved_after, order_id, user_id, note, created_at,
+ *                 product: { id, title, sku }, variant: { id, color, size },
+ *                 user: { id, name } | null }
+ *
+ * Movement writers: receive-stock ("purchase"), order placement ("sale",
+ * deducted immediately, customer + admin order creation) and cancelling or
+ * deleting an undelivered order ("release"). Orders placed before sale
+ * logging existed have no ledger rows. "reserve" is rendered if it ever
+ * appears, but the current order flow does not hold/reserve stock.
+ */
 
-/** Read-only stock snapshots. The backend does not expose a movement ledger. */
+const TYPE_META = {
+  purchase: { label: "Purchase", tone: "success" },
+  sale: { label: "Sale", tone: "danger" },
+  reserve: { label: "Reserve", tone: "warn" },
+  release: { label: "Release", tone: "info" },
+  adjustment: { label: "Adjustment", tone: "neutral" },
+};
+
+const quantity = (value) =>
+  typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US") : "—";
+
+const signed = (value) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return value > 0 ? `+${quantity(value)}` : quantity(value);
+};
+
 export default function InventoryMovementsPage() {
   const { can } = usePermissions();
   const allowed = can("manage inventory");
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(20);
-
-  const summary = useAsync(async () => {
-    if (!allowed) return null;
-    const body = await api.get("api/admin/inventory/summary");
-    if (!body?.data || typeof body.data.total_variants !== "number") {
-      throw new Error("The inventory summary response is invalid. Please refresh or contact support.");
-    }
-    return body.data;
-  }, [allowed]);
+  const [perPage, setPerPage] = useState(40);
 
   const list = useAsync(async () => {
     if (!allowed) return null;
-    const body = await api.get("api/admin/inventory/variants", {
-      params: { search, page, per_page: perPage, filter: "all" },
+    const body = await api.get("api/admin/inventory/movements", {
+      params: { page, per_page: perPage },
     });
     const data = body?.data;
-    if (!Array.isArray(data?.data) || !Number.isInteger(data.total) || !Number.isInteger(data.total_pages)) {
-      throw new Error("The inventory variants response is invalid. Please refresh or contact support.");
+    if (!Array.isArray(data?.data) || !Number.isInteger(data.total)) {
+      throw new Error("The stock history response is invalid. Please refresh or contact support.");
     }
-    return { rows: data.data, total: data.total, totalPages: data.total_pages,
-      currentPage: data.current_page, fetchedAt: new Date().toISOString() };
-  }, [allowed, search, page, perPage]);
+    return {
+      rows: data.data,
+      total: data.total,
+      totalPages: Math.max(1, data.last_page || 1),
+      currentPage: data.current_page || page,
+      fetchedAt: new Date().toISOString(),
+    };
+  }, [allowed, page, perPage]);
 
-  const refresh = () => { summary.reload(); list.reload(); };
-  const searchInventory = (event) => { event.preventDefault(); setSearch(query.trim()); setPage(1); };
-  const clearSearch = () => { setQuery(""); setSearch(""); setPage(1); };
-  const s = summary.data;
+  if (!allowed) return <ErrorState message="You need the manage inventory permission to view stock history." />;
+
   const result = list.data;
-  const busy = summary.loading || list.loading;
-
-  if (!allowed) return <ErrorState message="You need the manage inventory permission to view stock information." />;
 
   return (
     <div className="stack" style={{ gap: "1.25rem" }}>
       <AdminHeader
         eyebrow="Catalogue / Inventory"
-        title="Inventory movements"
-        subtitle="Current stock by product, colour and size. Read-only overview."
+        title="Stock History"
+        subtitle="Every recorded stock movement, newest first."
         actions={<div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <Button href="/admin/inventory" variant="outline" size="sm">Inventory overview</Button>
-          <Button variant="primary" size="sm" onClick={refresh} loading={busy}>
-            <FiRefreshCw aria-hidden="true" /> Refresh stock
+          <Button variant="primary" size="sm" onClick={list.reload} loading={list.loading}>
+            <FiRefreshCw aria-hidden="true" /> Refresh
           </Button>
         </div>}
       />
 
       <div className="notice notice-info" role="note">
-        <p><strong>Current stock, not movement history.</strong> The connected APIs return stock balances only. Receipts, deductions, adjustment reasons, movement dates and staff attribution are not available. No historical movements are inferred from these balances.</p>
+        <p><strong>Receipts and orders are both recorded.</strong> Receiving stock logs a purchase, placing an order logs a sale (stock is deducted immediately), and cancelling or deleting an undelivered order logs a release. Orders placed before movement logging began have no sale row to release against.</p>
       </div>
 
-      {summary.loading ? <div className="stat-grid" aria-label="Loading inventory totals">
-        {[1, 2, 3, 4].map(key => <Skeleton key={key} style={{ height: 110 }} />)}
-      </div> : summary.error ? <ErrorState message={summary.error} onRetry={summary.reload} /> : s ? <>
-        <div className="stat-grid">
-          <Stat label="Total variants" value={quantity(s.total_variants)} icon={FiLayers} tone="info" />
-          <Stat label="Units on hand" value={quantity(s.units_on_hand)} icon={FiBox} tone="brand" />
-          <Stat label="Held units" value={quantity(s.units_reserved)} icon={FiBox} tone="warn" />
-          <Stat label="Low-stock variants" value={quantity(s.low_stock)} icon={FiAlertTriangle} tone="warn" />
-        </div>
-        <p className="muted" style={{ fontSize: "0.82rem" }}>Totals cover the whole inventory, not only the search results. The summary API calls held units “units_reserved”.</p>
-      </> : null}
-
       <Card>
-        <form onSubmit={searchInventory} className="card-pad" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", borderBottom: "1px solid var(--line)" }}>
-          <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-            <Field label="Search stock" htmlFor="movement-stock-search">
-              <Input id="movement-stock-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Product name, SKU or size" />
-            </Field>
-          </div>
-          <Button type="submit" variant="outline" size="sm" disabled={list.loading}><FiSearch aria-hidden="true" /> Search</Button>
-          {(search || query) ? <Button type="button" variant="ghost" size="sm" onClick={clearSearch}>Clear search</Button> : null}
-          <Field label="Rows per page" htmlFor="movement-stock-page-size">
-            <Select id="movement-stock-page-size" value={perPage} onChange={event => { setPerPage(Number(event.target.value)); setPage(1); }} options={[20, 50, 100].map(value => ({ value, label: String(value) }))} />
+        <div className="card-pad" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end", borderBottom: "1px solid var(--line)" }}>
+          <Field label="Rows per page" htmlFor="movement-page-size">
+            <Select id="movement-page-size" value={perPage} onChange={(event) => { setPerPage(Number(event.target.value)); setPage(1); }} options={[20, 40, 100].map((value) => ({ value, label: String(value) }))} />
           </Field>
-        </form>
+          {result ? (
+            <span className="muted" style={{ fontSize: "0.85rem", marginLeft: "auto" }}>
+              {quantity(result.total)} movement{result.total === 1 ? "" : "s"} · Fetched {formatDateTime(result.fetchedAt)}
+            </span>
+          ) : null}
+        </div>
 
-        {list.loading ? <div className="card-pad" role="status" aria-label="Loading stock variants"><Skeleton style={{ height: 280 }} /></div>
-          : list.error ? <div className="card-pad"><ErrorState message={list.error} onRetry={list.reload} /></div>
-          : !result || result.rows.length === 0 ? <EmptyState icon={FiBox}
-            title={search ? "No stock variants match your search" : "No stock variants on this page"}
-            text={search ? "Try another product name, SKU or size." : "The API returned no variants for this page."}
-            action={search ? <Button variant="outline" onClick={clearSearch}>Clear search</Button> : page > 1 ? <Button variant="outline" onClick={() => setPage(1)}>Go to first page</Button> : null} />
-          : <>
-            <div className="card-pad row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "space-between" }} aria-live="polite">
-              <span className="muted">{quantity(result.total)} matching variant{result.total === 1 ? "" : "s"} · Page {result.currentPage} of {result.totalPages}</span>
-              <span className="muted" style={{ fontSize: "0.82rem" }}>Fetched {formatDateTime(result.fetchedAt)}</span>
-            </div>
+        {list.loading && !result ? (
+          <div className="card-pad" role="status" aria-label="Loading stock history"><Skeleton style={{ height: 280 }} /></div>
+        ) : list.error ? (
+          <div className="card-pad"><ErrorState message={list.error} onRetry={list.reload} /></div>
+        ) : !result || result.rows.length === 0 ? (
+          <EmptyState
+            icon={FiActivity}
+            title="No stock movements yet"
+            text="Receive stock from the Inventory page and the movement will appear here."
+            action={<Button variant="primary" href="/admin/inventory">Go to Inventory</Button>}
+          />
+        ) : (
+          <>
             <DataTable>
               <thead><tr>
-                <th>Product / SKU</th><th>Colour / size</th><th className="text-right">On hand</th>
-                <th className="text-right">Reserved</th><th className="text-right">Held</th>
-                <th className="text-right">Available</th><th>Stock status</th><th>Variant updated</th>
+                <th>When</th><th>Product</th><th>Variant</th><th>Type</th>
+                <th className="text-right">Change</th><th className="text-right">Stock after</th>
+                <th>Reference</th><th>By</th>
               </tr></thead>
-              <tbody>{result.rows.map(variant => <tr key={variant.id}>
-                <td><strong>{can("view products") && variant.product_id ? <Link href={`/admin/products/${variant.product_id}`}>{variant.product?.title || `Product #${variant.product_id}`}</Link> : variant.product?.title || "Product unavailable"}</strong>
-                  <span className="muted" style={{ display: "block", fontSize: "0.82rem" }}>{variant.sku || variant.product?.sku || "No SKU"}</span></td>
-                <td><span>{variant.color?.name || "No colour"} / {variant.size?.size || variant.label || "No size"}</span></td>
-                <td className="text-right num">{quantity(variant.stock)}</td>
-                <td className="text-right num">{quantity(variant.reserved)}</td>
-                <td className="text-right num">{quantity(variant.held)}</td>
-                <td className="text-right num"><strong>{quantity(variant.available)}</strong></td>
-                <td><div className="chip-row">
-                  {variant.product?.track_inventory ? <Badge tone={variant.available <= 0 ? "danger" : variant.low_stock ? "warn" : "success"}>{variant.available <= 0 ? "Out of stock" : variant.low_stock ? "Low stock" : "In stock"}</Badge> : <Badge>Not tracked</Badge>}
-                  {variant.allow_preorder ? <Badge tone="info">Pre-order</Badge> : null}
-                  {variant.is_active === false ? <Badge>Inactive</Badge> : null}
-                </div></td>
-                <td className="muted" style={{ whiteSpace: "nowrap" }}>{formatDateTime(variant.updated_at)}</td>
-              </tr>)}</tbody>
+              <tbody>{result.rows.map((m) => {
+                const meta = TYPE_META[String(m.type || "").toLowerCase()] || { label: m.type || "Movement", tone: "neutral" };
+                return (
+                  <tr key={m.id}>
+                    <td className="muted" style={{ whiteSpace: "nowrap" }}>{formatDateTime(m.created_at)}</td>
+                    <td>
+                      <strong>{can("view products") && m.product?.id ? <Link href={`/admin/products/${m.product.id}`}>{m.product.title || `Product #${m.product.id}`}</Link> : m.product?.title || "Product unavailable"}</strong>
+                      <span className="muted" style={{ display: "block", fontSize: "0.82rem" }}>{m.product?.sku || "No SKU"}</span>
+                    </td>
+                    <td>{m.variant_label || m.variant?.size?.size || "—"}</td>
+                    <td><Badge tone={meta.tone}>{meta.label}</Badge></td>
+                    <td className="text-right num" style={{ fontWeight: 700, color: m.quantity > 0 ? "var(--success, #178a4c)" : m.quantity < 0 ? "var(--danger)" : undefined }}>{signed(m.quantity)}</td>
+                    <td className="text-right num">{quantity(m.stock_after)}</td>
+                    <td className="muted">{m.note || (m.order_id ? `Order #${m.order_id}` : "—")}</td>
+                    <td>{m.user?.name || "System"}</td>
+                  </tr>
+                );
+              })}</tbody>
             </DataTable>
-            <div className="card-pad"><Pagination page={page} totalPages={result.totalPages} onChange={setPage} /></div>
-          </>}
+            <div className="card-pad"><Pagination page={result.currentPage} totalPages={result.totalPages} onChange={setPage} /></div>
+          </>
+        )}
       </Card>
-      <p className="muted" style={{ fontSize: "0.82rem" }}>Available quantities are used exactly as returned by the API (on hand minus held). Reserved and held are shown separately. “Variant updated” is not a stock-movement timestamp.</p>
+
+      <p className="muted" style={{ fontSize: "0.82rem" }}>
+        <FiBox aria-hidden="true" /> Current stock balances live on the <Link href="/admin/inventory">Inventory overview</Link>. This page is the history of how those balances changed.
+      </p>
     </div>
   );
 }

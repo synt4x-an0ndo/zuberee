@@ -1,3 +1,11 @@
+import {
+    getPreorderRemaining,
+    getProductOrderCapacity,
+    getVariantOrderCapacity,
+    isPreorderEligible,
+    isProductPreorder,
+} from "@/lib/preorder.js";
+
 export const CART_INCLUDE = {
     items: {
         orderBy: { createdAt: "desc" },
@@ -28,11 +36,22 @@ export function formatCartItem(item) {
             ? Number(product.discount)
             : basePrice;
 
+    const orderCapacity = variant
+        ? getVariantOrderCapacity(product, variant)
+        : getProductOrderCapacity(product);
+    const physicalStock = variant ? variant.stock : product.stock;
+    const isPreorder = isProductPreorder(product)
+        || (isPreorderEligible(product, variant) && item.quantity > Math.max(0, physicalStock));
+
     return {
         id: item.id,
         product_id: product.id,
         title: product.name,
         sku: product.sku,
+        product_status: product.status?.toLowerCase().replaceAll("_", "-") ?? null,
+        is_preorder: isPreorder,
+        order_capacity: orderCapacity,
+        max_quantity: orderCapacity,
 
         image:
             product.images?.find((img) => img.isPrimary)?.imageUrl ??
@@ -45,6 +64,12 @@ export function formatCartItem(item) {
                 name: variant.name,
                 value: variant.value,
                 stock: variant.stock,
+                allow_preorder: isPreorderEligible(product, variant),
+                preorder_limit: variant.preorderLimit,
+                preorder_count: variant.preorderCount,
+                preorder_available: getPreorderRemaining(variant),
+                order_capacity: orderCapacity,
+                max_quantity: orderCapacity,
             }
             : null,
 

@@ -3,6 +3,7 @@
 import UserAvatar from "@/components/UserAvatar";
 import { useMemo, useState } from "react";
 import { FiRefreshCw, FiSearch, FiShield, FiUserCheck } from "react-icons/fi";
+import RoleBadges from "@/components/RoleBadges";
 import PermissionGate from "@/components/admin/PermissionGate";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
 import UserRoleAssignmentModal from "@/components/admin/UserRoleAssignmentModal";
@@ -13,6 +14,7 @@ import { usePermissions } from "@/context/PermissionsContext";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { byName, PERM, permissionsForRoles } from "@/lib/permissions";
+import { formatRoleLabel, getDisplayRoles } from "@/lib/roleBadges";
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -48,7 +50,11 @@ export default function UsersPage() {
         return (
           entry.name.toLowerCase().includes(term) ||
           entry.email.toLowerCase().includes(term) ||
-          entry.roles.some((role) => role.name.toLowerCase().includes(term))
+          entry.roles.some(
+            (role) =>
+              role.name.toLowerCase().includes(term) ||
+              formatRoleLabel(role.name).toLowerCase().includes(term)
+          )
         );
       })
       .slice()
@@ -144,7 +150,7 @@ export default function UsersPage() {
                 value={roleFilter}
                 onChange={(event) => setRoleFilter(event.target.value)}
                 placeholder="All roles"
-                options={roles.map((role) => ({ value: String(role.id), label: role.name }))}
+                options={roles.map((role) => ({ value: String(role.id), label: formatRoleLabel(role.name) }))}
               />
             </Field>
           </div>
@@ -172,6 +178,7 @@ export default function UsersPage() {
               <tbody>
                 {filtered.map((entry) => {
                   const effective = effectiveByUser.get(entry.id) || [];
+                  const displayRoles = getDisplayRoles(entry.roles);
                   const isCurrent = currentUser && (currentUser.id === entry.id || currentUser.email === entry.email);
                   return (
                     <tr key={entry.id}>
@@ -192,14 +199,10 @@ export default function UsersPage() {
                       <td>
                         {entry.roles.length === 0 ? (
                           <span className="muted">No roles</span>
+                        ) : displayRoles.length === 0 ? (
+                          <span className="muted">Default user</span>
                         ) : (
-                          <div className="chip-row">
-                            {entry.roles.map((role) => (
-                              <span key={role.id} className="chip">
-                                {role.name}
-                              </span>
-                            ))}
-                          </div>
+                          <RoleBadges roles={entry.roles} className="users-role-badges" />
                         )}
                       </td>
                       <td>

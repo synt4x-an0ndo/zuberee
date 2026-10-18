@@ -13,8 +13,16 @@ function normalizeCart(raw) {
     title: item.title || "Product",
     sku: item.sku || "",
     image: imgUrl(item.image),
+    isPreorder: Boolean(item.is_preorder),
+    maxQuantity: item.max_quantity === null || item.max_quantity === undefined ? item.order_capacity ?? null : Number(item.max_quantity),
     variant: item.variant
-      ? { id: item.variant.id, label: item.variant.value || item.variant.name || "", stock: Number(item.variant.stock ?? 0) }
+      ? {
+          id: item.variant.id,
+          label: item.variant.value || item.variant.name || "",
+          stock: Number(item.variant.stock ?? 0),
+          allowPreorder: Boolean(item.variant.allow_preorder),
+          maxQuantity: item.variant.max_quantity === null || item.variant.max_quantity === undefined ? item.variant.order_capacity ?? null : Number(item.variant.max_quantity),
+        }
       : null,
     color: item.color ? { id: item.color.id, name: item.color.name, code: item.color.code } : null,
     unitPrice: Number(item.unit_price) || 0,

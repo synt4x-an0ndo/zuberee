@@ -30,7 +30,8 @@ const blankForm = () => ({
   description: "",
   videoUrl: "",
   trackInventory: false,
-  sizes: [], // { label, stock, price }
+  stock: 0,
+  sizes: [], // { id?, label, stock, price, allowPreorder, preorderLimit }
   colors: [], // { name, code, image }
   specifications: [], // { key, value }
   faqs: [], // { question, answer }
@@ -50,10 +51,14 @@ export function productToForm(raw) {
   f.description = raw.description || "";
   f.videoUrl = raw.video_url || "";
   f.trackInventory = Boolean(raw.inventory?.track_inventory ?? raw.track_inventory);
+  f.stock = raw.stock ?? 0;
   f.sizes = (raw.sizes || []).map((s) => ({
+    id: s.id ?? null,
     label: s.size ?? s.value ?? "",
     stock: s.pivot?.stock ?? s.stock ?? 0,
     price: s.pivot?.price != null && Number(s.pivot.price) !== Number(raw.price) ? s.pivot.price : "",
+    allowPreorder: Boolean(s.pivot?.variant_allow_preorder ?? s.variant_allow_preorder ?? false),
+    preorderLimit: s.pivot?.preorder_limit ?? s.preorder_limit ?? "",
   }));
   f.colors = (raw.colors || []).map((c) => ({ name: c.name || "", code: c.code || "#000000", image: c.image || "" }));
   f.specifications = (raw.specifications || []).map((s) => ({ key: s.key || "", value: s.value || "" }));
@@ -98,7 +103,7 @@ export default function ProductForm({ mode, productId, initial }) {
 
   const toggleSize = (label) => {
     setList("sizes", (list) =>
-      list.some((s) => s.label === label) ? list.filter((s) => s.label !== label) : [...list, { label, stock: 0, price: "" }]
+      list.some((s) => s.label === label) ? list.filter((s) => s.label !== label) : [...list, { id: null, label, stock: 0, price: "", allowPreorder: false, preorderLimit: "" }]
     );
   };
 
@@ -111,6 +116,8 @@ export default function ProductForm({ mode, productId, initial }) {
     if (form.discount !== "" && Number(form.discount) >= price) next.discount = "The sale price must be lower than the regular price.";
     if (categories.flat.length && !form.categoryId) next.categoryId = "Choose a category.";
     if (form.videoUrl && !/^https?:\/\//i.test(form.videoUrl)) next.videoUrl = "Use a full link starting with https://";
+    if (form.sizes.length === 0 && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 0)) next.stock = "Enter a valid stock quantity.";
+    if (form.sizes.some((s) => s.preorderLimit !== "" && s.preorderLimit !== null && (!Number.isInteger(Number(s.preorderLimit)) || Number(s.preorderLimit) < 0))) next.sizes = "Pre-order limits must be whole numbers of 0 or more.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -126,7 +133,15 @@ export default function ProductForm({ mode, productId, initial }) {
     description: form.description,
     video_url: form.videoUrl.trim(),
     inventory: { track_inventory: form.trackInventory },
-    sizes: form.sizes.map((s) => ({ size: s.label, stock: Number(s.stock) || 0, price: s.price === "" ? null : Number(s.price) })),
+    stock: Number(form.stock) || 0,
+    sizes: form.sizes.map((s) => ({
+      id: s.id ?? undefined,
+      size: s.label,
+      stock: Number(s.stock) || 0,
+      price: s.price === "" ? null : Number(s.price),
+      allow_preorder: Boolean(s.allowPreorder),
+      preorder_limit: s.preorderLimit === "" || s.preorderLimit === null ? null : Number(s.preorderLimit),
+    })),
     colors: form.colors.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), code: c.code, image: c.image.trim() || null })),
     specifications: form.specifications.filter((s) => s.key.trim()).map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
     faqs: form.faqs.filter((q) => q.question.trim()).map((q) => ({ question: q.question.trim(), answer: q.answer.trim() })),
@@ -324,6 +339,11 @@ export default function ProductForm({ mode, productId, initial }) {
             <CardHeader title="Inventory & sizes" />
             <div className="stack">
               <Toggle checked={form.trackInventory} onChange={(v) => set("trackInventory", v)} label="Track stock per size" />
+              {form.sizes.length === 0 && (
+                <Field label="Product stock" htmlFor="product-stock" error={errors.stock} hint="Used when this product has no sizes. Set the received quantity here before shipping a pre-order.">
+                  <Input id="product-stock" type="number" min="0" step="1" value={form.stock} onChange={(e) => set("stock", e.target.value)} style={{ width: 160 }} />
+                </Field>
+              )}
               <div className="chip-row" role="group" aria-label="Sizes offered">
                 {sizeLabels.length === 0 && <span className="muted" style={{ fontSize: "0.9rem" }}>No sizes have been added in the Sizes section yet.</span>}
                 {sizeLabels.map((label) => {
@@ -334,18 +354,21 @@ export default function ProductForm({ mode, productId, initial }) {
               {form.sizes.length > 0 && (
                 <div className="table-wrap">
                   <AlignedTable className="table">
-                    <thead><tr><th>Size</th><th>Stock</th><th>Price override (৳)</th><th /></tr></thead>
+                    <thead><tr><th>Size</th><th>Stock</th><th>Price override (৳)</th><th>Pre-order</th><th>Pre-order limit</th><th /></tr></thead>
                     <tbody>
                       {form.sizes.map((s, i) => (
                         <tr key={s.label}>
                           <td><strong>{s.label}</strong></td>
                           <td><Input aria-label={`Stock for ${s.label}`} type="number" min="0" value={s.stock} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, stock: e.target.value } : x)))} style={{ width: 96 }} /></td>
                           <td><Input aria-label={`Price for ${s.label}`} type="number" min="0" placeholder={form.price || "Default"} value={s.price} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} style={{ width: 120 }} /></td>
+                          <td><Toggle checked={s.allowPreorder} onChange={(v) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, allowPreorder: v } : x)))} label="" /></td>
+                          <td><Input aria-label={`Pre-order limit for ${s.label}`} type="number" min="0" step="1" placeholder="No limit" value={s.preorderLimit} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, preorderLimit: e.target.value } : x)))} style={{ width: 110 }} /></td>
                           <td><button type="button" className="icon-btn" aria-label={`Remove ${s.label}`} onClick={() => toggleSize(s.label)}><FiTrash2 aria-hidden="true" /></button></td>
                         </tr>
                       ))}
                     </tbody>
                   </AlignedTable>
+                  {errors.sizes && <p className="field-error" role="alert" style={{ marginTop: 8 }}>{errors.sizes}</p>}
                 </div>
               )}
             </div>

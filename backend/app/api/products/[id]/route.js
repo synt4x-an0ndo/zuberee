@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const VALID_STATUSES = [
@@ -7,6 +8,20 @@ const VALID_STATUSES = [
     "PRE_ORDER",
     "SOLD_OUT",
 ];
+
+
+function parseAllowPreorder(size, fallback = false) {
+    const value = size?.allow_preorder ?? size?.allowPreorder ?? size?.pivot?.allow_preorder;
+    return value === undefined ? fallback : Boolean(value);
+}
+
+function parsePreorderLimit(size, fallback = null) {
+    const value = size?.preorder_limit ?? size?.preorderLimit ?? size?.pivot?.preorder_limit;
+    if (value === undefined) return fallback;
+    if (value === null || value === "") return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
 
 function formatProduct(product) {
     return {
@@ -19,6 +34,9 @@ function formatProduct(product) {
                 ? null
                 : Number(product.discount),
         status: product.status.toLowerCase().replaceAll("_", "-"),
+        stock: product.stock,
+        allow_preorder: isProductPreorder(product),
+        order_capacity: getProductOrderCapacity(product),
         short_description: product.shortDescription,
         description: product.description,
         video_url: product.videoUrl,
@@ -40,6 +58,12 @@ function formatProduct(product) {
                         ? Number(product.price)
                         : Number(variant.price),
                 stock: variant.stock,
+                allow_preorder: isPreorderEligible(product, variant),
+                variant_allow_preorder: variant.allowPreorder,
+                preorder_limit: variant.preorderLimit,
+                preorder_count: variant.preorderCount,
+                preorder_available: getPreorderRemaining(variant),
+                order_capacity: getVariantOrderCapacity(product, variant),
             },
         })),
         category: product.category
@@ -387,30 +411,59 @@ export async function PUT(request, { params }) {
                 }
 
                 if (Array.isArray(sizes)) {
-                    await tx.productVariant.deleteMany({
+                    // Update matched size variants in place so order-item
+                    // links, the stock-movement ledger, and pre-order
+                    // counts survive a normal product edit. Only sizes
+                    // removed from the payload are deleted.
+                    const existingVariants = await tx.productVariant.findMany({
                         where: { productId: id },
+                        orderBy: { id: "asc" },
                     });
+                    const usedVariantIds = new Set();
 
-                    if (sizes.length > 0) {
-                        await tx.productVariant.createMany({
-                            data: sizes.map((size) => ({
-                                productId: id,
+                    for (const [index, size] of sizes.entries()) {
+                        const value = String(size.size ?? size.value ?? "");
+                        const requestedId = Number(size.id ?? size.variantId ?? size.variant_id);
+                        const matched = existingVariants.find((variant) => (
+                            !usedVariantIds.has(variant.id)
+                            && (Number.isInteger(requestedId) && requestedId > 0
+                                ? variant.id === requestedId
+                                : variant.value === value)
+                        ));
+                        const data = {
+                            name: "size",
+                            value,
+                            price:
+                                size.price === undefined ||
+                                size.price === null ||
+                                size.price === ""
+                                    ? null
+                                    : Number(size.price),
+                            stock: Number(size.stock ?? size.pivot?.stock ?? matched?.stock ?? 0),
+                            allowPreorder: parseAllowPreorder(size, matched?.allowPreorder ?? false),
+                            preorderLimit: parsePreorderLimit(size, matched?.preorderLimit ?? null),
+                            position: index,
+                        };
 
-                                name: "size",
+                        if (matched) {
+                            usedVariantIds.add(matched.id);
+                            await tx.productVariant.update({
+                                where: { id: matched.id },
+                                data,
+                            });
+                        } else {
+                            await tx.productVariant.create({
+                                data: { productId: id, ...data },
+                            });
+                        }
+                    }
 
-                                value: size.size ?? size.value ?? "",
-
-                                price:
-                                    size.price === undefined ||
-                                    size.price === null ||
-                                    size.price === ""
-                                        ? null
-                                        : Number(size.price),
-
-                                stock: Number(
-                                    size.stock ?? size.pivot?.stock ?? 0
-                                ),
-                            })),
+                    const removedVariantIds = existingVariants
+                        .filter((variant) => !usedVariantIds.has(variant.id))
+                        .map((variant) => variant.id);
+                    if (removedVariantIds.length > 0) {
+                        await tx.productVariant.deleteMany({
+                            where: { id: { in: removedVariantIds } },
                         });
                     }
                 }

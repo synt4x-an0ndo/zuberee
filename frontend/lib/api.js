@@ -233,3 +233,12 @@ export function normalizePhone(value) {
 export function isValidBdPhone(value) {
   return /^01[3-9]\d{8}$/.test(normalizePhone(value));
 }
+
+export function normalizeEmail(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function isValidEmail(value) {
+  const email = normalizeEmail(value);
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
