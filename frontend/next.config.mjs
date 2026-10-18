@@ -16,13 +16,14 @@ const nextConfig = {
       { source: "/account", destination: "/user", permanent: true },
       { source: "/account/:path*", destination: "/user/:path*", permanent: true },
       // Legacy storefront slug removal: /frontEnd/* -> /* (public pages)
-      // NOTE: the /frontEnd/admin login is handled first so it lands on
-      // /login/admin (NOT /admin, which is now the guarded dashboard).
-      // Compatibility-only legacy URLs; all new navigation uses the Zuberee route.
-      { source: "/frontEnd/admin/login_eyara_xyz", destination: "/login/admin/login_zuberee_xyz", permanent: true },
-      { source: "/login/admin/login_eyara_xyz", destination: "/login/admin/login_zuberee_xyz", permanent: true },
-      { source: "/frontEnd/admin/login_zuberee_xyz", destination: "/login/admin/login_zuberee_xyz", permanent: true },
-      { source: "/frontEnd/admin", destination: "/login/admin", permanent: true },
+      // NOTE: the dedicated admin-login landing page was removed; every legacy
+      // admin-login URL now lands on /login, which redirects by role after
+      // sign-in (admins -> /admin, customers -> /user).
+      { source: "/frontEnd/admin/login_eyara_xyz", destination: "/login", permanent: true },
+      { source: "/login/admin/login_eyara_xyz", destination: "/login", permanent: true },
+      { source: "/frontEnd/admin/login_zuberee_xyz", destination: "/login", permanent: true },
+      { source: "/login/admin/login_zuberee_xyz", destination: "/login", permanent: true },
+      { source: "/frontEnd/admin", destination: "/login", permanent: true },
       { source: "/frontEnd", destination: "/", permanent: true },
       { source: "/frontEnd/:path*", destination: "/:path*", permanent: true },
     ];

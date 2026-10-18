@@ -12,8 +12,8 @@ import { api, formatMoney, listOf } from "@/lib/api";
 import { normalizeProduct } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-const STATUS_TONE = { "in-stock": "success", "out-of-stock": "danger", "pre-order": "info", discontinued: "neutral" };
-const STATUS_LABEL = { "in-stock": "In stock", "out-of-stock": "Out of stock", "pre-order": "Pre-order", discontinued: "Discontinued" };
+const STATUS_TONE = { "in-stock": "success", "out-of-stock": "danger", "pre-order": "info", "sold-out": "neutral" };
+const STATUS_LABEL = { "in-stock": "In stock", "out-of-stock": "Out of stock", "pre-order": "Pre-order", "sold-out": "Sold out" };
 
 export default function ProductsPage() {
   const { toast, confirm } = useFeedback();

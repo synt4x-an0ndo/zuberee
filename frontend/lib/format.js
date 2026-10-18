@@ -68,12 +68,12 @@ export function paymentStatusMeta(status) {
   return PAYMENT_STATUS[String(status || "").toLowerCase()] || { label: status || "Unknown", tone: "neutral" };
 }
 
-/** Product status as the backend returns it: in-stock | out-of-stock | pre-order | discontinued. */
+/** Product status as the backend returns it: in-stock | out-of-stock | pre-order | sold-out. */
 export const PRODUCT_STATUS_OPTIONS = [
   { value: "in-stock", label: "In stock" },
   { value: "out-of-stock", label: "Out of stock" },
   { value: "pre-order", label: "Pre-order" },
-  { value: "discontinued", label: "Discontinued" },
+  { value: "sold-out", label: "Sold out" },
 ];
 
 export function num(value, fallback = 0) {
@@ -115,12 +115,12 @@ export function normalizeProduct(raw) {
   });
 
   const category = Array.isArray(raw.category) ? raw.category[0] : raw.category;
-  const status = String(raw.status || "in-stock").toLowerCase();
+  const status = String(raw.status || "in-stock").toLowerCase().replaceAll("_", "-");
   const tracked = Boolean(raw.track_inventory ?? raw.inventory?.track_inventory);
 
   let availability = "in-stock";
   if (status === "pre-order" || status === "preorder" || status === "pre_order") availability = "pre-order";
-  else if (status === "out-of-stock" || status === "discontinued") availability = "sold-out";
+  else if (status === "out-of-stock" || status === "sold-out") availability = "sold-out";
   else if (tracked && sizes.length > 0 && sizes.every((size) => size.stock <= 0)) availability = "sold-out";
 
   return {

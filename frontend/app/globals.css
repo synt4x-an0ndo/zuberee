@@ -9262,3 +9262,249 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
 @media (max-width: 760px) {
   .chat-update-tooltip { width: min(318px, calc(100vw - 40px)); }
 }
+
+/* ===================================================================== */
+/* Product card: single Buy Now action at the image bottom-centre,       */
+/* with a gentle floating animation. Replaces the bottom-right pair.     */
+/* Placed last so it wins the cascade over the earlier layout blocks.    */
+/* ===================================================================== */
+@keyframes buy-now-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.product-card .product-card-actions {
+  right: auto;
+  top: auto;
+  left: 50%;
+  bottom: 0.75rem;
+  display: flex;
+  width: auto;
+  grid-template-columns: none;
+  justify-content: center;
+  align-items: center;
+  transform: translate(-50%, 10px) scale(0.85);
+  transition: opacity 0.24s ease, transform 0.32s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.product-card .product-card-action.is-buy {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  border: 1px solid rgb(16 24 20 / 0.08);
+  background: rgb(255 255 255 / 0.92);
+  color: var(--brand);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 1px 2px rgb(16 24 20 / 0.06),
+    0 10px 28px rgb(16 24 20 / 0.16);
+  animation: buy-now-float 1.8s ease-in-out infinite;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.product-card .product-card-action.is-buy:hover:not(:disabled) {
+  background: rgb(255 255 255 / 1);
+  box-shadow:
+    0 2px 4px rgb(16 24 20 / 0.08),
+    0 14px 32px rgb(16 24 20 / 0.2);
+}
+
+.product-card .product-card-action.is-buy svg {
+  width: 18px;
+  height: 18px;
+}
+
+.product-card:hover .product-card-actions,
+.product-card:focus-within .product-card-actions {
+  transform: translate(-50%, 0) scale(1);
+}
+
+/* The float loop owns the button transform; keep the old hover lift off it. */
+.product-card .product-card-action.is-buy:hover:not(:disabled) {
+  transform: none;
+}
+
+/* Touch devices keep quick actions out of the way, as before. */
+@media (hover: none), (pointer: coarse) {
+  .product-card .product-card-actions {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card .product-card-action.is-buy {
+    animation: none;
+  }
+}
+
+/* ===================================================================== */
+/* Footer: orange outlined social icons + "Pay With" payment badges      */
+/* ===================================================================== */
+.site-footer .social-row a {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: 1.5px solid #ff5c00;
+  color: #ff5c00;
+}
+
+.site-footer .social-row a:hover {
+  background: #ff5c00;
+  color: #14100c;
+  transform: translateY(-2px);
+}
+
+.site-footer .social-row svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pay-with {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.pay-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid rgb(16 24 20 / 0.08);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ===================================================================== */
+/* Size guide tables                                                     */
+/* ===================================================================== */
+.size-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.size-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  min-width: 340px;
+}
+
+.size-table th,
+.size-table td {
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.size-table thead th {
+  background: var(--brand-tint, #f2f5f3);
+  color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.size-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.size-table tbody tr:nth-child(even) td {
+  background: rgb(255 255 255 / 0.6);
+}
+
+.size-table .size-cell {
+  font-weight: 800;
+  color: var(--brand);
+}
+
+/* ===================================================================== */
+/* Size guide: AI size recommendation                                    */
+/* ===================================================================== */
+.ai-size-card {
+  border: 1px solid rgb(255 92 0 / 0.25);
+}
+
+.ai-size-spark {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgb(255 92 0 / 0.12);
+  color: #ff5c00;
+  flex: 0 0 auto;
+}
+
+.ai-size-spark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ai-size-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.ai-size-result {
+  border: 1px solid rgb(255 92 0 / 0.18);
+  background: linear-gradient(180deg, #fffdfa, #fdf6ee);
+  border-radius: 14px;
+  padding: 1.1rem 1.3rem;
+  box-shadow: 0 10px 30px rgb(16 24 20 / 0.06);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.ai-size-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #ff5c00;
+}
+
+.ai-size-headline {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.ai-size-value {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--brand);
+  letter-spacing: 0.02em;
+}
+
+.ai-size-rest {
+  font-size: 1.02rem;
+  color: var(--ink, #1c2420);
+}
+
+.ai-size-note {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: rgb(16 24 20 / 0.72);
+}

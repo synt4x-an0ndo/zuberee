@@ -8,7 +8,7 @@ function formatPaginatedProduct(product) {
         price: Number(product.price),
         discount:
             product.discount === null ? null : Number(product.discount),
-        status: product.status.toLowerCase().replace("_", "-"),
+        status: product.status.toLowerCase().replaceAll("_", "-"),
         short_description: product.shortDescription,
         description: product.description,
         video_url: product.videoUrl,
@@ -144,7 +144,7 @@ export async function GET(request) {
 
             ...(status
                 ? {
-                    status: status.toUpperCase().replace("-", "_"),
+                    status: status.toUpperCase().replaceAll("-", "_"),
                 }
                 : {}),
 

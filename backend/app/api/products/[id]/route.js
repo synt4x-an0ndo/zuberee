@@ -5,7 +5,7 @@ const VALID_STATUSES = [
     "IN_STOCK",
     "OUT_OF_STOCK",
     "PRE_ORDER",
-    "DISCONTINUED",
+    "SOLD_OUT",
 ];
 
 function formatProduct(product) {
@@ -18,7 +18,7 @@ function formatProduct(product) {
             product.discount === null
                 ? null
                 : Number(product.discount),
-        status: product.status.toLowerCase().replace("_", "-"),
+        status: product.status.toLowerCase().replaceAll("_", "-"),
         short_description: product.shortDescription,
         description: product.description,
         video_url: product.videoUrl,
@@ -297,7 +297,7 @@ export async function PUT(request, { params }) {
         const newStatus = status
             ? String(status)
                 .toUpperCase()
-                .replace("-", "_")
+                .replaceAll("-", "_")
             : existingProduct.status;
 
         if (!VALID_STATUSES.includes(newStatus)) {
