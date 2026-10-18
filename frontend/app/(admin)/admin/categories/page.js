@@ -11,8 +11,8 @@ import { useAsync } from "@/lib/useAsync";
 
 const SIZE_GUIDE = [
   { value: "NONE", label: "No size guide" },
-  { value: "CLOTHING", label: "Clothing" },
-  { value: "FOOTWEAR", label: "Footwear" },
+  { value: "DRESS", label: "Dress Size Guide" },
+  { value: "SHOE", label: "Shoe Size Guide" },
 ];
 
 const blank = { id: null, name: "", slug: "", slugTouched: false, description: "", parentId: "", displayPriority: 0, showOnHomepage: false, stockTracking: false, sizeGuideType: "NONE" };
