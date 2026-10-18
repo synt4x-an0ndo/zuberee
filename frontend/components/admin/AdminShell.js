@@ -125,7 +125,7 @@ export default function AdminShell({ children }) {
   const signOut = async () => {
     await logout();
     toast.info("Signed out of the admin panel.");
-    router.replace("/login/admin/login_zuberee_xyz");
+    router.replace("/login");
   };
 
   const toggleSidebar = () => {

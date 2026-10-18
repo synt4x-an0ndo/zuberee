@@ -238,7 +238,7 @@ async function searchProducts(tokens, ceiling) {
                 name: product.name,
                 price: Number(product.price),
                 salePrice: saleOf(product),
-                status: product.status.toLowerCase().replace("_", "-"),
+                status: product.status.toLowerCase().replaceAll("_", "-"),
                 category: product.category?.name || null,
                 description: (product.shortDescription || product.description || "").slice(0, 240),
                 image: product.images[0]?.imageUrl || null,

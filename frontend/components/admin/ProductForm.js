@@ -16,7 +16,7 @@ const STATUS_OPTIONS = [
   { value: "in-stock", label: "In stock" },
   { value: "out-of-stock", label: "Out of stock" },
   { value: "pre-order", label: "Pre-order" },
-  { value: "discontinued", label: "Discontinued" },
+  { value: "sold-out", label: "Sold out" },
 ];
 
 const blankForm = () => ({

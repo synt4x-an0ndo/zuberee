@@ -61,7 +61,7 @@ function formatVariant(variant) {
                 sku: variant.product.sku,
                 status: variant.product.status
                     .toLowerCase()
-                    .replace("_", "-"),
+                    .replaceAll("_", "-"),
                 track_inventory: trackInv,
                 first_image: firstImage
                     ? {

@@ -147,7 +147,7 @@ export async function GET(request) {
                         title: item.product?.name ?? "Unknown",
                         sku: item.product?.sku ?? null,
                         product_status: item.product?.status
-                            ? item.product.status.toLowerCase().replace("_", "-")
+                            ? item.product.status.toLowerCase().replaceAll("_", "-")
                             : null,
                         image: firstImage,
                         order_count: 0,

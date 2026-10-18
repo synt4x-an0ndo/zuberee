@@ -5,6 +5,16 @@ import Img from "@/components/Img";
 import { useSite } from "@/context/SiteContext";
 
 /** Footer content comes entirely from admin-managed settings; empty fields are simply omitted. */
+
+/** Payment methods shown under "Pay With" (text badges — no external assets). */
+const PAY_METHODS = [
+  { label: "VISA", color: "#1a1f71" },
+  { label: "Mastercard", color: "#eb001b" },
+  { label: "bKash", color: "#e2136e" },
+  { label: "Nagad", color: "#f6921e" },
+  { label: "Rocket", color: "#8c3494" },
+  { label: "Upay", color: "#00a99d" },
+];
 export default function Footer({ siteName, company, social, roots }) {
   const { logoSizes } = useSite();
   const socials = [
@@ -49,24 +59,22 @@ export default function Footer({ siteName, company, social, roots }) {
           </div>
 
           <div>
-            <h3>Shop</h3>
+            <h3>Main Menu</h3>
             <ul>
-              <li><Link href="/shop">All products</Link></li>
-              {roots.slice(0, 6).map((category) => (
-                <li key={category.id}>
-                  <Link href={`/${category.slug}`}>{category.name}</Link>
-                </li>
-              ))}
+              <li><Link href="/">Home</Link></li>
+              <li><Link href="/shop">Shop</Link></li>
+              <li><Link href="/about_us">About Us</Link></li>
             </ul>
           </div>
 
           <div>
-            <h3>Account</h3>
+            <h3>Useful Link</h3>
             <ul>
-              <li><Link href="/user">My account</Link></li>
-              <li><Link href="/user/orders">Order history</Link></li>
-              <li><Link href="/cart">Cart</Link></li>
-              <li><Link href="/login">Sign in</Link></li>
+              <li><Link href="/about_us">About Us</Link></li>
+              <li><Link href="/privacy_policy">Privacy Policy</Link></li>
+              <li><Link href="/return_policy">Refund and Returns Policy</Link></li>
+              <li><Link href="/track-order">Track an Order</Link></li>
+              <li><Link href="/size-guide">Size Guide</Link></li>
             </ul>
           </div>
 
@@ -83,13 +91,12 @@ export default function Footer({ siteName, company, social, roots }) {
                 <li><FiMail aria-hidden="true" /><a href={`mailto:${company.email}`}>{company.email}</a></li>
               )}
             </ul>
-            <ul style={{ marginTop: "1.25rem" }}>
-              <li><Link href="/privacy_policy">Privacy policy</Link></li>
-              <li><Link href="/return_policy">Return policy</Link></li>
-              <li><Link href="/size-guide">Size guide</Link></li>
-              <li><Link href="/about_us">About us</Link></li>
-              <li><Link href="/track-order">Track an order</Link></li>
-            </ul>
+            <h3 style={{ marginTop: "1.5rem" }}>Pay With</h3>
+            <div className="pay-with" aria-label="Accepted payment methods">
+              {PAY_METHODS.map((method) => (
+                <span key={method.label} className="pay-badge" title={method.label} style={{ color: method.color }}>{method.label}</span>
+              ))}
+            </div>
           </div>
         </div>
 

@@ -407,6 +407,18 @@ function ContactPanel({ initial, onSaved }) {
           value={form.logo_path}
           onChange={(logo_path) => setForm({ ...form, logo_path })}
         />
+        <Field label="Company description" htmlFor="ct-description" hint="A short line about the store, shown under the logo in the footer.">
+          <Textarea id="ct-description" rows={3} value={form.company_description} onChange={set("company_description")} placeholder="e.g. Zuberee is an online fashion store…" />
+        </Field>
+        <Field label="Company address" htmlFor="ct-address" hint="Shown in the footer contact list.">
+          <Input id="ct-address" value={form.company_address} onChange={set("company_address")} placeholder="e.g. House 12, Road 5, Dhanmondi, Dhaka" />
+        </Field>
+        <Field label="Contact email" htmlFor="ct-email" hint="Shown in the footer as a mailto link.">
+          <Input id="ct-email" type="email" value={form.company_email} onChange={set("company_email")} placeholder="e.g. support@zuberee.com" />
+        </Field>
+        <Field label="Contact phone" htmlFor="ct-phone" hint="Shown in the footer as a tap-to-call link.">
+          <Input id="ct-phone" value={form.company_phone} onChange={set("company_phone")} placeholder="e.g. +880 1XXX-XXXXXX" />
+        </Field>
         <div><Button type="submit" variant="primary" loading={busy} disabled={busy}>Save contact details</Button></div>
       </form>
     </Card>

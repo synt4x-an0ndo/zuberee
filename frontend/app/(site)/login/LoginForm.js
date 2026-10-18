@@ -31,7 +31,11 @@ export default function LoginForm() {
     try {
       const user = await login({ email: form.email.trim(), password: form.password });
       toast.success(`Welcome back${user?.name ? `, ${user.name.split(" ")[0]}` : ""}!`);
-      router.replace(user?.role === "admin" && next === "/user" ? "/admin" : next);
+      // Role-based destination: admins land in the admin panel, customers in their
+      // account — unless a safe ?next= destination is present (e.g. the admin guard
+      // sent them here via /login?next=/admin).
+      const target = next !== "/user" ? next : user?.role === "admin" ? "/admin" : "/user";
+      router.replace(target);
     } catch (err) {
       setError(err.message || "Sign-in failed. Please try again.");
     } finally {
