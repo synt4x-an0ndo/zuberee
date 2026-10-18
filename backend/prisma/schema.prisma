@@ -49,9 +49,9 @@ model User {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  addresses    Address[]
-  orders       Order[]
-  cart         Cart?
+  addresses           Address[]
+  orders              Order[]
+  cart                Cart?
   passwordResetTokens PasswordResetToken[]
   chatConversations   ChatConversation[]
   userRoles           UserRole[]
@@ -60,11 +60,11 @@ model User {
 }
 
 model Role {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  guardName   String   @default("sanctum")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  guardName String   @default("sanctum")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   permissions RolePermission[]
   users       UserRole[]
@@ -73,13 +73,13 @@ model Role {
 }
 
 model Permission {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  guardName   String   @default("sanctum")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  guardName String   @default("sanctum")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  roles       RolePermission[]
+  roles RolePermission[]
 
   @@map("permissions")
 }
@@ -88,19 +88,19 @@ model RolePermission {
   roleId       Int
   permissionId Int
 
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model UserRole {
-  userId  Int
-  roleId  Int
+  userId Int
+  roleId Int
 
-  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role    Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
   @@map("user_roles")
@@ -113,7 +113,7 @@ model PasswordResetToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
@@ -132,32 +132,32 @@ model Address {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("addresses")
 }
 
 model Category {
-  id              Int            @id @default(autoincrement())
-  name            String         @unique
-  slug            String         @unique
-  description     String?
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  slug        String  @unique
+  description String?
 
-  sizeGuideType   SizeGuideType  @default(NONE)
+  sizeGuideType SizeGuideType @default(NONE)
 
   parentId        Int?
-  displayPriority Int            @default(0)
-  stockTracking   Boolean        @default(false)
-  showOnHomepage  Boolean        @default(false)
+  displayPriority Int     @default(0)
+  stockTracking   Boolean @default(false)
+  showOnHomepage  Boolean @default(false)
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  parent          Category?      @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Category[]     @relation("CategoryParent")
+  parent   Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryParent")
 
-  products        Product[]
+  products Product[]
 
   @@index([parentId])
   @@index([displayPriority])
@@ -165,30 +165,30 @@ model Category {
 }
 
 model Product {
-  id               Int                @id @default(autoincrement())
+  id               Int           @id @default(autoincrement())
   categoryId       Int
   name             String
-  sku              String?            @unique
+  sku              String?       @unique
   description      String?
   shortDescription String?
-  price            Decimal            @db.Decimal(10, 2)
-  discount         Decimal?           @db.Decimal(10, 2)
-  status           ProductStatus      @default(IN_STOCK)
+  price            Decimal       @db.Decimal(10, 2)
+  discount         Decimal?      @db.Decimal(10, 2)
+  status           ProductStatus @default(IN_STOCK)
   videoUrl         String?
-  stock            Int                @default(0)
-  isActive         Boolean            @default(true)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  stock            Int           @default(0)
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  category         Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  images           ProductImage[]
-  variants         ProductVariant[]
-  colors           ProductColor[]
-  specifications   ProductSpecification[]
-  faqs             ProductFaq[]
-  inventory        ProductInventory?
-  orderItems       OrderItem[]
-  cartItem         CartItem[]
+  category       Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  images         ProductImage[]
+  variants       ProductVariant[]
+  colors         ProductColor[]
+  specifications ProductSpecification[]
+  faqs           ProductFaq[]
+  inventory      ProductInventory?
+  orderItems     OrderItem[]
+  cartItem       CartItem[]
 
   @@index([categoryId])
   @@index([status])
@@ -203,43 +203,44 @@ enum ProductStatus {
 }
 
 model ProductColor {
-  id         Int      @id @default(autoincrement())
-  productId  Int
-  name       String
-  code       String
-  image      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  productId Int
+  name      String
+  code      String
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@map("product_colors")
 }
 
 model ProductVariant {
-  id                 Int      @id @default(autoincrement())
-  productId          Int
-  colorId            Int?
-  name               String
-  value              String
-  price              Decimal? @db.Decimal(10, 2)
+  id        Int      @id @default(autoincrement())
+  productId Int
+  colorId   Int?
+  name      String
+  value     String
+  price     Decimal? @db.Decimal(10, 2)
 
-  stock              Int      @default(0)
-  held               Int      @default(0)
-  reserved           Int      @default(0)
-  lowStockThreshold  Int?
-  trackInventory     Boolean  @default(false)
-  allowPreorder      Boolean  @default(false)
-  preorderLimit      Int?
-  preorderCount      Int      @default(0)
-  isActive           Boolean  @default(true)
-  position           Int      @default(0)
+  stock             Int     @default(0)
+  held              Int     @default(0)
+  reserved          Int     @default(0)
+  lowStockThreshold Int?
+  trackInventory    Boolean @default(false)
+  allowPreorder     Boolean @default(false)
+  preorderLimit     Int?
+  preorderCount     Int     @default(0)
+  isActive          Boolean @default(true)
+  position          Int     @default(0)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockMovements StockMovement[]
 
   @@index([productId])
   @@index([colorId])
@@ -254,7 +255,7 @@ model ProductSpecification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@map("product_specifications")
@@ -268,38 +269,38 @@ model ProductFaq {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@map("product_faqs")
 }
 
 model ProductInventory {
-  id              Int      @id @default(autoincrement())
-  productId       Int      @unique
-  trackInventory  Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  productId      Int      @unique
+  trackInventory Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@map("product_inventory")
 }
 
 model AbandonedCheckout {
-  id                   Int       @id @default(autoincrement())
-  sessionId            String?   @unique
-  userId               Int?
-  cartItems            Json
-  name                 String?
-  phone                String?
-  address              String?
-  isRecovered          Boolean   @default(false)
-  status               String    @default("pending")
-  convertedOrderId     Int?
-  convertedAt          DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id               Int       @id @default(autoincrement())
+  sessionId        String?   @unique
+  userId           Int?
+  cartItems        Json
+  name             String?
+  phone            String?
+  address          String?
+  isRecovered      Boolean   @default(false)
+  status           String    @default("pending")
+  convertedOrderId Int?
+  convertedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([sessionId])
   @@index([status])
@@ -308,34 +309,34 @@ model AbandonedCheckout {
 }
 
 model ShippingCost {
-  id                Int      @id @default(autoincrement())
-  insideDhaka       Decimal  @default(80)  @db.Decimal(10, 2)
-  outsideDhaka      Decimal  @default(150) @db.Decimal(10, 2)
-  oneShippingCost   Decimal? @db.Decimal(10, 2)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  insideDhaka     Decimal  @default(80) @db.Decimal(10, 2)
+  outsideDhaka    Decimal  @default(150) @db.Decimal(10, 2)
+  oneShippingCost Decimal? @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("shipping_costs")
 }
 
 model ProductImage {
-  id         Int      @id @default(autoincrement())
-  productId  Int
-  imageUrl   String
-  isPrimary  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  productId Int
+  imageUrl  String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@map("product_images")
 }
 
 model Order {
-  id              Int           @id @default(autoincrement())
-  userId          Int?
-  guestName       String?
-  guestPhone      String?
+  id         Int     @id @default(autoincrement())
+  userId     Int?
+  guestName  String?
+  guestPhone String?
 
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
@@ -347,11 +348,11 @@ model Order {
   paymentMethod   String        @default("cash")
   assignedBadge   String?
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user            User?         @relation(fields: [userId], references: [id])
-  items           OrderItem[]
+  user  User?       @relation(fields: [userId], references: [id])
+  items OrderItem[]
 
   @@index([userId])
   @@index([status])
@@ -361,15 +362,15 @@ model Order {
 }
 
 model OrderItem {
-  id         Int      @id @default(autoincrement())
-  orderId    Int
-  productId  Int
-  quantity   Int
-  unitPrice  Decimal  @db.Decimal(10, 2)
-  createdAt  DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
 
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id])
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -392,30 +393,30 @@ model Banner {
 }
 
 model Cart {
-  id         Int        @id @default(autoincrement())
-  userId     Int?       @unique
-  sessionId  String?    @unique
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @unique
+  sessionId String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user       User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items      CartItem[]
+  user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
 
   @@map("carts")
 }
 
 model CartItem {
-  id         Int      @id @default(autoincrement())
-  cartId     Int
-  productId  Int
-  variantId  Int?
-  colorId    Int?
-  quantity   Int      @default(1)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  cartId    Int
+  productId Int
+  variantId Int?
+  colorId   Int?
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, productId, variantId, colorId])
   @@index([cartId])
@@ -435,29 +436,29 @@ model Size {
 }
 
 model FraudCheckerSettings {
-  id                Int      @id @default(autoincrement())
-  isActive          Boolean  @default(true)
-  cacheMinutes      Int      @default(60)
-  apiKey            String?
-  providerUrl       String   @default("https://api.bdcourier.com/courier-check")
+  id           Int     @id @default(autoincrement())
+  isActive     Boolean @default(true)
+  cacheMinutes Int     @default(60)
+  apiKey       String?
+  providerUrl  String  @default("https://api.bdcourier.com/courier-check")
 
-  planId            Int?
-  planName          String?
-  planType          String?
-  isFree            Boolean  @default(true)
-  status            String   @default("inactive")
-  nextDueDate       DateTime?
-  expiresAt         DateTime?
-  daysRemaining     Int      @default(0)
-  frequency         String?
-  price             Decimal? @db.Decimal(10, 2)
-  apiCalls          Int      @default(0)
-  paidCalls         Int      @default(0)
-  callLimit         Int      @default(0)
-  paidLimit         Int      @default(0)
+  planId        Int?
+  planName      String?
+  planType      String?
+  isFree        Boolean   @default(true)
+  status        String    @default("inactive")
+  nextDueDate   DateTime?
+  expiresAt     DateTime?
+  daysRemaining Int       @default(0)
+  frequency     String?
+  price         Decimal?  @db.Decimal(10, 2)
+  apiCalls      Int       @default(0)
+  paidCalls     Int       @default(0)
+  callLimit     Int       @default(0)
+  paidLimit     Int       @default(0)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("fraud_checker_settings")
 }
@@ -531,14 +532,14 @@ model FacebookSettings {
 }
 
 model ChatConversation {
-  id        Int           @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   userId    Int
-  status    String        @default("open")
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  ChatMessage[]
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
 
   @@index([userId, status])
   @@index([updatedAt])
@@ -546,16 +547,35 @@ model ChatConversation {
 }
 
 model ChatMessage {
-  id             Int              @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   conversationId Int
   sender         String
   body           String
-  readByAdmin    Boolean          @default(false)
-  readByUser     Boolean          @default(false)
-  createdAt      DateTime         @default(now())
+  readByAdmin    Boolean  @default(false)
+  readByUser     Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
-  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@map("chat_messages")
+}
+
+model StockMovement {
+  id               Int      @id @default(autoincrement())
+  productVariantId Int
+  type             String // "purchase" | "sale" | "reserve" | "release" | "adjustment"
+  quantity         Int
+  stockAfter       Int
+  reservedAfter    Int
+  note             String?
+  userId           Int?
+  orderId          Int?
+  createdAt        DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+
+  @@index([productVariantId])
+  @@index([createdAt])
+  @@map("stock_movements")
 }
