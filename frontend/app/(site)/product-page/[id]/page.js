@@ -3,7 +3,7 @@
 import AlignedTable from "@/components/AlignedTable";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     FiChevronLeft,
   FiChevronRight,
@@ -15,6 +15,8 @@ import {
   FiShoppingCart,
   FiTruck,
   FiZap,
+  FiZoomIn,
+  FiZoomOut,
 } from "react-icons/fi";
 import { FaFacebookMessenger, FaRuler, FaWhatsapp } from "react-icons/fa";
 import Img from "@/components/Img";
@@ -26,6 +28,10 @@ import { useFeedback } from "@/context/FeedbackContext";
 import { useSite } from "@/context/SiteContext";
 import { api, formatMoney, listOf, unwrap } from "@/lib/api";
 import { discountPercent, normalizeProduct } from "@/lib/format";
+
+const GALLERY_AUTOPLAY_MS = 4000;
+const GALLERY_RESUME_MS = 8000;
+const GALLERY_SWIPE_THRESHOLD = 45;
 
 function ProductDetailSkeleton() {
   return (
@@ -53,6 +59,11 @@ export default function ProductPage() {
   const [state, setState] = useState({ loading: true, error: "", product: null });
   const [related, setRelated] = useState([]);
   const [imageIndex, setImageIndex] = useState(0);
+  const [galleryPaused, setGalleryPaused] = useState(false);
+  const [hoverZoomed, setHoverZoomed] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const autoplayResumeRef = useRef(null);
+  const swipeRef = useRef(null);
   const [colorId, setColorId] = useState(null);
   const [sizeId, setSizeId] = useState(null);
   const [qty, setQty] = useState(1);
@@ -70,6 +81,9 @@ export default function ProductPage() {
         if (!product) throw new Error("Product not found.");
         setState({ loading: false, error: "", product });
         setImageIndex(0);
+        setGalleryPaused(false);
+        setHoverZoomed(false);
+        setZoomed(false);
         setColorId(product.colors[0]?.id ?? null);
         setSizeId(null);
         setQty(1);
@@ -108,6 +122,29 @@ export default function ProductPage() {
     if (color?.image && !base.includes(color.image)) return [color.image, ...base];
     return base;
   }, [product, color]);
+
+  const pauseGalleryTemporarily = () => {
+    setGalleryPaused(true);
+    if (autoplayResumeRef.current) window.clearTimeout(autoplayResumeRef.current);
+    autoplayResumeRef.current = window.setTimeout(() => setGalleryPaused(false), GALLERY_RESUME_MS);
+  };
+
+  useEffect(() => () => {
+    if (autoplayResumeRef.current) window.clearTimeout(autoplayResumeRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (gallery.length > 0 && imageIndex >= gallery.length) setImageIndex(0);
+  }, [gallery.length, imageIndex]);
+
+  useEffect(() => {
+    if (gallery.length <= 1 || galleryPaused || zoomed) return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setImageIndex((index) => (index + 1) % gallery.length);
+    }, GALLERY_AUTOPLAY_MS);
+    return () => window.clearInterval(timer);
+  }, [gallery.length, galleryPaused, imageIndex, zoomed]);
 
   if (state.loading) return <ProductDetailSkeleton />;
   if (state.error) {
@@ -175,8 +212,78 @@ export default function ProductPage() {
         `Hello ${siteName || "there"}, I want to know more about "${product.title}"${product.sku ? ` (SKU: ${product.sku})` : ""}.`
       )}`
     : "";
-  const prevImg = () => gallery.length && setImageIndex((i) => (i - 1 + gallery.length) % gallery.length);
-  const nextImg = () => gallery.length && setImageIndex((i) => (i + 1) % gallery.length);
+  const selectGalleryImage = (index) => {
+    if (!gallery.length) return;
+    setImageIndex(((index % gallery.length) + gallery.length) % gallery.length);
+    setHoverZoomed(false);
+    setZoomed(false);
+    pauseGalleryTemporarily();
+  };
+  const prevImg = () => selectGalleryImage(imageIndex - 1);
+  const nextImg = () => selectGalleryImage(imageIndex + 1);
+
+  const updateZoomOrigin = (event) => {
+    const frame = event.currentTarget;
+    const rect = frame.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100));
+    const y = Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100));
+    frame.style.setProperty("--zoom-x", `${x}%`);
+    frame.style.setProperty("--zoom-y", `${y}%`);
+  };
+
+  const handleGalleryPointerDown = (event) => {
+    pauseGalleryTemporarily();
+    swipeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    if (event.pointerType === "mouse" || zoomed) updateZoomOrigin(event);
+  };
+
+  const handleGalleryPointerMove = (event) => {
+    if (event.pointerType === "mouse") {
+      updateZoomOrigin(event);
+      if (!zoomed) setHoverZoomed(true);
+    } else if (zoomed) {
+      updateZoomOrigin(event);
+    }
+  };
+
+  const handleGalleryPointerUp = (event) => {
+    const swipe = swipeRef.current;
+    swipeRef.current = null;
+    if (!swipe || swipe.pointerId !== event.pointerId || gallery.length <= 1 || zoomed) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    if (Math.abs(deltaX) < GALLERY_SWIPE_THRESHOLD || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+    if (deltaX < 0) nextImg();
+    else prevImg();
+  };
+
+  const handleGalleryPointerCancel = () => {
+    swipeRef.current = null;
+  };
+
+  const toggleZoom = () => {
+    if (!gallery[imageIndex]) return;
+    setZoomed((current) => !current);
+    pauseGalleryTemporarily();
+  };
+
+  const handleGalleryKeyDown = (event) => {
+    if (event.key === "ArrowLeft" && gallery.length > 1) {
+      event.preventDefault();
+      prevImg();
+    } else if (event.key === "ArrowRight" && gallery.length > 1) {
+      event.preventDefault();
+      nextImg();
+    } else if ((event.key === "Enter" || event.key === " ") && gallery[imageIndex]) {
+      event.preventDefault();
+      toggleZoom();
+    }
+  };
 
   return (
     <div className="pd2-bg">
@@ -193,17 +300,32 @@ export default function ProductPage() {
           <div className="pd2-gallery-card">
             <div className="pd2-frame">
               <div
-                key={gallery[imageIndex] || "empty"}
-                className={cx("pd2-img-wrap", gallery[imageIndex] && "has-hover-zoom")}
-                onPointerMove={(event) => {
-                  if (event.pointerType !== "mouse") return;
-                  const frame = event.currentTarget;
-                  const rect = frame.getBoundingClientRect();
-                  const x = Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100));
-                  const y = Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100));
-                  frame.style.setProperty("--zoom-x", `${x}%`);
-                  frame.style.setProperty("--zoom-y", `${y}%`);
+                className={cx("pd2-img-wrap", gallery[imageIndex] && "has-hover-zoom", hoverZoomed && "is-hover-zoomed", zoomed && "is-zoomed", gallery.length > 1 && "is-swipeable")}
+                tabIndex={gallery[imageIndex] ? 0 : undefined}
+                role={gallery.length > 1 ? "group" : undefined}
+                aria-roledescription={gallery.length > 1 ? "carousel" : undefined}
+                aria-label={gallery[imageIndex] ? `Product photo ${imageIndex + 1} of ${gallery.length}. ${zoomed ? "Photo zoomed in." : "Use the zoom button or double-click to zoom."}` : undefined}
+                onPointerDown={handleGalleryPointerDown}
+                onPointerMove={handleGalleryPointerMove}
+                onPointerUp={handleGalleryPointerUp}
+                onPointerCancel={handleGalleryPointerCancel}
+                onPointerEnter={(event) => {
+                  if (event.pointerType === "mouse") {
+                    setGalleryPaused(true);
+                    if (!zoomed) setHoverZoomed(true);
+                  }
                 }}
+                onPointerLeave={(event) => {
+                  swipeRef.current = null;
+                  if (event.pointerType === "mouse") {
+                    setGalleryPaused(false);
+                    setHoverZoomed(false);
+                  }
+                }}
+                onFocus={() => setGalleryPaused(true)}
+                onBlur={() => setGalleryPaused(false)}
+                onKeyDown={handleGalleryKeyDown}
+                onDoubleClick={toggleZoom}
               >
                 {gallery[imageIndex] ? (
                   <Img key={gallery[imageIndex]} src={gallery[imageIndex]} alt={product.title} fill priority sizes="(max-width: 1024px) 100vw, 600px" />
@@ -216,6 +338,33 @@ export default function ProductPage() {
                 {unavailable && <span className="pd2-tag is-out">SOLD OUT</span>}
                 {off > 0 && <span className="pd2-tag is-off">-{off}%</span>}
               </div>
+              {gallery[imageIndex] && (
+                <button
+                  type="button"
+                  className="pd2-zoom-btn"
+                  onClick={toggleZoom}
+                  aria-label={zoomed ? "Zoom out of product photo" : "Zoom in on product photo"}
+                  aria-pressed={zoomed}
+                  title={zoomed ? "Zoom out" : "Zoom in"}
+                >
+                  {zoomed ? <FiZoomOut aria-hidden="true" /> : <FiZoomIn aria-hidden="true" />}
+                </button>
+              )}
+              {gallery.length > 1 && (
+                <span className="pd2-photo-counter" aria-live="polite">
+                  {imageIndex + 1} / {gallery.length}
+                </span>
+              )}
+              {gallery.length > 1 && (
+                <>
+                  <button type="button" className="pd2-main-arrow is-left" onClick={prevImg} aria-label="Previous photo">
+                    <FiChevronLeft aria-hidden="true" />
+                  </button>
+                  <button type="button" className="pd2-main-arrow is-right" onClick={nextImg} aria-label="Next photo">
+                    <FiChevronRight aria-hidden="true" />
+                  </button>
+                </>
+              )}
             </div>
             {gallery.length > 1 && (
               <div className="pd2-thumbs-wrap">
@@ -224,7 +373,7 @@ export default function ProductPage() {
                 </button>
                 <div className="pd2-thumbs" role="tablist" aria-label="Product photos">
                   {gallery.slice(0, 10).map((url, i) => (
-                    <button key={url} type="button" className={cx(i === imageIndex && "is-active")} onClick={() => setImageIndex(i)} aria-label={`Photo ${i + 1}`}>
+                    <button key={url} type="button" className={cx(i === imageIndex && "is-active")} onClick={() => selectGalleryImage(i)} aria-label={`Photo ${i + 1}`}>
                       <Img src={url} alt="" fill sizes="120px" />
                     </button>
                   ))}
@@ -272,6 +421,9 @@ export default function ProductPage() {
                       onClick={() => {
                         setColorId(c.id);
                         setImageIndex(0);
+                        setHoverZoomed(false);
+                        setZoomed(false);
+                        pauseGalleryTemporarily();
                       }}
                       aria-label={`Color ${c.name}`}
                       aria-pressed={colorId === c.id}
