@@ -148,13 +148,13 @@ export default function Header() {
             <FiMenu aria-hidden="true" />
           </button>
 
-          <Link href="/" className="brand" aria-label={siteName || "Home"}>
+          <Link href="/" className="brand" aria-label={siteName || "Home"} style={{ marginRight: "auto", marginLeft: 0, flex: "0 0 auto" }}>
             {logo ? (
               <Img src={logo} alt={siteName || "Logo"} width={logoSizes.header.width} height={logoSizes.header.height} style={{ width: logoSizes.header.width, height: logoSizes.header.height, objectFit: "contain" }} priority />
+            ) : loading ? (
+              <span className="skeleton brand-placeholder" aria-hidden="true" />
             ) : siteName ? (
               <span className="brand-name">{siteName}</span>
-            ) : loading ? (
-              <span className="skeleton brand-placeholder" />
             ) : (
               <span className="brand-name">Shop</span>
             )}
@@ -174,7 +174,7 @@ export default function Header() {
 
 
 
-          <div className="header-actions">
+          <div className="header-actions" style={{ marginLeft: 0, marginRight: 0, flex: "0 0 auto" }}>
             <Link
               href={isAuthenticated ? "/user" : "/login"}
               className="icon-btn"
@@ -205,9 +205,20 @@ export default function Header() {
         <div className="mobile-drawer" onMouseDown={(e) => e.target === e.currentTarget && setMenuOpen(false)}>
           <aside className="mobile-drawer-panel" aria-label="Menu">
             <div className="drawer-head">
-              <span className="brand-name" style={{ fontWeight: 800, color: "var(--brand)" }}>
-                {siteName || "Menu"}
-              </span>
+              {logo ? (
+                <Img
+                  className="drawer-head-brand"
+                  src={logo}
+                  alt={siteName || "Logo"}
+                  width={logoSizes.header.width}
+                  height={logoSizes.header.height}
+                  style={{ height: 30, width: "auto", maxWidth: 150, objectFit: "contain", display: "block" }}
+                />
+              ) : (
+                <span className="brand-name drawer-head-brand" style={{ fontWeight: 800, color: "var(--brand)" }}>
+                  {siteName || "Menu"}
+                </span>
+              )}
               <button type="button" className="icon-btn" onClick={() => setMenuOpen(false)} aria-label="Close menu">
                 <FiX aria-hidden="true" />
               </button>

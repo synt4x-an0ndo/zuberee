@@ -1,9 +1,17 @@
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import {
+    normalizeAiBaseUrl,
+    normalizeAiModel,
+    testAiApiKey,
+} from "@/lib/aiProvider.js";
 
 function formatSiteSettings(s) {
     return {
         site_name: s.siteName,
+        ai_api_key_set: Boolean(s.aiApiKey || s.geminiApiKey),
+        ai_api_base_url: s.aiApiBaseUrl ?? "",
+        ai_api_model: s.aiApiModel ?? "",
         gemini_api_key_set: Boolean(s.geminiApiKey),
         favicon_path: s.faviconPath ?? null,
         favicon_zoom: s.faviconZoom ?? 85,
@@ -91,6 +99,12 @@ export async function PUT(request) {
             faviconZoom,
             logo_sizes,
             logoSizes,
+            ai_api_key,
+            aiApiKey,
+            ai_api_base_url,
+            aiApiBaseUrl,
+            ai_api_model,
+            aiApiModel,
             gemini_api_key,
             geminiApiKey,
             primary_color,
@@ -175,15 +189,100 @@ export async function PUT(request) {
             updateData.logoSizes = sanitized;
         }
 
-        // Gemini API key (server-only secret): undefined = keep the
-        // stored key, "" = remove it, otherwise replace it. The key is
-        // never returned by any endpoint — only gemini_api_key_set is.
-        const finalKey = gemini_api_key ?? geminiApiKey;
-        if (finalKey !== undefined) {
-            updateData.geminiApiKey =
-                finalKey === null || finalKey === ""
-                    ? null
-                    : String(finalKey).trim();
+        // AI API configuration (server-only secret): undefined = keep the
+        // stored value, "" = remove it, otherwise replace it. A non-empty
+        // candidate is tested before it is saved, so a bad key can never
+        // disconnect the API that is already working. The key itself is
+        // never returned by any endpoint — only ai_api_key_set is.
+        const finalKey =
+            ai_api_key ?? aiApiKey ?? gemini_api_key ?? geminiApiKey;
+        const finalBaseUrl = ai_api_base_url ?? aiApiBaseUrl;
+        const finalModel = ai_api_model ?? aiApiModel;
+        const aiConfigChanged =
+            finalKey !== undefined ||
+            finalBaseUrl !== undefined ||
+            finalModel !== undefined;
+
+        if (aiConfigChanged) {
+            const existingAi = await getOrCreate();
+            const previousKeySet = Boolean(
+                existingAi.aiApiKey || existingAi.geminiApiKey
+            );
+
+            let candidateBaseUrl = "";
+            let candidateModel = "";
+            try {
+                candidateBaseUrl =
+                    finalBaseUrl === undefined
+                        ? existingAi.aiApiBaseUrl || ""
+                        : normalizeAiBaseUrl(finalBaseUrl);
+                candidateModel =
+                    finalModel === undefined
+                        ? existingAi.aiApiModel || ""
+                        : normalizeAiModel(finalModel);
+            } catch (error) {
+                return Response.json(
+                    { success: false, message: error.message },
+                    { status: 400 }
+                );
+            }
+
+            const candidateKey =
+                finalKey === undefined
+                    ? existingAi.aiApiKey || existingAi.geminiApiKey || ""
+                    : finalKey === null || finalKey === ""
+                      ? ""
+                      : String(finalKey).trim();
+
+            if (candidateKey) {
+                const connection = await testAiApiKey(candidateKey, {
+                    baseUrl: candidateBaseUrl,
+                    model: candidateModel,
+                });
+                if (!connection.ok) {
+                    const status =
+                        connection.status === 0 ||
+                        connection.status === 429 ||
+                        connection.status >= 500
+                            ? 503
+                            : 400;
+                    const keepMessage = previousKeySet
+                        ? " The new API was not saved; your previous API is still active."
+                        : " The API was not saved.";
+                    const reason =
+                        connection.status === 422
+                            ? connection.detail ||
+                              "The API configuration is incomplete."
+                            : connection.status === 401 ||
+                                connection.status === 403
+                              ? "AI Assistant disconnected — the API key was rejected. Create a fresh key and paste the complete key."
+                              : connection.status === 404
+                                ? "AI Assistant disconnected — the automatic model is not available to this API key."
+                                : connection.status === 429
+                                  ? "AI Assistant disconnected — the API is rate-limited or out of quota. Wait a moment and try Save again."
+                                  : connection.status === 0
+                                    ? "AI Assistant disconnected — the API could not be reached from this PC."
+                                    : connection.status >= 500
+                                      ? "AI Assistant disconnected — the API is temporarily unavailable."
+                                      : "AI Assistant disconnected — the API rejected the test request.";
+                    return Response.json(
+                        {
+                            success: false,
+                            code: "AI_CONNECTION_FAILED",
+                            message: `${reason}${keepMessage}`,
+                            provider_status: connection.status,
+                        },
+                        { status }
+                    );
+                }
+            }
+
+            updateData.aiApiKey = candidateKey || null;
+            // Keep the legacy column in sync so an older build never
+            // resurrects a removed/replaced key as a fallback.
+            updateData.geminiApiKey = candidateKey || null;
+            updateData.aiApiBaseUrl = candidateBaseUrl || null;
+            updateData.aiApiModel = candidateModel || null;
         }
 
         const finalColor = primary_color ?? primaryColor;

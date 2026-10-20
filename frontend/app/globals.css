@@ -11468,3 +11468,2484 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
   line-height: 1.55;
   color: rgb(16 24 20 / 0.72);
 }
+
+/* =====================================================================
+   TRB (The Raw Bros) credit badge
+   Shared by the chat panel header and the admin sidebar. Colours use
+   currentColor so the badge works on the dark chat header, the dark admin
+   sidebar and on light surfaces without extra variants.
+   ===================================================================== */
+.trb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  white-space: nowrap;
+  opacity: 0.92;
+  transition: background 0.18s var(--ease), border-color 0.18s var(--ease), opacity 0.18s var(--ease);
+}
+
+.trb-badge:hover {
+  background: color-mix(in srgb, currentColor 17%, transparent);
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  opacity: 1;
+}
+
+.trb-badge:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.trb-mark {
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.trb-icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0.72;
+}
+
+/* Inline variant: "TRB . Developed by The Raw Bros" for sidebars */
+.trb-badge--inline {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  margin-bottom: 0.5rem;
+  opacity: 0.88;
+}
+
+.trb-badge--inline .trb-text {
+  font-weight: 500;
+  opacity: 0.92;
+}
+
+.trb-badge--inline .trb-icon {
+  width: 11px;
+  height: 11px;
+}
+
+/* Slot in the chat header: sits between the title and the close button,
+   and never squeezes the title on narrow phones. */
+.trb-slot {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 420px) {
+  .chat-head-row .trb-badge {
+    padding: 2px 6px;
+    font-size: 0.58rem;
+    gap: 4px;
+  }
+  .chat-head-row .trb-icon {
+    display: none;
+  }
+}
+
+/* Admin sidebar: keep it tidy when the sidebar collapses to icon width */
+.trb-badge--side {
+  width: 100%;
+  justify-content: center;
+}
+
+.admin-shell.is-sidebar-collapsed .trb-badge--side .trb-text {
+  display: none;
+}
+
+
+/* =====================================================================
+   Chat v4 - premium minimal pass
+   Later layer, higher specificity (.chat-panel/.chat-launcher-anchor
+   prefixed) so it wins over the earlier chat v1-v3 rules without
+   touching them. Design intent: calm neutrals, hairline borders, one
+   soft ambient shadow, generous spacing, restrained motion.
+   ===================================================================== */
+.chat-panel {
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgb(16 24 20 / 0.07);
+  box-shadow:
+    0 1px 2px rgb(16 24 20 / 0.04),
+    0 18px 48px -12px rgb(16 24 20 / 0.22);
+}
+
+/* ---------- header ---------- */
+.chat-panel .chat-head {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  padding: 14px 16px;
+}
+.chat-panel .chat-head.is-hero { padding: 16px 16px 18px; }
+.chat-panel .chat-head::before { opacity: 0.42; }
+.chat-panel .chat-head::after { opacity: 0.5; }
+.chat-panel .chat-head-row { gap: 11px; }
+.chat-panel .chat-head-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.14);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  font-size: 14px;
+}
+.chat-panel .chat-head-text strong {
+  font-size: 0.94rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+.chat-panel .chat-head-text small {
+  font-size: 0.72rem;
+  font-weight: 450;
+  letter-spacing: 0;
+  opacity: 0.78;
+}
+.chat-panel .chat-back,
+.chat-panel .chat-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 0;
+  color: #fff;
+  background: rgb(255 255 255 / 0.1);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.chat-panel .chat-back:hover,
+.chat-panel .chat-close:hover { background: rgb(255 255 255 / 0.2); }
+.chat-panel .chat-back:active,
+.chat-panel .chat-close:active { transform: scale(0.94); }
+.chat-panel .chat-hero { margin-top: 14px; gap: 3px; }
+.chat-panel .chat-hero strong {
+  font-size: 1.24rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+.chat-panel .chat-hero span {
+  font-size: 0.8rem;
+  font-weight: 400;
+  opacity: 0.72;
+}
+
+/* ---------- body / messages ---------- */
+.chat-panel .chat-body {
+  padding: 18px 16px;
+  gap: 12px;
+  background: #fff;
+}
+.chat-panel .chat-msg {
+  max-width: 84%;
+  padding: 10px 13px;
+  font-size: 0.875rem;
+  line-height: 1.58;
+  letter-spacing: -0.005em;
+  border-radius: 15px;
+}
+.chat-panel .chat-msg.is-theirs {
+  background: #f6f7f6;
+  border: 1px solid rgb(16 24 20 / 0.06);
+  border-bottom-left-radius: 5px;
+  color: var(--ink);
+  box-shadow: none;
+}
+.chat-panel .chat-msg.is-mine {
+  background: var(--brand);
+  color: var(--brand-contrast);
+  border-bottom-right-radius: 5px;
+  box-shadow: none;
+}
+.chat-panel .chat-msg.is-theirs p,
+.chat-panel .chat-msg.is-theirs li { line-height: 1.58; }
+.chat-panel .chat-msg.is-theirs strong { font-weight: 650; }
+.chat-panel .chat-time {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  opacity: 0.5;
+}
+.chat-panel .chat-row { gap: 8px; }
+.chat-panel .chat-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--brand-tint);
+  border: 1px solid rgb(16 24 20 / 0.06);
+  color: var(--brand);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.chat-panel .chat-dots span {
+  width: 5px;
+  height: 5px;
+  background: var(--brand-mid, #7f9689);
+}
+
+/* product cards inside a reply */
+.chat-panel .chat-products { gap: 8px; margin-top: 9px; }
+.chat-panel .chat-product {
+  border: 1px solid rgb(16 24 20 / 0.08);
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px;
+  gap: 10px;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.chat-panel .chat-product:hover {
+  border-color: rgb(16 24 20 / 0.16);
+  box-shadow: 0 4px 14px -6px rgb(16 24 20 / 0.18);
+}
+.chat-panel .chat-product img,
+.chat-panel .chat-product-ph {
+  border-radius: 8px;
+  background: var(--brand-tint);
+}
+.chat-panel .chat-product-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.chat-panel .chat-product-price { font-size: 0.78rem; font-weight: 600; }
+.chat-panel .chat-chip {
+  font-size: 0.63rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgb(16 24 20 / 0.09);
+  background: #fafbfa;
+  color: var(--ink-2, #384239);
+}
+
+/* ---------- menu (start screen) ---------- */
+.chat-panel.view-menu .chat-choice,
+.chat-panel .chat-choice {
+  border: 1px solid rgb(16 24 20 / 0.08);
+  border-radius: 14px;
+  background: #fff;
+  padding: 13px 14px;
+  gap: 12px;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.chat-panel.view-menu .chat-choice:hover,
+.chat-panel .chat-choice:hover {
+  border-color: rgb(16 24 20 / 0.18);
+  background: #fdfdfc;
+  box-shadow: 0 6px 18px -12px rgb(16 24 20 / 0.35);
+}
+.chat-panel .chat-choice-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+.chat-panel.view-menu .chat-choice-ai .chat-choice-icon {
+  background: var(--brand);
+  color: var(--brand-contrast);
+}
+.chat-panel.view-menu .chat-choice-main strong,
+.chat-panel .chat-choice-main strong {
+  font-size: 0.865rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+.chat-panel.view-menu .chat-choice-main small,
+.chat-panel .chat-choice-main small {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.chat-panel .chat-choice-arrow {
+  color: rgb(16 24 20 / 0.3);
+  font-size: 15px;
+  transition: transform 0.16s var(--ease), color 0.16s var(--ease);
+}
+.chat-panel .chat-choice:hover .chat-choice-arrow {
+  transform: translateX(2px);
+  color: rgb(16 24 20 / 0.55);
+}
+
+/* quick-start chips */
+.chat-panel.view-menu .chat-quick-chip,
+.chat-panel .chat-quick-chip {
+  border: 1px solid rgb(16 24 20 / 0.09);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink-2, #384239);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 7px 11px;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+}
+.chat-panel.view-menu .chat-quick-chip:hover,
+.chat-panel .chat-quick-chip:hover {
+  border-color: rgb(16 24 20 / 0.2);
+  background: #fafbfa;
+  color: var(--ink);
+}
+.chat-panel .chat-quick-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.chat-panel .chat-privacy {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--muted);
+  border-top: 1px solid rgb(16 24 20 / 0.06);
+  padding-top: 11px;
+  margin-top: 2px;
+}
+
+/* ---------- empty states / suggestions ---------- */
+.chat-panel .chat-empty { gap: 5px; padding: 10px 4px; }
+.chat-panel .chat-empty-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+.chat-panel .chat-empty strong {
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.chat-panel .chat-empty span {
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.chat-panel .chat-suggest {
+  border: 1px solid rgb(16 24 20 / 0.09);
+  border-radius: 11px;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-2, #384239);
+  padding: 9px 11px;
+  text-align: left;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease);
+}
+.chat-panel .chat-suggest:hover {
+  border-color: rgb(16 24 20 / 0.2);
+  background: #fafbfa;
+}
+
+/* ---------- composer ---------- */
+.chat-panel .chat-input-row {
+  padding: 12px 14px 14px;
+  gap: 8px;
+  align-items: center;
+  background: #fff;
+  border-top: 1px solid rgb(16 24 20 / 0.06);
+  box-shadow: none;
+}
+.chat-panel .chat-input-row input {
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid rgb(16 24 20 / 0.1);
+  background: #fafbfa;
+  padding: 0 16px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.chat-panel .chat-input-row input::placeholder { color: rgb(16 24 20 / 0.36); }
+.chat-panel .chat-input-row input:focus {
+  outline: none;
+  background: #fff;
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+}
+.chat-panel .chat-input-row button[type="submit"] {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), transform 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+.chat-panel .chat-input-row button[type="submit"]:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+.chat-panel .chat-input-row button[type="submit"]:active:not(:disabled) { transform: scale(0.94); }
+.chat-panel .chat-input-row button[type="submit"]:disabled {
+  opacity: 0.34;
+  cursor: not-allowed;
+}
+.chat-panel .chat-end {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 8px 0 12px;
+  cursor: pointer;
+  transition: color 0.16s var(--ease);
+}
+.chat-panel .chat-end:hover { color: var(--danger); }
+.chat-panel .chat-wide-btn {
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  height: 40px;
+}
+
+/* ---------- sign-in state ---------- */
+.chat-panel .chat-signin-title {
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.chat-panel .chat-signin p {
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.chat-panel .chat-signin-btn {
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  font-size: 0.82rem;
+  font-weight: 600;
+  height: 42px;
+}
+.chat-panel .chat-note {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---------- launcher ---------- */
+.chat-launcher-anchor .chat-fab {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  border: 0;
+  box-shadow:
+    0 1px 2px rgb(16 24 20 / 0.12),
+    0 10px 26px -8px rgb(var(--brand-rgb) / 0.5);
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background 0.18s var(--ease);
+}
+.chat-launcher-anchor .chat-fab:hover {
+  background: var(--brand-dark);
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 2px rgb(16 24 20 / 0.14),
+    0 14px 32px -8px rgb(var(--brand-rgb) / 0.55);
+}
+.chat-launcher-anchor .chat-fab:active { transform: scale(0.96); }
+.chat-launcher-anchor .chat-fab:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+/* the animated ring reads as noise at this size - keep it still */
+.chat-launcher-anchor .chat-fab-ring { display: none; }
+.chat-launcher-anchor .chat-fab-label {
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgb(16 24 20 / 0.08);
+  box-shadow: 0 4px 16px -8px rgb(16 24 20 / 0.3);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  padding: 7px 12px;
+}
+.chat-launcher-anchor .chat-fab-badge {
+  background: var(--sale, #c2410c);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  border: 2px solid #fff;
+}
+
+/* ---------- small screens ---------- */
+@media (max-width: 420px) {
+  .chat-panel { border-radius: 20px; }
+  .chat-panel .chat-body { padding: 15px 13px; gap: 10px; }
+  .chat-panel .chat-msg { font-size: 0.85rem; padding: 9px 12px; }
+  .chat-panel .chat-input-row { padding: 10px 12px 12px; }
+  .chat-panel .chat-input-row input,
+  .chat-panel .chat-input-row button[type="submit"] { height: 42px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel *,
+  .chat-launcher-anchor .chat-fab { transition: none !important; animation: none !important; }
+}
+
+/* =====================================================================
+   Chat v5 - "warm boutique concierge"
+   Last layer. Fixes the view-menu header/hierarchy and lifts the whole
+   panel: branded gradient header, serif greeting, tactile cards with a
+   primary AI action, refined chips, warm neutrals throughout.
+   Brand values derive from --brand (admin primary colour) via color-mix,
+   so this still follows the store's theme.
+   ===================================================================== */
+.chat-panel {
+  --v5-warm: color-mix(in srgb, var(--brand) 9%, #fffdfb);
+  --v5-line: color-mix(in srgb, var(--brand) 11%, #f0eae2);
+  --v5-ink: #241f1a;
+  --v5-muted: color-mix(in srgb, var(--brand) 26%, #7d7468);
+  --v5-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+
+  background: #fffdfb;
+  border: 1px solid var(--v5-line);
+  border-radius: 24px;
+  box-shadow:
+    0 1px 2px rgb(53 37 25 / 0.05),
+    0 26px 60px -20px rgb(53 37 25 / 0.28);
+}
+
+/* ---------- header: same gradient in EVERY view ---------- */
+.chat-panel .chat-head,
+.chat-panel .chat-head.is-hero,
+.chat-panel.view-menu .chat-head.is-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 15px 17px 17px;
+  background:
+    radial-gradient(130% 120% at 88% -30%, rgb(255 255 255 / 0.20) 0%, transparent 55%),
+    linear-gradient(152deg,
+      var(--brand) 0%,
+      color-mix(in srgb, var(--brand) 74%, #2b1508) 58%,
+      color-mix(in srgb, var(--brand) 52%, #1c0d04) 100%);
+  border-bottom: 0;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.chat-panel.view-menu .chat-head.is-hero { padding: 17px 18px 20px; }
+/* soft arc for depth */
+.chat-panel .chat-head::after {
+  content: "";
+  position: absolute;
+  right: -58px;
+  bottom: -92px;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  border: 34px solid rgb(255 255 255 / 0.06);
+  pointer-events: none;
+}
+.chat-panel .chat-head::before { display: none; }
+
+.chat-panel .chat-head-avatar,
+.chat-panel.view-menu .chat-head-avatar {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.chat-panel .chat-head-text strong,
+.chat-panel.view-menu .chat-head-text strong {
+  color: #fff;
+  font-size: 0.93rem;
+  font-weight: 650;
+  letter-spacing: -0.017em;
+}
+.chat-panel .chat-head-text small,
+.chat-panel.view-menu .chat-head-text small {
+  color: rgb(255 255 255 / 0.72);
+  font-size: 0.715rem;
+  font-weight: 450;
+  letter-spacing: 0.005em;
+  opacity: 1;
+  margin-top: 2px;
+}
+/* live status dot before the subtitle */
+.chat-panel .chat-head-text small::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #7ee2a8;
+  box-shadow: 0 0 0 2px rgb(126 226 168 / 0.22);
+  vertical-align: 1px;
+  animation: none;
+}
+
+.chat-panel .chat-back,
+.chat-panel .chat-close {
+  width: 29px;
+  height: 29px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.chat-panel .chat-back:hover,
+.chat-panel .chat-close:hover { background: rgb(255 255 255 / 0.2); }
+.chat-panel .chat-back:active,
+.chat-panel .chat-close:active { transform: scale(0.93); }
+
+/* TRB badge sits on the gradient */
+.chat-panel .trb-badge {
+  border-color: rgb(255 255 255 / 0.26);
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.chat-panel .trb-badge:hover { background: rgb(255 255 255 / 0.22); }
+
+/* ---------- greeting, now editorial ---------- */
+.chat-panel .chat-hero,
+.chat-panel.view-menu .chat-hero { margin-top: 16px; gap: 4px; }
+.chat-panel .chat-hero strong,
+.chat-panel.view-menu .chat-hero strong {
+  font-family: var(--v5-serif);
+  font-size: 1.44rem;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: 1.2;
+  color: #fff;
+}
+.chat-panel .chat-hero span,
+.chat-panel.view-menu .chat-hero span {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: rgb(255 255 255 / 0.74);
+  opacity: 1;
+}
+
+/* ---------- menu: no dead space, tactile cards ---------- */
+.chat-panel.view-menu { height: auto; max-height: min(88vh, 660px); }
+.chat-panel .chat-menu,
+.chat-panel.view-menu .chat-menu {
+  padding: 16px 16px 14px;
+  gap: 10px;
+  background: #fffdfb;
+}
+.chat-panel .chat-choice,
+.chat-panel.view-menu .chat-choice {
+  position: relative;
+  padding: 13px 14px;
+  gap: 12px;
+  border: 1px solid var(--v5-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(53 37 25 / 0.04);
+  transition: transform 0.16s var(--ease), border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.chat-panel .chat-choice:hover,
+.chat-panel.view-menu .chat-choice:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand) 30%, #e6ddd2);
+  background: #fff;
+  box-shadow: 0 10px 24px -14px rgb(53 37 25 / 0.45);
+}
+.chat-panel .chat-choice-icon,
+.chat-panel.view-menu .chat-choice-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--v5-line);
+  background: var(--v5-warm);
+  color: var(--brand);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+/* the AI path is the primary action */
+.chat-panel.view-menu .chat-choice-ai {
+  border-color: color-mix(in srgb, var(--brand) 24%, #e6ddd2);
+  box-shadow: 0 1px 2px rgb(53 37 25 / 0.05), 0 8px 22px -16px rgb(53 37 25 / 0.55);
+}
+.chat-panel.view-menu .chat-choice-ai .chat-choice-icon {
+  background: linear-gradient(150deg,
+    var(--brand) 0%,
+    color-mix(in srgb, var(--brand) 66%, #241004) 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--brand) 80%, transparent);
+}
+.chat-panel .chat-choice-main strong,
+.chat-panel.view-menu .chat-choice-main strong {
+  font-size: 0.885rem;
+  font-weight: 650;
+  letter-spacing: -0.016em;
+  color: var(--v5-ink);
+}
+.chat-panel .chat-choice-main small,
+.chat-panel.view-menu .chat-choice-main small {
+  font-size: 0.735rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--v5-muted);
+  margin-top: 2px;
+}
+.chat-panel .chat-choice-arrow,
+.chat-panel.view-menu .chat-choice-arrow {
+  color: color-mix(in srgb, var(--brand) 34%, #b9b0a4);
+  transition: transform 0.16s var(--ease), color 0.16s var(--ease);
+}
+.chat-panel .chat-choice:hover .chat-choice-arrow {
+  transform: translateX(3px);
+  color: var(--brand);
+}
+
+/* ---------- quick start ---------- */
+.chat-panel .chat-quick,
+.chat-panel.view-menu .chat-quick { margin-top: 6px; gap: 9px; }
+.chat-panel .chat-quick-label,
+.chat-panel.view-menu .chat-quick-label {
+  font-size: 0.655rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a89c8e;
+}
+.chat-panel .chat-quick-chip,
+.chat-panel.view-menu .chat-quick-chip {
+  padding: 8px 10px;
+  border: 1px solid var(--v5-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--v5-ink);
+  font-size: 0.725rem;
+  font-weight: 550;
+  box-shadow: none;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.chat-panel .chat-quick-chip:hover,
+.chat-panel.view-menu .chat-quick-chip:hover {
+  border-color: color-mix(in srgb, var(--brand) 38%, #e6ddd2);
+  background: var(--v5-warm);
+  color: var(--brand);
+}
+
+.chat-panel .chat-privacy {
+  margin: 4px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--v5-line);
+  font-size: 0.665rem;
+  line-height: 1.5;
+  color: #a89c8e;
+}
+
+/* ---------- conversation ---------- */
+.chat-panel .chat-body {
+  background: #fffdfb;
+  padding: 18px 16px;
+  gap: 12px;
+}
+.chat-panel .chat-msg.is-theirs {
+  background: #f8f4ef;
+  border: 1px solid var(--v5-line);
+  color: var(--v5-ink);
+  border-radius: 15px 15px 15px 5px;
+  box-shadow: none;
+}
+.chat-panel .chat-msg.is-mine {
+  background: linear-gradient(150deg,
+    var(--brand) 0%,
+    color-mix(in srgb, var(--brand) 78%, #241004) 100%);
+  color: #fff;
+  border-radius: 15px 15px 5px 15px;
+  box-shadow: 0 8px 20px -12px color-mix(in srgb, var(--brand) 85%, transparent);
+}
+.chat-panel .chat-time { color: #a89c8e; opacity: 1; }
+.chat-panel .chat-msg.is-mine .chat-time { color: rgb(255 255 255 / 0.62); }
+.chat-panel .chat-avatar {
+  background: var(--v5-warm);
+  border: 1px solid var(--v5-line);
+  color: var(--brand);
+}
+.chat-panel .chat-dots span { background: color-mix(in srgb, var(--brand) 45%, #b9b0a4); }
+
+.chat-panel .chat-product {
+  border: 1px solid var(--v5-line);
+  border-radius: 13px;
+  background: #fff;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.chat-panel .chat-product:hover {
+  border-color: color-mix(in srgb, var(--brand) 34%, #e6ddd2);
+  box-shadow: 0 8px 20px -14px rgb(53 37 25 / 0.6);
+}
+.chat-panel .chat-product img,
+.chat-panel .chat-product-ph { background: var(--v5-warm); }
+.chat-panel .chat-chip {
+  border: 1px solid var(--v5-line);
+  background: var(--v5-warm);
+  color: color-mix(in srgb, var(--brand) 60%, #4a4238);
+}
+
+/* ---------- empty state / suggestions ---------- */
+.chat-panel .chat-empty-icon {
+  background: var(--v5-warm);
+  border: 1px solid var(--v5-line);
+  color: var(--brand);
+}
+.chat-panel .chat-empty strong { color: var(--v5-ink); font-weight: 650; letter-spacing: -0.02em; }
+.chat-panel .chat-empty span { color: var(--v5-muted); }
+.chat-panel .chat-suggest {
+  border: 1px solid var(--v5-line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--v5-ink);
+  font-weight: 550;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.chat-panel .chat-suggest:hover {
+  border-color: color-mix(in srgb, var(--brand) 38%, #e6ddd2);
+  background: var(--v5-warm);
+  color: var(--brand);
+}
+
+/* ---------- composer ---------- */
+.chat-panel .chat-input-row {
+  padding: 12px 14px 13px;
+  background: #fffdfb;
+  border-top: 1px solid var(--v5-line);
+}
+.chat-panel .chat-input-row input {
+  height: 44px;
+  border: 1px solid var(--v5-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--v5-ink);
+  font-size: 0.85rem;
+}
+.chat-panel .chat-input-row input::placeholder { color: #b3a89a; }
+.chat-panel .chat-input-row input:focus {
+  background: #fff;
+  border-color: color-mix(in srgb, var(--brand) 50%, #e6ddd2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 13%, transparent);
+}
+.chat-panel .chat-input-row button[type="submit"] {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(150deg,
+    var(--brand) 0%,
+    color-mix(in srgb, var(--brand) 74%, #241004) 100%);
+  color: #fff;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--brand) 80%, transparent);
+  transition: filter 0.16s var(--ease), transform 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+.chat-panel .chat-input-row button[type="submit"]:hover:not(:disabled) { filter: brightness(1.08); }
+.chat-panel .chat-input-row button[type="submit"]:active:not(:disabled) { transform: scale(0.94); }
+.chat-panel .chat-input-row button[type="submit"]:disabled { opacity: 0.32; box-shadow: none; }
+.chat-panel .chat-end { color: #a89c8e; }
+.chat-panel .chat-end:hover { color: #a8402a; }
+
+/* ---------- sign-in ---------- */
+.chat-panel .chat-signin-title { color: var(--v5-ink); }
+.chat-panel .chat-signin p,
+.chat-panel .chat-note { color: var(--v5-muted); }
+.chat-panel .chat-signin-btn {
+  border-radius: 999px;
+  background: linear-gradient(150deg, var(--brand), color-mix(in srgb, var(--brand) 74%, #241004));
+  color: #fff;
+  box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--brand) 80%, transparent);
+}
+
+/* ---------- launcher ---------- */
+.chat-launcher-anchor .chat-fab {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(150deg, var(--brand), color-mix(in srgb, var(--brand) 68%, #241004));
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow:
+    0 2px 4px rgb(53 37 25 / 0.16),
+    0 14px 30px -10px color-mix(in srgb, var(--brand) 75%, transparent);
+}
+.chat-launcher-anchor .chat-fab:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.chat-launcher-anchor .chat-fab-label {
+  border: 1px solid var(--v5-line);
+  color: var(--v5-ink);
+  box-shadow: 0 6px 18px -10px rgb(53 37 25 / 0.5);
+}
+
+@media (max-width: 420px) {
+  .chat-panel .chat-hero strong,
+  .chat-panel.view-menu .chat-hero strong { font-size: 1.3rem; }
+  .chat-panel .chat-menu,
+  .chat-panel.view-menu .chat-menu { padding: 14px 13px 12px; }
+}
+
+/* =====================================================================
+   Chat v6 - uniform panel size + fully brand-driven colour
+   1. Every view (menu / admin / ai) uses ONE height, so the panel never
+      jumps when you switch modes. Overflow scrolls inside.
+   2. All remaining hardcoded warm/green values in the earlier chat
+      layers are replaced with tokens derived from --brand, so changing
+      the primary colour in Admin -> Theme recolours the chat too.
+   ===================================================================== */
+.chat-panel {
+  --c-accent: var(--brand);
+  --c-accent-deep: var(--brand-dark, color-mix(in srgb, var(--brand) 75%, #000));
+  --c-surface: color-mix(in srgb, var(--brand) 2.5%, #ffffff);
+  --c-surface-2: color-mix(in srgb, var(--brand) 6%, #ffffff);
+  --c-surface-3: color-mix(in srgb, var(--brand) 10%, #ffffff);
+  --c-line: color-mix(in srgb, var(--brand) 13%, #eeeae4);
+  --c-line-strong: color-mix(in srgb, var(--brand) 26%, #ded8cf);
+  --c-ink: color-mix(in srgb, var(--brand) 30%, #1c1815);
+  --c-ink-2: color-mix(in srgb, var(--brand) 42%, #494138);
+  --c-muted: color-mix(in srgb, var(--brand) 34%, #7c7368);
+  --c-faint: color-mix(in srgb, var(--brand) 26%, #a89f93);
+
+  /* one height for every view */
+  --chat-h: min(86vh, 660px);
+
+  height: var(--chat-h);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-surface);
+  border: 1px solid var(--c-line);
+}
+
+/* ---------- fixed regions ---------- */
+.chat-panel .chat-head,
+.chat-panel .chat-head.is-hero,
+.chat-panel.view-menu .chat-head.is-hero {
+  flex: 0 0 auto;
+  background:
+    radial-gradient(130% 120% at 88% -30%, rgb(255 255 255 / 0.20) 0%, transparent 55%),
+    linear-gradient(152deg,
+      var(--c-accent) 0%,
+      var(--c-accent-deep) 62%,
+      color-mix(in srgb, var(--c-accent-deep) 70%, #000) 100%);
+}
+.chat-panel .chat-head-row { flex: 0 0 auto; }
+
+.chat-panel .chat-input-row,
+.chat-panel .chat-end,
+.chat-panel .chat-wide-btn { flex: 0 0 auto; }
+
+/* ---------- menu fills the height, privacy pinned to the bottom ---------- */
+.chat-panel.view-menu { height: var(--chat-h); max-height: none; }
+.chat-panel .chat-menu,
+.chat-panel.view-menu .chat-menu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  background: var(--c-surface);
+}
+.chat-panel .chat-privacy,
+.chat-panel.view-menu .chat-privacy {
+  margin-top: auto;
+  padding-top: 13px;
+  border-top: 1px solid var(--c-line);
+  color: var(--c-faint);
+}
+.chat-panel .chat-quick,
+.chat-panel.view-menu .chat-quick { flex: 0 0 auto; }
+
+/* ---------- conversation body scrolls between the fixed regions ---------- */
+.chat-panel .chat-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--c-surface);
+}
+.chat-panel .chat-suggest-wrap { flex: 1 1 auto; }
+.chat-panel .chat-signin {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: transparent;
+  justify-content: center;
+}
+
+/* ---------- kill leftover hardcoded colours from earlier layers ---------- */
+.chat-panel .chat-choice,
+.chat-panel.view-menu .chat-choice {
+  border-color: var(--c-line);
+  background: #fff;
+}
+.chat-panel .chat-choice:hover,
+.chat-panel.view-menu .chat-choice:hover {
+  border-color: var(--c-line-strong);
+  background: var(--c-surface-2);
+}
+.chat-panel.view-menu .chat-choice:hover {
+  background: var(--c-surface-2);
+  border-color: var(--c-line-strong);
+  box-shadow: 0 10px 24px -16px rgb(var(--brand-rgb, 0 0 0) / 0.55);
+}
+.chat-panel.view-menu .chat-choice-ai {
+  border-color: color-mix(in srgb, var(--c-accent) 26%, var(--c-line));
+}
+.chat-panel .chat-choice-icon,
+.chat-panel.view-menu .chat-choice-icon {
+  background: var(--c-surface-3);
+  border-color: var(--c-line);
+  color: var(--c-accent);
+}
+.chat-panel.view-menu .chat-choice-ai .chat-choice-icon {
+  background: linear-gradient(150deg, var(--c-accent) 0%, var(--c-accent-deep) 100%);
+  border-color: transparent;
+  color: var(--brand-contrast, #fff);
+  box-shadow: 0 6px 14px -8px rgb(var(--brand-rgb, 0 0 0) / 0.75);
+}
+.chat-panel .chat-choice-main strong,
+.chat-panel.view-menu .chat-choice-main strong { color: var(--c-ink); }
+.chat-panel .chat-choice-main small,
+.chat-panel.view-menu .chat-choice-main small { color: var(--c-muted); }
+.chat-panel .chat-choice-arrow,
+.chat-panel.view-menu .chat-choice-arrow {
+  color: var(--c-faint);
+  background: transparent;
+}
+.chat-panel .chat-choice:hover .chat-choice-arrow,
+.chat-panel.view-menu .chat-choice:hover .chat-choice-arrow {
+  color: var(--c-accent);
+  background: transparent;
+}
+
+.chat-panel .chat-quick-label,
+.chat-panel.view-menu .chat-quick-label { color: var(--c-faint); }
+.chat-panel .chat-quick-chip,
+.chat-panel.view-menu .chat-quick-chip {
+  border-color: var(--c-line);
+  background: #fff;
+  color: var(--c-ink);
+}
+.chat-panel .chat-quick-chip:hover,
+.chat-panel.view-menu .chat-quick-chip:hover {
+  border-color: var(--c-line-strong);
+  background: var(--c-surface-3);
+  color: var(--c-accent);
+}
+
+/* focus rings follow the brand instead of a fixed brown */
+.chat-panel :is(.chat-choice, .chat-quick-chip, .chat-suggest, .chat-close, .chat-back, .chat-input-row button, .trb-badge):focus-visible,
+.chat-panel.view-menu :is(.chat-choice, .chat-quick-chip, .chat-close):focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* body / empty / suggestions / chips */
+.chat-panel .chat-empty strong { color: var(--c-ink); }
+.chat-panel .chat-empty span { color: var(--c-muted); }
+.chat-panel .chat-empty-icon {
+  background: var(--c-surface-3);
+  border-color: var(--c-line);
+  color: var(--c-accent);
+}
+.chat-panel .chat-suggest {
+  border-color: var(--c-line);
+  background: #fff;
+  color: var(--c-ink);
+}
+.chat-panel .chat-suggest:hover {
+  border-color: var(--c-line-strong);
+  background: var(--c-surface-3);
+  color: var(--c-accent);
+}
+.chat-panel .chat-msg.is-theirs {
+  background: var(--c-surface-2);
+  border-color: var(--c-line);
+  color: var(--c-ink);
+}
+.chat-panel .chat-msg.is-mine {
+  background: linear-gradient(150deg, var(--c-accent) 0%, var(--c-accent-deep) 100%);
+  color: var(--brand-contrast, #fff);
+  box-shadow: 0 8px 20px -12px rgb(var(--brand-rgb, 0 0 0) / 0.85);
+}
+.chat-panel .chat-msg.is-mine .chat-time { color: rgb(255 255 255 / 0.62); }
+.chat-panel .chat-time { color: var(--c-faint); }
+.chat-panel .chat-avatar {
+  background: var(--c-surface-3);
+  border-color: var(--c-line);
+  color: var(--c-accent);
+}
+.chat-panel .chat-dots span { background: var(--c-faint); }
+.chat-panel .chat-chip,
+.chat-panel .chat-chip-color {
+  background: var(--c-surface-3);
+  border-color: var(--c-line);
+  color: var(--c-ink-2);
+}
+.chat-panel .chat-product {
+  border-color: var(--c-line);
+  background: #fff;
+}
+.chat-panel .chat-product:hover { border-color: var(--c-line-strong); }
+.chat-panel .chat-product img,
+.chat-panel .chat-product-ph { background: var(--c-surface-3); }
+.chat-panel .chat-product-price { color: var(--c-accent); }
+
+/* composer */
+.chat-panel .chat-input-row {
+  background: var(--c-surface);
+  border-top-color: var(--c-line);
+}
+.chat-panel .chat-input-row input {
+  background: #fff;
+  border-color: var(--c-line);
+  color: var(--c-ink);
+}
+.chat-panel .chat-input-row input::placeholder { color: var(--c-faint); }
+.chat-panel .chat-input-row input:focus {
+  border-color: var(--c-line-strong);
+  box-shadow: 0 0 0 3px rgb(var(--brand-rgb, 0 0 0) / 0.12);
+}
+.chat-panel .chat-input-row button[type="submit"] {
+  background: linear-gradient(150deg, var(--c-accent) 0%, var(--c-accent-deep) 100%);
+  color: var(--brand-contrast, #fff);
+  box-shadow: 0 8px 18px -10px rgb(var(--brand-rgb, 0 0 0) / 0.8);
+}
+.chat-panel .chat-end { color: var(--c-faint); }
+.chat-panel .chat-signin-btn {
+  background: linear-gradient(150deg, var(--c-accent), var(--c-accent-deep));
+  color: var(--brand-contrast, #fff);
+}
+
+/* ---------- ChatUpdates popup: was hardcoded brown ---------- */
+.chat-update {
+  background: var(--c-surface, color-mix(in srgb, var(--brand) 2.5%, #fff));
+  border-color: color-mix(in srgb, var(--brand) 16%, #e8e2da);
+  color: var(--c-ink, #2a231d);
+}
+.chat-update-icon {
+  background: color-mix(in srgb, var(--brand) 10%, #fff);
+  color: var(--brand);
+}
+.chat-update-label { color: color-mix(in srgb, var(--brand) 30%, #8b8279); }
+.chat-update-title { color: color-mix(in srgb, var(--brand) 55%, #2a231d); }
+.chat-update-title:focus-visible { outline-color: var(--brand); }
+.chat-update-copy p { color: color-mix(in srgb, var(--brand) 40%, #4a443c); }
+.chat-update-copy small { color: color-mix(in srgb, var(--brand) 28%, #9a9188); }
+.chat-update-dismiss:hover {
+  background: color-mix(in srgb, var(--brand) 10%, #fff);
+  color: var(--brand);
+}
+.chat-update-dismiss:focus-visible { outline-color: var(--brand); }
+.chat-update-tooltip::after {
+  background: color-mix(in srgb, var(--brand) 3%, #fff);
+  border-color: color-mix(in srgb, var(--brand) 24%, #ddd4c8);
+}
+.chat-update-tooltip .chat-update-label { color: color-mix(in srgb, var(--brand) 42%, #6b6055); }
+.chat-update-tooltip .chat-update-title { color: color-mix(in srgb, var(--brand) 62%, #1f1a16); }
+.chat-update-tooltip .chat-update-copy p { color: color-mix(in srgb, var(--brand) 38%, #443d36); }
+.chat-update-tooltip .chat-update-dismiss { color: color-mix(in srgb, var(--brand) 38%, #6b6055); }
+
+/* ---------- launcher ---------- */
+.chat-launcher-anchor .chat-fab {
+  background: linear-gradient(150deg, var(--c-accent, var(--brand)), var(--c-accent-deep, var(--brand-dark)));
+  color: var(--brand-contrast, #fff);
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.16),
+    0 14px 30px -10px rgb(var(--brand-rgb, 0 0 0) / 0.7);
+}
+.chat-launcher-anchor .chat-fab-label {
+  border-color: color-mix(in srgb, var(--brand) 14%, #e8e2da);
+  color: color-mix(in srgb, var(--brand) 45%, #2a231d);
+}
+
+/* ---------- sizing on small screens ---------- */
+@media (max-width: 760px) {
+  .chat-panel { --chat-h: min(78dvh, 600px); }
+}
+@media (max-width: 420px) {
+  .chat-panel { --chat-h: min(76dvh, 560px); }
+}
+
+/* =====================================================================
+   Chat v7 - compact pass
+   The panel read too large: shorter frame, tighter header, denser cards,
+   smaller type. Everything still derives from --brand.
+   ===================================================================== */
+.chat-panel {
+  --chat-h: min(76vh, 566px);
+  border-radius: 20px;
+}
+
+/* ---------- header ---------- */
+.chat-panel .chat-head,
+.chat-panel .chat-head.is-hero,
+.chat-panel.view-menu .chat-head.is-hero { padding: 12px 14px 13px; }
+.chat-panel.view-menu .chat-head.is-hero { padding: 13px 14px 14px; }
+
+.chat-panel .chat-head-avatar,
+.chat-panel.view-menu .chat-head-avatar {
+  width: 29px;
+  height: 29px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.chat-panel .chat-head-row { gap: 9px; }
+.chat-panel .chat-head-text strong,
+.chat-panel.view-menu .chat-head-text strong {
+  font-size: 0.855rem;
+  letter-spacing: -0.014em;
+}
+.chat-panel .chat-head-text small,
+.chat-panel.view-menu .chat-head-text small {
+  font-size: 0.665rem;
+  margin-top: 1px;
+}
+.chat-panel .chat-head-text small::before {
+  width: 4px;
+  height: 4px;
+  margin-right: 5px;
+}
+.chat-panel .chat-back,
+.chat-panel .chat-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.chat-panel .trb-badge {
+  padding: 2px 6px;
+  font-size: 0.55rem;
+  gap: 3px;
+}
+.chat-panel .trb-icon { width: 8px; height: 8px; }
+
+/* ---------- greeting, dialled back ---------- */
+.chat-panel .chat-hero,
+.chat-panel.view-menu .chat-hero { margin-top: 11px; gap: 2px; }
+.chat-panel .chat-hero strong,
+.chat-panel.view-menu .chat-hero strong {
+  font-size: 1.16rem;
+  letter-spacing: -0.008em;
+  line-height: 1.18;
+}
+.chat-panel .chat-hero span,
+.chat-panel.view-menu .chat-hero span { font-size: 0.725rem; line-height: 1.45; }
+
+/* ---------- menu ---------- */
+.chat-panel .chat-menu,
+.chat-panel.view-menu .chat-menu {
+  padding: 12px 12px 10px;
+  gap: 8px;
+}
+.chat-panel .chat-choice,
+.chat-panel.view-menu .chat-choice {
+  padding: 10px 11px;
+  gap: 10px;
+  border-radius: 13px;
+}
+.chat-panel .chat-choice-icon,
+.chat-panel.view-menu .chat-choice-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.chat-panel .chat-choice-main strong,
+.chat-panel.view-menu .chat-choice-main strong {
+  font-size: 0.835rem;
+  letter-spacing: -0.012em;
+}
+.chat-panel .chat-choice-main small,
+.chat-panel.view-menu .chat-choice-main small {
+  font-size: 0.695rem;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.chat-panel .chat-choice-arrow,
+.chat-panel.view-menu .chat-choice-arrow { font-size: 14px; }
+
+/* ---------- quick start ---------- */
+.chat-panel .chat-quick,
+.chat-panel.view-menu .chat-quick { margin-top: 4px; gap: 7px; }
+.chat-panel .chat-quick-label,
+.chat-panel.view-menu .chat-quick-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.09em;
+}
+.chat-panel .chat-quick-list,
+.chat-panel.view-menu .chat-quick-list { gap: 6px; }
+.chat-panel .chat-quick-chip,
+.chat-panel.view-menu .chat-quick-chip {
+  padding: 6px 9px;
+  font-size: 0.685rem;
+}
+
+/* ---------- privacy line: small, and the void above it shrinks ---------- */
+.chat-panel .chat-privacy,
+.chat-panel.view-menu .chat-privacy {
+  font-size: 0.615rem;
+  padding-top: 9px;
+  gap: 5px;
+}
+.chat-panel .chat-privacy svg { width: 9px; height: 9px; }
+
+/* ---------- conversation ---------- */
+.chat-panel .chat-body { padding: 13px 12px; gap: 9px; }
+.chat-panel .chat-msg {
+  font-size: 0.83rem;
+  line-height: 1.5;
+  padding: 8px 11px;
+  border-radius: 13px;
+}
+.chat-panel .chat-msg.is-theirs { border-radius: 13px 13px 13px 4px; }
+.chat-panel .chat-msg.is-mine { border-radius: 13px 13px 4px 13px; }
+.chat-panel .chat-time { font-size: 0.6rem; margin-top: 3px; }
+.chat-panel .chat-row { gap: 7px; }
+.chat-panel .chat-avatar { width: 23px; height: 23px; border-radius: 7px; font-size: 11px; }
+.chat-panel .chat-product { padding: 6px; gap: 9px; border-radius: 11px; }
+.chat-panel .chat-product img,
+.chat-panel .chat-product-ph { width: 38px; height: 46px; border-radius: 7px; }
+.chat-panel .chat-product-name { font-size: 0.755rem; }
+.chat-panel .chat-product-price { font-size: 0.735rem; }
+.chat-panel .chat-chip { font-size: 0.59rem; padding: 1px 6px; }
+.chat-panel .chat-empty { padding: 6px 4px; gap: 4px; }
+.chat-panel .chat-empty-icon { width: 34px; height: 34px; border-radius: 10px; font-size: 15px; }
+.chat-panel .chat-empty strong { font-size: 0.89rem; }
+.chat-panel .chat-empty span { font-size: 0.735rem; line-height: 1.5; }
+.chat-panel .chat-suggest { padding: 7px 10px; font-size: 0.715rem; }
+
+/* ---------- composer ---------- */
+.chat-panel .chat-input-row { padding: 9px 11px 10px; gap: 7px; }
+.chat-panel .chat-input-row input {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 0.815rem;
+}
+.chat-panel .chat-input-row button[type="submit"] {
+  width: 38px;
+  height: 38px;
+  font-size: 14px;
+}
+.chat-panel .chat-end {
+  padding: 6px 0 9px;
+  font-size: 0.685rem;
+}
+.chat-panel .chat-wide-btn { height: 36px; font-size: 0.765rem; border-radius: 10px; }
+
+/* ---------- launcher slightly smaller too ---------- */
+.chat-launcher-anchor .chat-fab { width: 50px; height: 50px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 760px) {
+  .chat-panel { --chat-h: min(72dvh, 540px); }
+}
+@media (max-width: 420px) {
+  .chat-panel { --chat-h: min(70dvh, 510px); }
+  .chat-panel .chat-hero strong,
+  .chat-panel.view-menu .chat-hero strong { font-size: 1.08rem; }
+}
+
+/* =====================================================================
+   Admin - Settings & theme : "Chat & AI" tab
+   Minimal, premium treatment for the AI Assistant card. Scoped to
+   .card.ai-settings so no other admin card is affected.
+   ===================================================================== */
+.card.ai-settings {
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgb(16 24 20 / 0.04);
+  padding: 1.15rem 1.25rem 1.25rem;
+}
+
+/* header: hairline rule under title + status pill on the right */
+.card.ai-settings .card-header {
+  align-items: center;
+  margin-bottom: 0;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--line-2, var(--line));
+}
+.card.ai-settings .card-title {
+  font-size: 0.98rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+.card.ai-settings .card-subtitle {
+  font-size: 0.775rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+  line-height: 1.45;
+}
+
+/* the owner credit is a real link */
+.ai-owner {
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+  padding-bottom: 1px;
+  transition: color 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+.ai-owner:hover {
+  color: var(--brand-dark, var(--brand));
+  border-bottom-color: var(--brand);
+}
+.ai-owner:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.ai-owner-arrow {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.72em;
+  opacity: 0.72;
+  transform: translateY(-1px);
+}
+.ai-owner:hover .ai-owner-arrow { opacity: 1; }
+
+/* status: dot + badge, quiet */
+.ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ai-status .badge {
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 3px 9px;
+}
+.ai-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+/* fields: looser rhythm, quieter labels and hints */
+.card.ai-settings form.stack {
+  gap: 0;
+}
+.card.ai-settings .field {
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--line-2, var(--line));
+}
+.card.ai-settings .field:last-of-type { border-bottom: 0; padding-bottom: 0.35rem; }
+.card.ai-settings .field-label {
+  font-size: 0.735rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--ink-2, var(--ink));
+  margin-bottom: 0.4rem;
+}
+.card.ai-settings .input {
+  font-size: 0.85rem;
+  border-radius: 10px;
+  border-color: var(--line);
+  background: var(--surface, #fff);
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.card.ai-settings .input:focus {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 12%, transparent);
+  outline: none;
+}
+.card.ai-settings .field-hint {
+  font-size: 0.715rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-top: 0.4rem;
+}
+.card.ai-settings .field-error { font-size: 0.72rem; }
+
+/* action bar */
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-2, var(--line));
+}
+.ai-actions .btn,
+.ai-actions button {
+  border-radius: 9px;
+  font-size: 0.81rem;
+  font-weight: 600;
+}
+.card.ai-settings .ai-remove {
+  margin-left: auto;
+  color: var(--danger, #b42318);
+  opacity: 0.85;
+}
+.card.ai-settings .ai-remove:hover {
+  opacity: 1;
+  background: var(--danger-soft, #fdecea);
+}
+
+@media (max-width: 560px) {
+  .card.ai-settings { padding: 1rem; }
+  .card.ai-settings .card-header { align-items: flex-start; gap: 0.6rem; }
+  .card.ai-settings .ai-remove { margin-left: 0; }
+}
+
+/* =====================================================================
+   Chat v8 - true chatbox proportions
+   Shorter, narrower frame and, most importantly, dense message
+   typography: markdown lists/paragraphs inside a reply previously kept
+   their default margins, which ballooned long answers (e.g. the size
+   charts) into a multi-screen wall. Still fully --brand driven.
+   ===================================================================== */
+.chat-panel {
+  --chat-h: min(72vh, 520px);
+  width: min(340px, calc(100vw - 24px));
+  border-radius: 18px;
+}
+
+/* ---------- header ---------- */
+.chat-panel .chat-head,
+.chat-panel .chat-head.is-hero,
+.chat-panel.view-menu .chat-head.is-hero { padding: 10px 12px 11px; }
+.chat-panel.view-menu .chat-head.is-hero { padding: 11px 12px 12px; }
+.chat-panel .chat-head-row { gap: 8px; }
+.chat-panel .chat-head-avatar,
+.chat-panel.view-menu .chat-head-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.chat-panel .chat-head-text strong,
+.chat-panel.view-menu .chat-head-text strong { font-size: 0.805rem; }
+.chat-panel .chat-head-text small,
+.chat-panel.view-menu .chat-head-text small { font-size: 0.635rem; }
+.chat-panel .chat-back,
+.chat-panel .chat-close { width: 24px; height: 24px; border-radius: 7px; font-size: 12px; }
+.chat-panel .trb-badge { padding: 2px 5px; font-size: 0.5rem; gap: 2px; letter-spacing: 0.07em; }
+.chat-panel .trb-icon { width: 7px; height: 7px; }
+.chat-panel .chat-hero,
+.chat-panel.view-menu .chat-hero { margin-top: 9px; gap: 1px; }
+.chat-panel .chat-hero strong,
+.chat-panel.view-menu .chat-hero strong { font-size: 1.06rem; line-height: 1.15; }
+.chat-panel .chat-hero span,
+.chat-panel.view-menu .chat-hero span { font-size: 0.69rem; line-height: 1.4; }
+
+/* ---------- menu ---------- */
+.chat-panel .chat-menu,
+.chat-panel.view-menu .chat-menu { padding: 10px 10px 8px; gap: 7px; }
+.chat-panel .chat-choice,
+.chat-panel.view-menu .chat-choice { padding: 9px 10px; gap: 9px; border-radius: 12px; }
+.chat-panel .chat-choice-icon,
+.chat-panel.view-menu .chat-choice-icon { width: 29px; height: 29px; border-radius: 9px; font-size: 13px; }
+.chat-panel .chat-choice-main strong,
+.chat-panel.view-menu .chat-choice-main strong { font-size: 0.8rem; }
+.chat-panel .chat-choice-main small,
+.chat-panel.view-menu .chat-choice-main small { font-size: 0.665rem; }
+.chat-panel .chat-quick,
+.chat-panel.view-menu .chat-quick { margin-top: 2px; gap: 6px; }
+.chat-panel .chat-quick-list,
+.chat-panel.view-menu .chat-quick-list { gap: 5px; }
+.chat-panel .chat-quick-chip,
+.chat-panel.view-menu .chat-quick-chip { padding: 5px 8px; font-size: 0.655rem; }
+.chat-panel .chat-quick-label,
+.chat-panel.view-menu .chat-quick-label { font-size: 0.565rem; }
+.chat-panel .chat-privacy,
+.chat-panel.view-menu .chat-privacy { font-size: 0.575rem; padding-top: 7px; }
+
+/* ---------- conversation: the real win ---------- */
+.chat-panel .chat-body { padding: 10px 10px; gap: 7px; }
+.chat-panel .chat-row { gap: 6px; }
+.chat-panel .chat-avatar { width: 20px; height: 20px; border-radius: 6px; font-size: 10px; }
+
+.chat-panel .chat-msg {
+  font-size: 0.79rem;
+  line-height: 1.42;
+  padding: 7px 10px;
+  border-radius: 12px;
+  max-width: 88%;
+}
+.chat-panel .chat-msg.is-theirs { border-radius: 12px 12px 12px 4px; }
+.chat-panel .chat-msg.is-mine { border-radius: 12px 12px 4px 12px; }
+
+/* markdown inside a reply - kill the default rhythm that made it huge */
+.chat-panel .chat-msg :is(p, ul, ol, h1, h2, h3, h4, blockquote) {
+  margin: 0;
+  padding-left: 0;
+}
+.chat-panel .chat-msg :is(p, ul, ol, h1, h2, h3, h4, blockquote) + :is(p, ul, ol, h1, h2, h3, h4, blockquote) {
+  margin-top: 5px;
+}
+.chat-panel .chat-msg :is(ul, ol) { padding-left: 14px; }
+.chat-panel .chat-msg li { margin: 0; line-height: 1.4; }
+.chat-panel .chat-msg li + li { margin-top: 2px; }
+.chat-panel .chat-msg :is(h1, h2, h3, h4) {
+  font-size: 0.805rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.chat-panel .chat-msg strong { font-weight: 650; }
+.chat-panel .chat-msg code {
+  font-size: 0.735rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.chat-panel .chat-time { font-size: 0.565rem; margin-top: 2px; }
+
+/* product cards + chips in a reply */
+.chat-panel .chat-products { gap: 5px; margin-top: 6px; }
+.chat-panel .chat-product { padding: 5px; gap: 8px; border-radius: 9px; }
+.chat-panel .chat-product img,
+.chat-panel .chat-product-ph { width: 32px; height: 39px; border-radius: 6px; }
+.chat-panel .chat-product-name { font-size: 0.72rem; }
+.chat-panel .chat-product-price { font-size: 0.7rem; }
+.chat-panel .chat-chip { font-size: 0.55rem; padding: 1px 5px; }
+
+/* empty / suggestions */
+.chat-panel .chat-empty { padding: 4px 2px; gap: 3px; }
+.chat-panel .chat-empty-icon { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; }
+.chat-panel .chat-empty strong { font-size: 0.845rem; }
+.chat-panel .chat-empty span { font-size: 0.7rem; line-height: 1.45; }
+.chat-panel .chat-suggest { padding: 6px 9px; font-size: 0.685rem; }
+.chat-panel .chat-suggest-wrap { gap: 6px; }
+
+/* ---------- composer ---------- */
+.chat-panel .chat-input-row { padding: 8px 10px 9px; gap: 6px; }
+.chat-panel .chat-input-row input { height: 36px; padding: 0 13px; font-size: 0.79rem; }
+.chat-panel .chat-input-row button[type="submit"] { width: 36px; height: 36px; font-size: 13px; }
+.chat-panel .chat-end { padding: 4px 0 7px; font-size: 0.66rem; }
+.chat-panel .chat-wide-btn { height: 34px; font-size: 0.74rem; border-radius: 9px; }
+
+/* ---------- launcher ---------- */
+.chat-launcher-anchor .chat-fab { width: 46px; height: 46px; }
+.chat-launcher-anchor .chat-fab svg { width: 21px; height: 21px; }
+.chat-launcher-anchor .chat-fab-label { font-size: 0.7rem; padding: 6px 10px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 760px) {
+  .chat-panel { --chat-h: min(68dvh, 500px); width: min(336px, calc(100vw - 20px)); }
+}
+@media (max-width: 420px) {
+  .chat-panel { --chat-h: min(66dvh, 480px); width: calc(100vw - 20px); }
+}
+
+/* =====================================================================
+   Chat v9 - one viewport-proof size for desktop AND phone
+   The panel is fixed-positioned, so every dimension must be expressed
+   against the viewport (dvh, not vh) and clamped so it can never run
+   off-screen behind the launcher or the mobile browser chrome.
+   ===================================================================== */
+.chat-panel.chat-panel {
+  /* width: comfortable on desktop, edge-to-edge (with a margin) on phones */
+  --chat-w: min(360px, calc(100vw - 24px));
+  /* height: never taller than the viewport minus the launcher + margins */
+  --chat-h: min(560px, calc(100dvh - 116px));
+
+  position: fixed;
+  right: 12px;
+  bottom: 84px;
+  z-index: 130;
+  width: var(--chat-w);
+  height: var(--chat-h);
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 96px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* short viewports (landscape phones, small laptops) - keep it usable */
+@media (max-height: 640px) {
+  .chat-panel.chat-panel { --chat-h: calc(100dvh - 108px); bottom: 76px; }
+}
+@media (max-height: 520px) {
+  .chat-panel.chat-panel { --chat-h: calc(100dvh - 92px); bottom: 68px; }
+}
+
+/* phones: full width sheet, still leaving room for the launcher */
+@media (max-width: 760px) {
+  .chat-panel.chat-panel {
+    --chat-w: calc(100vw - 20px);
+    --chat-h: min(76dvh, 560px);
+    right: 10px;
+    bottom: 78px;
+    border-radius: 18px;
+  }
+}
+@media (max-width: 420px) {
+  .chat-panel.chat-panel {
+    --chat-w: calc(100vw - 16px);
+    --chat-h: min(74dvh, 540px);
+    right: 8px;
+    bottom: 74px;
+  }
+}
+
+/* ---------- the empty band under the chips ---------- */
+/* Distribute leftover space instead of dumping it all above the privacy
+   line: the menu block is vertically centred, so short content at a tall
+   panel height reads as intentional whitespace at both ends. */
+.chat-panel .chat-menu,
+.chat-panel.view-menu .chat-menu {
+  justify-content: center;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.chat-panel .chat-privacy,
+.chat-panel.view-menu .chat-privacy { margin-top: 0; }
+
+/* ---------- keep the launcher clear of the panel on phones ---------- */
+@media (max-width: 760px) {
+  .chat-launcher-anchor { bottom: 0; }
+  .chat-launcher-anchor .chat-fab { width: 48px; height: 48px; }
+}
+
+/* =====================================================================
+   Chat v10 - keep the launcher clear of the mobile bottom nav
+   v9 set .chat-launcher-anchor { bottom: 0 } on phones, which dropped the
+   FAB on top of the Cart item in the 68px .mobile-bottom-nav. Restore the
+   correct offsets (nav height + safe-area inset + gap) and lift the panel
+   above the FAB so nothing overlaps.
+   ===================================================================== */
+
+/* desktop: launcher bottom 20px, panel clears it */
+.chat-panel.chat-panel { bottom: 88px; }
+
+@media (max-width: 760px) {
+  /* nav is 68px tall (+ iOS home-indicator inset); sit 16px above it */
+  .chat-launcher-anchor {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 16px);
+    right: 14px;
+    width: 48px;
+    height: 48px;
+  }
+
+  /* panel sits above the launcher, never over the nav */
+  .chat-panel.chat-panel {
+    --chat-h: min(72dvh, 540px);
+    right: 10px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 16px + 48px + 12px);
+    max-height: calc(100dvh - (68px + env(safe-area-inset-bottom, 0px) + 96px));
+  }
+}
+
+@media (max-width: 760px) and (max-height: 620px) {
+  /* landscape phones: shrink the panel rather than overlap the nav */
+  .chat-panel.chat-panel { --chat-h: calc(100dvh - (68px + env(safe-area-inset-bottom, 0px) + 92px)); }
+}
+
+@media (max-width: 420px) {
+  .chat-launcher-anchor {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 14px);
+    right: 12px;
+    width: 46px;
+    height: 46px;
+  }
+  .chat-panel.chat-panel {
+    --chat-w: calc(100vw - 16px);
+    --chat-h: min(70dvh, 520px);
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 14px + 46px + 12px);
+    max-height: calc(100dvh - (68px + env(safe-area-inset-bottom, 0px) + 92px));
+  }
+}
+
+/* the launcher must win the paint order over the panel */
+.chat-launcher-anchor { z-index: 140; }
+
+/* ---------- final guard: outrank every earlier launcher/panel rule ---------- */
+body .chat-launcher-anchor {
+  z-index: 140;
+  bottom: max(20px, calc(68px + env(safe-area-inset-bottom, 0px) + 16px));
+}
+@media (max-width: 760px) {
+  body .chat-launcher-anchor {
+    right: 14px;
+    width: 48px;
+    height: 48px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  body .chat-panel.chat-panel {
+    --chat-h: min(72dvh, 540px);
+    right: 10px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 76px);
+    max-height: calc(100dvh - (68px + env(safe-area-inset-bottom, 0px) + 92px));
+  }
+}
+@media (max-width: 420px) {
+  body .chat-launcher-anchor {
+    right: 12px;
+    width: 46px;
+    height: 46px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 14px);
+  }
+  body .chat-panel.chat-panel {
+    --chat-w: calc(100vw - 16px);
+    --chat-h: min(70dvh, 520px);
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 72px);
+    max-height: calc(100dvh - (68px + env(safe-area-inset-bottom, 0px) + 88px));
+  }
+}
+
+/* =====================================================================
+   Cart drawer - swipe-to-dismiss affordance
+   A grab handle at the top makes the gesture discoverable; it only
+   appears on touch-sized screens where the gesture exists.
+   ===================================================================== */
+.drawer-grip {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .drawer .drawer-grip {
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 7px auto 1px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 18%, transparent);
+    flex: 0 0 auto;
+    touch-action: none;
+  }
+  /* the header is the swipe zone - don't let the browser pan it */
+  .drawer .drawer-head { touch-action: pan-y; }
+  .drawer { overscroll-behavior: contain; }
+}
+
+/* =====================================================================
+   Chat v11 - correct desktop corner anchoring
+   v10's guard applied the mobile-nav offset (68px + 16px) at every
+   width, so on desktop the launcher sat at 84px and overlapped the
+   panel's bottom edge. Desktop now pins the launcher to the true corner
+   and stacks the panel directly above it.
+   ===================================================================== */
+
+@media (min-width: 761px) {
+  body .chat-launcher-anchor {
+    right: 20px;
+    bottom: 20px;
+    width: 56px;
+    height: 56px;
+    z-index: 140;
+  }
+  body .chat-panel.chat-panel {
+    right: 20px;
+    bottom: 88px;
+    --chat-w: min(360px, calc(100vw - 40px));
+    --chat-h: min(560px, calc(100dvh - 112px));
+    max-height: calc(100dvh - 112px);
+  }
+}
+
+@media (min-width: 761px) and (max-height: 700px) {
+  body .chat-panel.chat-panel {
+    --chat-h: calc(100dvh - 108px);
+    bottom: 84px;
+  }
+}
+
+@media (max-width: 760px) {
+  body .chat-launcher-anchor {
+    right: 14px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 16px);
+    width: 48px;
+    height: 48px;
+  }
+}
+@media (max-width: 420px) {
+  body .chat-launcher-anchor {
+    right: 12px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 14px);
+    width: 46px;
+    height: 46px;
+  }
+}
+
+/* =====================================================================
+   Admin AI card - chatbot connection panel
+   A connection summary strip (provider tile, state, inline Test) plus an
+   Advanced disclosure for the endpoint/model, so the default view reads
+   like an integration card rather than a settings form.
+   ===================================================================== */
+.card.ai-settings .ai-conn-strip {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0.9rem 0 0.15rem;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--brand) 14%, var(--line));
+  border-radius: 13px;
+  background:
+    radial-gradient(120% 140% at 4% -20%, color-mix(in srgb, var(--brand) 8%, transparent) 0%, transparent 62%),
+    color-mix(in srgb, var(--brand) 2.5%, #fff);
+}
+.card.ai-settings .ai-conn-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--brand-contrast, #fff);
+  background: linear-gradient(150deg, var(--brand) 0%, var(--brand-dark, var(--brand)) 100%);
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--brand) 80%, transparent);
+}
+.card.ai-settings .ai-conn-icon svg { width: 17px; height: 17px; }
+.card.ai-settings .ai-conn-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.card.ai-settings .ai-conn-main strong {
+  font-size: 0.845rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+}
+.card.ai-settings .ai-conn-main small {
+  font-size: 0.715rem;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card.ai-settings .ai-conn-test {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.735rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--brand);
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--brand) 26%, var(--line));
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+.card.ai-settings .ai-conn-test:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 7%, #fff);
+  border-color: color-mix(in srgb, var(--brand) 44%, var(--line));
+}
+.card.ai-settings .ai-conn-test:disabled { opacity: 0.5; cursor: not-allowed; }
+.card.ai-settings .ai-conn-test:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* the key field loses its top rule - the strip is the divider now */
+.card.ai-settings form.stack > .field:first-of-type {
+  border-top: 0;
+  padding-top: 0.7rem;
+}
+
+/* ---------- Advanced disclosure ---------- */
+.card.ai-settings .ai-advanced {
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--line-2, var(--line));
+}
+.card.ai-settings .ai-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0.85rem 0 0.3rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.735rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--ink-2, var(--ink));
+  user-select: none;
+}
+.card.ai-settings .ai-advanced > summary::-webkit-details-marker { display: none; }
+.card.ai-settings .ai-advanced > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.18s var(--ease);
+  margin-right: 1px;
+}
+.card.ai-settings .ai-advanced[open] > summary::before { transform: rotate(45deg); }
+.card.ai-settings .ai-advanced > summary small {
+  font-size: 0.665rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+}
+.card.ai-settings .ai-advanced > summary:hover { color: var(--brand); }
+.card.ai-settings .ai-advanced > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.card.ai-settings .ai-advanced-body .field {
+  padding: 0.75rem 0;
+  border-bottom: 0;
+}
+.card.ai-settings .ai-advanced-body .field + .field {
+  border-top: 1px solid var(--line-2, var(--line));
+}
+
+/* =====================================================================
+   Site header - mobile/tablet: logo truly centred, actions in the corner
+   .header-inner is a plain flex row with no justify-content, so the
+   hamburger, logo and actions all packed to the left and the profile /
+   cart never reached the right edge. A 1fr/auto/1fr grid centres the
+   logo regardless of how wide the side groups are.
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .site-header .header-inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: 0.5rem;
+  }
+  .site-header .header-inner > .menu-toggle {
+    grid-column: 1;
+    justify-self: start;
+    margin-left: -2px;
+  }
+  .site-header .header-inner > .brand {
+    grid-column: 2;
+    justify-self: center;
+    min-width: 0;
+  }
+  .site-header .header-inner > .header-actions {
+    grid-column: 3;
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    margin-right: -2px;
+  }
+  /* the nav is hidden here; make sure it can never add a 4th grid cell */
+  .site-header .header-inner > .primary-nav { display: none; }
+
+  /* keep the wordmark / logo from squeezing the grid */
+  .site-header .brand img,
+  .site-header .brand svg {
+    max-height: 40px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+  }
+  .site-header .brand-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 46vw;
+  }
+  .site-header .header-actions .icon-btn,
+  .site-header .header-actions .cart-btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* very narrow phones: tighten the side groups further */
+@media (max-width: 420px) {
+  .site-header .header-inner { column-gap: 0.35rem; }
+  .site-header .brand img,
+  .site-header .brand svg { max-height: 34px; }
+  .site-header .header-actions { gap: 0; }
+  .site-header .header-actions .icon-btn { width: 34px; height: 34px; }
+}
+
+/* =====================================================================
+   Site header (<=1024px) - logo sits LEFT next to the menu icon
+   Supersedes the centred 1fr/auto/1fr grid: the wordmark now reads as a
+   lockup with the hamburger, and the actions stay flush in the corner.
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .site-header .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    column-gap: 0.55rem;
+  }
+  .site-header .header-inner > .menu-toggle {
+    grid-column: auto;
+    justify-self: auto;
+    flex: 0 0 auto;
+    margin-left: -2px;
+  }
+  .site-header .header-inner > .brand {
+    grid-column: auto;
+    justify-self: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-right: auto;      /* pushes everything after it to the right */
+    margin-left: 0.15rem;
+    text-align: left;
+  }
+  .site-header .header-inner > .header-actions {
+    grid-column: auto;
+    justify-self: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
+    margin-right: -2px;
+  }
+  .site-header .brand img,
+  .site-header .brand svg {
+    max-height: 40px;
+    width: auto;
+    object-fit: contain;
+  }
+  .site-header .brand-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 52vw;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-header .header-inner { column-gap: 0.4rem; }
+  .site-header .brand { margin-left: 0.1rem; }
+  .site-header .brand img,
+  .site-header .brand svg { max-height: 34px; }
+  .site-header .brand-name { max-width: 44vw; }
+}
+
+/* mobile drawer head - show the real logo, not a text label */
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.drawer-head .drawer-head-brand {
+  display: block;
+  height: 30px;
+  width: auto;
+  max-width: 150px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.drawer-head > .icon-btn { flex: 0 0 auto; }
+
+/* =====================================================================
+   Site header (<=1024px) - logo hugs the menu icon, actions right
+   FIX: v13 set margin-right:auto on .brand AND margin-left:auto on
+   .header-actions. Two auto margins share the free space equally, which
+   parked the wordmark in the middle instead of beside the hamburger.
+   Only the brand may own an auto margin.
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .site-header .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    column-gap: 0.55rem;
+  }
+  .site-header .header-inner > .menu-toggle {
+    flex: 0 0 auto;
+    margin: 0 -2px 0 0;
+  }
+  .site-header .header-inner > .brand {
+    flex: 0 0 auto;
+    margin: 0 auto 0 0;        /* the ONLY auto margin in the row */
+    text-align: left;
+    min-width: 0;
+  }
+  .site-header .header-inner > .header-actions {
+    flex: 0 0 auto;
+    margin: 0 -2px 0 0;        /* no auto margin - stays pinned right */
+  }
+  .site-header .header-inner > .primary-nav {
+    display: none;
+    margin: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-header .header-inner { column-gap: 0.4rem; }
+  .site-header .brand img,
+  .site-header .brand svg { max-height: 34px; }
+}
+
+/* =====================================================================
+   Site header (<=1024px) - the logo must hug the menu icon
+   ROOT CAUSE: the logo <Img> carries inline width:180px;height:44px from
+   Settings > logo_sizes.header. The mobile rule only clamped max-height,
+   so the element stayed 180px wide while the artwork shrank to ~34px tall.
+   object-fit:contain then letterboxed it, leaving ~20px of empty space on
+   BOTH sides - which is why the wordmark looked centred and detached from
+   the hamburger instead of sitting next to it.
+   Fix: clamp height AND let width follow the artwork.
+   ===================================================================== */
+@media (max-width: 1024px) {
+  .site-header .brand {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+  }
+  .site-header .brand img,
+  .site-header .brand svg {
+    height: 34px !important;
+    width: auto !important;
+    max-width: 58vw !important;
+    max-height: 34px !important;
+    object-fit: contain;
+  }
+  .site-header .brand-name {
+    max-width: 52vw;
+  }
+}
+
+@media (max-width: 420px) {
+  .site-header .brand img,
+  .site-header .brand svg {
+    height: 30px !important;
+    max-height: 30px !important;
+    max-width: 54vw !important;
+  }
+}
+
+/* =====================================================================
+   MOBILE POLISH (<=760px) - audit pass
+   Every rule here is scoped to phones. Desktop (>=761px) is untouched.
+   ===================================================================== */
+
+@media (max-width: 760px) {
+  /* ---- 1. Banners -------------------------------------------------
+     Banners are authored 2.37:1 (1928x815). The hero was
+     min-height:clamp(380px,62vh,620px) -> 523px tall on a 390px phone,
+     i.e. 0.70:1, so object-fit:cover threw away ~70% of the artwork.
+     Match the source aspect so the whole banner is visible.
+     Scoped to the carousel so the text-only fallback hero is unaffected. */
+  .hero[aria-roledescription="carousel"] {
+    min-height: 0;
+    height: auto;
+    aspect-ratio: 2.35 / 1;
+    max-height: 46vh;
+    border-radius: 14px;
+  }
+  .hero[aria-roledescription="carousel"] .hero-slide img {
+    object-fit: cover;
+    object-position: center center;
+  }
+  /* the left-to-right dark scrim was for overlaid text; banners have
+     their own design, so drop it on phones */
+  .hero[aria-roledescription="carousel"] .hero-slide::after {
+    background: none;
+  }
+
+  /* ---- 2. Carousel dots: 4px tall was untappable ------------------ */
+  .hero-dots {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 4px;
+    gap: 0;
+  }
+  .hero-dots button {
+    position: relative;
+    width: 34px;
+    height: 32px;
+    background: transparent;
+    border-radius: 8px;
+  }
+  .hero-dots button::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.55);
+    transition: width 0.3s var(--ease), background-color 0.3s var(--ease);
+  }
+  .hero-dots button.is-active {
+    width: 34px;
+    background: transparent;
+  }
+  .hero-dots button.is-active::before {
+    width: 30px;
+    background: #fff;
+  }
+
+  /* ---- 3. Header touch targets (were 34px) ----------------------- */
+  .site-header .header-actions .icon-btn,
+  .site-header .header-actions .cart-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .site-header .brand {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .site-header .menu-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* ---- 4. Chips / links that were under 40px tall ---------------- */
+  .category-view-all { min-height: 40px; }
+  .password-toggle { width: 40px; height: 40px; }
+  .site-footer .link-arrow,
+  .mobile-drawer .link-arrow {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* ---- 5. Text below 11px --------------------------------------- */
+  .pay-badge { font-size: 11px; }
+  .pd2-tag { font-size: 11px; }
+
+  /* ---- 6. Size guide table was clipped at 390px ------------------
+     min-width:340px + 0.9rem side padding pushed the HIP column off
+     the edge. Tighten so all columns fit one screen. */
+  .size-table { min-width: 0; font-size: 0.82rem; }
+  .size-table td,
+  .size-table thead th { padding: 0.5rem 0.4rem; }
+  .size-table thead th { font-size: 0.68rem; letter-spacing: 0.06em; }
+}
+
+/* =====================================================================
+   MOBILE POLISH - round 2 (<=760px only)
+   ===================================================================== */
+@media (max-width: 760px) {
+  /* carousel dots -> full 40px target (visual bar is the ::before) */
+  .hero-dots button,
+  .hero-dots button.is-active { width: 40px; height: 40px; }
+  .hero-dots { bottom: 0; }
+
+  /* footer link lists were 18-23px tall, inconsistent and fiddly */
+  .site-footer nav a,
+  .site-footer .footer-links a,
+  .site-footer .footer-col a,
+  .site-footer .footer-contact a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 2px 0;
+  }
+  /* footer social icons 34 -> 40 */
+  .site-footer .social a,
+  .site-footer .footer-social a,
+  .site-footer a[aria-label] {
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  /* bottom nav labels 10.4px -> 11.5px, keep the 5-up row intact */
+  .mobile-bottom-nav {
+    font-size: 11.5px;
+  }
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav span {
+    font-size: 11.5px;
+    line-height: 1.15;
+  }
+  .mobile-bottom-nav svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  /* size-guide table header back above 11px while still fitting */
+  .size-table thead th { font-size: 0.72rem; letter-spacing: 0.03em; }
+  .size-table td { font-size: 0.82rem; }
+}
+
+/* =====================================================================
+   MOBILE POLISH - round 3 (<=760px only)
+   Footer link lists are <li><a> with no utility classes, so the earlier
+   class-based selectors missed them. Give every footer list link a
+   40px tap target. The inline "Developed by" credit is left alone.
+   ===================================================================== */
+@media (max-width: 760px) {
+  .site-footer li > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 2px 0;
+  }
+}
+
+/* =====================================================================
+   MOBILE POLISH - round 4 (<=760px only)
+   The three trust/info cards (.feature-strip) stack on phones but kept
+   their desktop padding and 42px icons, so three 81px cards plus 16px
+   gaps ate 274px of vertical space right under the fold. Compact them.
+   ===================================================================== */
+@media (max-width: 760px) {
+  .feature-strip {
+    gap: 8px;
+    margin-top: 0.85rem;
+  }
+  .feature {
+    padding: 9px 12px;
+    gap: 10px;
+    border-radius: 10px;
+  }
+  .feature-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+  .feature-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  .feature strong {
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+  .feature span {
+    font-size: 0.76rem;
+    line-height: 1.3;
+  }
+}

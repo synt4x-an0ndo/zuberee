@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiCheck, FiRefreshCw } from "react-icons/fi";
 import { AdminHeader } from "@/components/admin/AdminPage";
 import ImageUploadField from "@/components/admin/ImageUploadField";
@@ -481,41 +481,112 @@ function SocialPanel({ initial, onSaved }) {
   );
 }
 
+// The server contract stays isolated here so the visible panel can remain
+// provider-neutral while the stored key stays write-only.
+const AI_KEY_FIELD = "ai_api_key";
+const AI_KEY_SET_FIELD = "ai_api_key_set";
+const AI_BASE_URL_FIELD = "ai_api_base_url";
+const AI_MODEL_FIELD = "ai_api_model";
+
 function ChatAiPanel() {
   const { toast } = useFeedback();
   const [keySet, setKeySet] = useState(null);
   const [keyInput, setKeyInput] = useState("");
+  const [baseUrlInput, setBaseUrlInput] = useState("");
+  const [modelInput, setModelInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connection, setConnection] = useState("checking");
+
+  const checkConnection = useCallback(
+    async (hasSavedKey, { notify = false } = {}) => {
+      if (!hasSavedKey) {
+        setConnection("disconnected");
+        if (notify) toast.error("AI Assistant disconnected.");
+        return false;
+      }
+
+      setTesting(true);
+      setConnection("checking");
+      try {
+        const res = await api.post("api/chat/ai", {
+          message: "Hello",
+          history: [],
+        });
+        if (!res?.data?.reply) throw new Error("No AI reply received.");
+        setConnection("connected");
+        if (notify) toast.success("AI Assistant connected.");
+        return true;
+      } catch {
+        setConnection("disconnected");
+        if (notify) toast.error("AI Assistant disconnected.");
+        return false;
+      } finally {
+        setTesting(false);
+      }
+    },
+    [toast]
+  );
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .get("api/admin/site-settings")
-      .then((res) => {
-        if (!cancelled) setKeySet(Boolean(res?.data?.gemini_api_key_set));
-      })
-      .catch(() => {
-        if (!cancelled) setKeySet(false);
-      });
+
+    (async () => {
+      try {
+        const res = await api.get("api/admin/site-settings");
+        if (cancelled) return;
+        const hasSavedKey = Boolean(
+          res?.data?.[AI_KEY_SET_FIELD] ?? res?.data?.gemini_api_key_set
+        );
+        setKeySet(hasSavedKey);
+        setBaseUrlInput(res?.data?.[AI_BASE_URL_FIELD] || "");
+        setModelInput(res?.data?.[AI_MODEL_FIELD] || "");
+        await checkConnection(hasSavedKey, { notify: true });
+      } catch {
+        if (cancelled) return;
+        setKeySet(false);
+        setConnection("disconnected");
+        toast.error("AI Assistant disconnected.");
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [checkConnection, toast]);
 
   const save = async (e) => {
     e.preventDefault();
     const key = keyInput.trim();
-    if (!key) {
-      return toast.error("Paste a Gemini API key first — or use “Remove key” to clear the saved one.");
+    const hadSavedKey = Boolean(keySet);
+    if (!key && !hadSavedKey) {
+      return toast.error("Paste an API key first — or use “Remove” to clear the saved one.");
     }
+
     setBusy(true);
+    setConnection("checking");
     try {
-      await api.put("api/admin/site-settings", { gemini_api_key: key });
+      const payload = {
+        [AI_BASE_URL_FIELD]: baseUrlInput.trim(),
+        [AI_MODEL_FIELD]: modelInput.trim(),
+      };
+      if (key) payload[AI_KEY_FIELD] = key;
+
+      // The server tests this candidate before replacing the saved API.
+      const res = await api.put("api/admin/site-settings", payload);
       setKeySet(true);
       setKeyInput("");
-      toast.success("Gemini API key saved. The AI assistant is live.");
+      setBaseUrlInput(res?.data?.[AI_BASE_URL_FIELD] || "");
+      setModelInput(res?.data?.[AI_MODEL_FIELD] || "");
+      await checkConnection(true, { notify: true });
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "AI Assistant disconnected.");
+      if (hadSavedKey) {
+        // A rejected candidate must not turn a working saved API red.
+        await checkConnection(true, { notify: false });
+      } else {
+        setConnection("disconnected");
+      }
     } finally {
       setBusy(false);
     }
@@ -524,56 +595,172 @@ function ChatAiPanel() {
   const remove = async () => {
     setBusy(true);
     try {
-      await api.put("api/admin/site-settings", { gemini_api_key: "" });
+      await api.put("api/admin/site-settings", {
+        [AI_KEY_FIELD]: "",
+        [AI_BASE_URL_FIELD]: "",
+        [AI_MODEL_FIELD]: "",
+      });
       setKeySet(false);
       setKeyInput("");
-      toast.success("Gemini API key removed. The AI assistant is off.");
+      setBaseUrlInput("");
+      setModelInput("");
+      setConnection("disconnected");
+      toast.error("AI Assistant disconnected.");
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "AI Assistant disconnected.");
     } finally {
       setBusy(false);
     }
   };
 
+  const status =
+    keySet === null || testing || connection === "checking"
+      ? "checking"
+      : keySet && connection === "connected"
+        ? "connected"
+        : "disconnected";
+  const statusDotColor =
+    status === "connected" ? "#16a34a" : status === "checking" ? "#d97706" : "#dc2626";
+  const statusDotGlow =
+    status === "connected"
+      ? "0 0 0 4px rgb(22 163 74 / 0.16)"
+      : status === "checking"
+        ? "0 0 0 4px rgb(217 119 6 / 0.16)"
+        : "0 0 0 4px rgb(220 38 38 / 0.16)";
+
   return (
     <div className="stack" style={{ gap: "1.25rem", maxWidth: 640 }}>
-      <Card>
+      <Card className="ai-settings">
         <CardHeader
-          title="AI shopping assistant (Gemini)"
-          subtitle="The “Chat with AI” option in the storefront chat. The assistant answers from your live catalogue — products, prices, sizes, colours and stock — and never invents items."
+          title="AI Assistant"
+          subtitle={
+            <>
+              Owned by{" "}
+              <a
+                className="ai-owner"
+                href="https://therawbros.pages.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="The Raw Bros - https://therawbros.pages.dev"
+              >
+                The Raw Bros
+                <span className="ai-owner-arrow" aria-hidden="true">↗</span>
+              </a>
+            </>
+          }
+          actions={
+            <span className="ai-status">
+              <span
+                aria-hidden="true"
+                className="ai-status-dot"
+                style={{ background: statusDotColor, boxShadow: statusDotGlow }}
+              />
+              {status === "connected" ? (
+                <Badge tone="success">Connected</Badge>
+              ) : status === "checking" ? (
+                <Badge>Checking…</Badge>
+              ) : (
+                <Badge tone="danger">Disconnected</Badge>
+              )}
+            </span>
+          }
         />
         <form onSubmit={save} className="stack">
-          <div className="row" style={{ gap: 8, alignItems: "center" }}>
-            <span style={{ fontWeight: 600 }}>Status:</span>
-            {keySet === null ? (
-              <span className="muted">Checking…</span>
-            ) : keySet ? (
-              <Badge tone="brand">API key saved — assistant is on</Badge>
-            ) : (
-              <Badge>Not configured — assistant is off</Badge>
+          <div className="ai-conn-strip">
+            <span className="ai-conn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="3" />
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+              </svg>
+            </span>
+            <span className="ai-conn-main">
+              <strong>{keySet ? "Assistant connected" : "No key connected yet"}</strong>
+              <small>
+                {keySet
+                  ? `Model: ${modelInput?.trim() || "Auto"}${baseUrlInput?.trim() ? " · custom endpoint" : ""}`
+                  : "Paste a provider API key below to switch the assistant on."}
+              </small>
+            </span>
+            {keySet && (
+              <button
+                type="button"
+                className="ai-conn-test"
+                disabled={busy || testing}
+                onClick={() => checkConnection(true, { notify: true })}
+              >
+                {testing ? "Testing…" : "Test"}
+              </button>
             )}
           </div>
           <Field
-            label="Gemini API key"
-            htmlFor="st-gemini-key"
-            hint="Stored on the server only and never shown again — this box stays empty; type a key to replace the saved one. Get a free key from Google AI Studio (aistudio.google.com/apikey). Runs on the cheapest Gemini model that works (Flash-Lite tier) with automatic fallbacks."
+            label="API key"
+            htmlFor="st-ai-assistant-key"
+            hint="Any supported provider key. Saving tests it first, so a bad key never replaces a working one. Stored server-side and never shown again."
           >
             <Input
-              id="st-gemini-key"
+              id="st-ai-assistant-key"
               type="password"
               autoComplete="off"
+              aria-label="AI Assistant API key"
               value={keyInput}
               onChange={(e) => setKeyInput(e.target.value)}
-              placeholder={keySet ? "•••••••••• (saved — type to replace)" : "AIza…"}
+              placeholder={keySet ? "•••••••••• (saved — type to replace)" : "Paste API key"}
             />
           </Field>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <Button type="submit" variant="primary" loading={busy} disabled={busy}>
-              Save API key
+          <details className="ai-advanced">
+            <summary>
+              <span>Advanced</span>
+              <small>API URL &amp; model</small>
+            </summary>
+            <div className="ai-advanced-body">
+              <Field
+                label="API URL"
+                htmlFor="st-ai-assistant-base-url"
+                hint="Optional. Only needed for a custom OpenAI-compatible endpoint."
+              >
+                <Input
+                  id="st-ai-assistant-base-url"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="AI Assistant API URL"
+                  value={baseUrlInput}
+                  onChange={(e) => setBaseUrlInput(e.target.value)}
+                  placeholder="https://…/v1"
+                />
+              </Field>
+              <Field
+                label="Model"
+                htmlFor="st-ai-assistant-model"
+                hint="Optional. Leave empty to use the automatic model."
+              >
+                <Input
+                  id="st-ai-assistant-model"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="AI Assistant model"
+                  value={modelInput}
+                  onChange={(e) => setModelInput(e.target.value)}
+                  placeholder="Auto"
+                />
+              </Field>
+            </div>
+          </details>
+          <div className="ai-actions">
+            <Button type="submit" variant="primary" loading={busy} disabled={busy || testing}>
+              Save
             </Button>
             {keySet && (
-              <Button type="button" variant="ghost" disabled={busy} onClick={remove}>
-                Remove key
+              <Button
+                type="button"
+                variant="ghost"
+                className="ai-remove"
+                disabled={busy || testing}
+                onClick={remove}
+              >
+                Remove
               </Button>
             )}
           </div>

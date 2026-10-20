@@ -1,5 +1,7 @@
 "use client";
 
+import TrbBadge from "@/components/site/TrbBadge";
+
 import UserAvatar from "@/components/UserAvatar";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -149,6 +151,7 @@ export default function AdminShell({ children }) {
         </Link>
         <NavList pathname={pathname} canShow={canShow} />
         <div className="side-foot">
+          <TrbBadge variant="inline" className="trb-badge--side" />
           <Link href="/" className="side-link" target="_blank" rel="noopener">
             <FiExternalLink aria-hidden="true" /> <span>View storefront</span>
           </Link>

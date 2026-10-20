@@ -9,6 +9,7 @@ import { useCart } from "@/context/CartContext";
 import { useSite } from "@/context/SiteContext";
 import { api, imgUrl } from "@/lib/api";
 import MarkdownText from "@/components/site/MarkdownText";
+import TrbBadge from "@/components/site/TrbBadge";
 
 /**
  * Floating store chat (bottom-right, on every storefront page).
@@ -334,6 +335,7 @@ export default function ChatWidget() {
                       : "AI assistant & store team"}
                 </small>
               </span>
+              <span className="trb-slot"><TrbBadge /></span>
               <button type="button" className="chat-close" onClick={closePanel} aria-label="Close chat">
                 <FiX aria-hidden="true" />
               </button>

@@ -1,10 +1,12 @@
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import { generateAiText } from "@/lib/aiProvider.js";
+import { buildStoreKnowledge, buildOrderKnowledge } from "@/lib/storeFacts.js";
 
 /**
  * POST /api/chat/ai   (signed-in customers)
  *
- * AI shopping assistant powered by Google Gemini. Stateless by design
+ * Provider-neutral AI shopping assistant. Stateless by design
  * (no chat log): the widget sends the last few messages as `history`
  * with every request and nothing is stored server-side.
  *
@@ -12,8 +14,8 @@ import { authenticateRequest } from "@/directory/auth/auth.js";
  *   -> { success, data: { reply, products: [{ id, name, price, salePrice,
  *        image, sizes, colors, url }] } }
  *
- * The Gemini API key is set by the admin in Settings (site-settings
- * `geminiApiKey` column). It is read here, on the server only, and is
+ * The AI API key and optional provider URL/model are set by the admin
+ * in Settings. They are read here, on the server only, and the key is
  * never returned by any public endpoint. Without a key this route
  * answers 503 so the widget can say the assistant is not configured.
  *
@@ -21,79 +23,9 @@ import { authenticateRequest } from "@/directory/auth/auth.js";
  * the customer's words (product names, descriptions, categories, colour
  * names and size values, plus an optional price ceiling like "under
  * 1000"), and the best matches — with prices, sizes and per-size stock —
- * are given to Gemini as the only source of product facts.
+ * are given to the configured AI provider as the only source of product facts.
  */
 
-// Cost policy (store owner's choice): run on the CHEAPEST Gemini model
-// that works. The Flash-Lite tier is Google's cheapest; gemini-3.5-flash-lite
-// is the cheapest model this API key can actually call (verified live —
-// Google's own 404 for the retired gemini-2.5-flash-lite recommends it).
-// Google also retires/overloads models without notice, so if the Lite
-// models are unavailable the chain falls back to the full Flash models
-// for that request rather than failing the chat. The chain is walked in
-// order on every request, so the assistant always prefers the cheapest.
-const GEMINI_MODELS = [
-    "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.8-flash",
-];
-
-async function callGemini(apiKey, payload) {
-    const order = GEMINI_MODELS;
-    let lastStatus = 0;
-    let lastDetail = "";
-    // Google's lite tier throws short bursts of 429/503 under demand; one
-    // full retry pass after a brief pause recovers most of those without
-    // slowing down the happy path.
-    for (let pass = 0; pass < 2; pass++) {
-        if (pass > 0) await new Promise((r) => setTimeout(r, 1600));
-        const result = await callGeminiPass(apiKey, payload, order);
-        if (result.ok) return result;
-        lastStatus = result.status;
-        lastDetail = result.detail;
-        if (![0, 429, 500, 502, 503].includes(result.status)) break;
-    }
-    return { ok: false, status: lastStatus, detail: lastDetail };
-}
-
-async function callGeminiPass(apiKey, payload, order) {
-    let lastStatus = 0;
-    let lastDetail = "";
-    for (const model of order) {
-        let res;
-        try {
-            res = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": apiKey,
-                    },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(30000),
-                }
-            );
-        } catch (err) {
-            console.error(`Gemini fetch failed for ${model}:`, err.message);
-            lastStatus = 0;
-            lastDetail = err.message;
-            continue;
-        }
-        if (res.ok) {
-            return { ok: true, data: await res.json() };
-        }
-        lastStatus = res.status;
-        lastDetail = await res.text().catch(() => "");
-        console.error(`Gemini API error (${model}):`, res.status, lastDetail.slice(0, 300));
-        // Only model-availability / transient failures move to the next
-        // candidate; a bad key etc. would fail on every model anyway.
-        if (![404, 429, 500, 502, 503].includes(res.status)) break;
-    }
-    return { ok: false, status: lastStatus, detail: lastDetail };
-}
 const MAX_HISTORY = 8;
 
 const STOPWORDS = new Set([
@@ -322,9 +254,15 @@ export async function POST(request) {
 
         const settings = await prisma.siteSettings.findFirst({
             orderBy: { createdAt: "asc" },
-            select: { siteName: true, geminiApiKey: true },
+            select: {
+                siteName: true,
+                geminiApiKey: true,
+                aiApiKey: true,
+                aiApiBaseUrl: true,
+                aiApiModel: true,
+            },
         });
-        const apiKey = (settings?.geminiApiKey || "").trim();
+        const apiKey = (settings?.aiApiKey || settings?.geminiApiKey || "").trim();
         if (!apiKey) {
             return Response.json(
                 {
@@ -337,11 +275,19 @@ export async function POST(request) {
         }
         const storeName = (settings?.siteName || "").trim() || "our store";
 
-        const [categories, footer] = await Promise.all([
+        const [categories, footer, shipping, about] = await Promise.all([
             prisma.category.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
             prisma.footerSettings.findFirst({
                 orderBy: { createdAt: "asc" },
                 select: { companyEmail: true, companyPhone: true, companyAddress: true },
+            }),
+            prisma.shippingCost.findFirst({
+                orderBy: { createdAt: "asc" },
+                select: { insideDhaka: true, outsideDhaka: true, oneShippingCost: true },
+            }),
+            prisma.aboutUs.findFirst({
+                orderBy: { createdAt: "asc" },
+                select: { title: true, content: true },
             }),
         ]);
 
@@ -357,6 +303,52 @@ export async function POST(request) {
             products = await searchProducts([], null);
         }
         const contextProducts = products.slice(0, 6);
+
+        // FAQs for the products actually being discussed, so the assistant can
+        // answer fit/fabric/care questions without guessing.
+        const faqRows = contextProducts.length
+            ? await prisma.productFaq.findMany({
+                  where: { productId: { in: contextProducts.map((p) => p.id) } },
+                  orderBy: { id: "asc" },
+                  take: 20,
+                  select: { productId: true, question: true, answer: true },
+              })
+            : [];
+        const storeKnowledge = buildStoreKnowledge({
+            shipping,
+            about,
+            faqs: faqRows,
+            products: contextProducts,
+        });
+        // The signed-in customer's own orders, so "where is my order" can be
+        // answered from real data instead of "chat with the admin".
+        const myOrders = await prisma.order.findMany({
+            where: { userId: auth.user.userId },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            select: {
+                id: true,
+                status: true,
+                paymentStatus: true,
+                totalAmount: true,
+                createdAt: true,
+                district: true,
+                courierEntry: true,
+                items: {
+                    select: {
+                        quantity: true,
+                        size: true,
+                        productId: true,
+                        product: { select: { name: true } },
+                    },
+                },
+            },
+        });
+        const orderKnowledge = buildOrderKnowledge(myOrders, {
+            userName: auth.user.name,
+            userEmail: auth.user.email,
+        });
+
         const cardProducts = products.slice(0, 4).map((p) => ({
             id: p.id,
             name: p.name,
@@ -369,65 +361,70 @@ export async function POST(request) {
         }));
 
         const systemInstruction = [
-            `You are the friendly shopping assistant for ${storeName}, an online store in Bangladesh. Currency is Bangladeshi taka (৳).`,
-            "Reply in the same language the customer writes in (English, Bangla, or a mix). Keep answers short, warm and helpful — a few sentences, or a short list when comparing products.",
-            "For anything about products, prices, sizes, colours or stock, use ONLY the catalogue data given in the customer's message. Never invent a product, price, size, colour or stock level. If the catalogue data is empty or does not match, say you could not find a match and suggest browsing the categories instead.",
-            "When you recommend a product, mention its name, its price (the sale price when one is given), and the sizes/colours actually available. Sizes listed with stock 0 are unavailable — do not offer them. Format with simple markdown only: **bold** for product names and prices, and short bullet lists. Never use tables.",
-            "For orders, delivery, returns or account problems you cannot solve, invite the customer to use the \"Chat with Admin\" option in this same chat window.",
-            `Store categories: ${categories.map((c) => c.name).join(", ") || "—"}.`,
+            `You are the friendly shopping assistant for ${storeName}, an online store in Bangladesh. Currency is Bangladeshi taka (\u09F3).`,
+            "Reply in the same language the customer writes in (English, Bangla, or a mix). Keep answers short, warm and helpful - a few sentences, or a short list when comparing products.",
+            "You have exactly two sources of truth: (1) the STORE FACTS block below - size charts, delivery charges, about-the-store text and product FAQs; and (2) the catalogue search results included in the customer's message - product names, prices, sizes, colours and stock. Use only these.",
+            "Never invent a product, price, size, colour, stock level, delivery charge or measurement. If neither source answers the question, say so plainly and invite the customer to use the \"Chat with Admin\" option.",
+            "If the customer asks about a size guide, size chart, measurements, or which size to pick, quote the STORE FACTS size charts directly, including the actual numbers. The store does have size charts - never say you cannot find a size guide.",
+            "If the customer asks generally what sizes are available (for example \"what sizes do you have\", \"which sizes\", \"size options\"), list BOTH ranges from STORE FACTS - the clothing sizes XS to XXL with their bust/waist/hip measurements, and the shoe sizes EU 36 to 42 with foot length - then invite them to name a product for exact stock. That is a complete answer; do not say you cannot find products.",
+            "If the customer asks about delivery, shipping or charges, quote the exact inside/outside Dhaka amounts from STORE FACTS.",
+            "If the customer asks about their order, order status, tracking, shipping progress, delivery date or whether something was dispatched, answer ONLY from the CUSTOMER ORDERS block. First list every order they have with its number, status and what that status means (for example \"Order #15 is SHIPPED - handed to the courier and on its way\"), plus the items. Only after that may you mention that courier tracking numbers are not stored. If the CUSTOMER ORDERS block says they have no orders, open by saying clearly that their account has no orders yet - do not talk about couriers, consignment numbers or tracking in that case, just offer the Chat with Admin option - and never imply an order exists.",
+            "This store does not keep courier consignment/tracking numbers, hub scans or guaranteed delivery dates. Never invent a tracking number, scan event, courier location or delivery date. If a courier is assigned, name it and say the admin can share the consignment details; otherwise say tracking details are not available yet.",
+            "For changing an order, cancelling, refunds or payment problems, invite the customer to use the \"Chat with Admin\" option.",
+            "When you recommend a product, mention its name, its price (the sale price when one is given), and the sizes/colours actually available. Sizes listed with stock 0 are unavailable - do not offer them. Format with simple markdown only: **bold** for product names and prices, and short bullet lists. NEVER use a markdown table or pipe characters - when listing several orders or products, use one bullet line each.",
+            "For orders, returns or account problems you cannot solve, invite the customer to use the \"Chat with Admin\" option in this same chat window.",
+            `Store categories: ${categories.map((c) => c.name).join(", ") || "-"}.`,
             footer?.companyPhone || footer?.companyEmail
-                ? `Store contact: ${[footer.companyPhone, footer.companyEmail, footer.companyAddress].filter(Boolean).join(" · ")}.`
+                ? `Store contact: ${[footer.companyPhone, footer.companyEmail, footer.companyAddress].filter(Boolean).join(" | ")}.`
                 : "",
+            storeKnowledge ? `\n=== STORE FACTS ===\n${storeKnowledge}` : "",
+            orderKnowledge ? `\n=== CUSTOMER ORDERS ===\n${orderKnowledge}` : "",
         ]
             .filter(Boolean)
             .join("\n");
 
-        const contents = [
-            ...history.map((h) => ({
-                role: h.role === "assistant" ? "model" : "user",
-                parts: [{ text: h.text }],
-            })),
+        const aiMessages = [
+            { role: "system", content: systemInstruction },
+            ...history.map((h) => ({ role: h.role, content: h.text })),
             {
                 role: "user",
-                parts: [
-                    {
-                        text:
-                            `[Catalogue search results for this question — the only product facts you may use]\n` +
-                            (contextProducts.length
-                                ? JSON.stringify(contextProducts, null, 1)
-                                : "(no matching products found)") +
-                            `\n\nCustomer question: ${message}`,
-                    },
-                ],
+                content:
+                    `[Catalogue search results for this question — the only product facts you may use]\n` +
+                    (contextProducts.length
+                        ? JSON.stringify(contextProducts, null, 1)
+                        : "(no specific product matched this question. If the customer is asking about sizes, measurements, delivery charges or store policies, answer from the STORE FACTS block above - do NOT reply that you have no information.)") +
+                    `\n\nCustomer question: ${message}`,
             },
         ];
 
-        const geminiResult = await callGemini(apiKey, {
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-            contents,
-            generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
+        const aiResult = await generateAiText({
+            apiKey,
+            baseUrl: settings?.aiApiBaseUrl || "",
+            model: settings?.aiApiModel || "",
+            messages: aiMessages,
+            temperature: 0.4,
+            maxOutputTokens: 800,
         });
 
-        if (!geminiResult.ok) {
+        if (!aiResult.ok) {
+            const status = aiResult.status;
             return Response.json(
                 {
                     success: false,
                     message:
-                        geminiResult.status === 400 || geminiResult.status === 403
-                            ? "The AI assistant could not accept the configured Gemini API key. Please ask the admin to check it in Settings."
-                            : geminiResult.status === 429 || geminiResult.status === 503
-                              ? "The AI assistant is busy right now (high demand at Google). Please wait a minute and try again, or chat with the admin."
-                              : "The AI assistant is unavailable right now. Please try again or chat with the admin.",
+                        status === 422
+                            ? "The AI assistant configuration is incomplete. Please ask the admin to check the API URL and model in Settings."
+                            : status === 400 || status === 401 || status === 403
+                              ? "The AI assistant could not accept the configured API key. Please ask the admin to check it in Settings."
+                              : status === 429 || status === 503
+                                ? "The AI assistant is busy right now. Please wait a minute and try again, or chat with the admin."
+                                : "The AI assistant is unavailable right now. Please try again or chat with the admin.",
                 },
                 { status: 502 }
             );
         }
 
-        const geminiData = geminiResult.data;
-        const reply = (geminiData?.candidates?.[0]?.content?.parts || [])
-            .map((part) => part?.text || "")
-            .join("")
-            .trim();
+        const reply = (aiResult.text || "").trim();
 
         // If the assistant says nothing matched, don't contradict it by
         // attaching unrelated product cards underneath.
@@ -442,6 +439,8 @@ export async function POST(request) {
                     reply ||
                     "Sorry, I could not come up with an answer just now. Please try rephrasing, or chat with the admin.",
                 products: saidNoMatch ? mentioned : cardProducts,
+                provider: aiResult.provider,
+                model: aiResult.model,
             },
         });
     } catch (error) {

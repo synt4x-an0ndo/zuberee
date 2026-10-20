@@ -511,6 +511,9 @@ model SiteSettings {
   siteName                    String   @default("Zuberee")
   faviconPath                 String?
   geminiApiKey                String?
+  aiApiKey                    String?
+  aiApiBaseUrl                String?
+  aiApiModel                  String?
   faviconZoom                 Int      @default(85)
   logoSizes                   Json?
   primaryColor                String   @default("#092009")

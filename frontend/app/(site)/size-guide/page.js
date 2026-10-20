@@ -11,7 +11,9 @@ import { api } from "@/lib/api";
 
 /**
  * Size guide. The backend has no content endpoint for this page (categories only
- * carry a NONE/SHOE/DRESS guide-type flag), so the charts are static here.
+ * carry a NONE/SHOE/DRESS guide-type flag), so the charts are static here. These rows are mirrored in
+ * backend/lib/storeFacts.js, which feeds the same charts to the AI assistant
+ * (POST /api/chat/ai) - keep the two in sync when you change a measurement.
  *
  * "Find my size" reuses the store's Gemini integration (POST api/chat/ai — the
  * same route and server-held API key the chat assistant uses). The prompt embeds

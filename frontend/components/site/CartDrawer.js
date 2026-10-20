@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiMinus, FiPlus, FiShoppingBag, FiTrash2, FiX } from "react-icons/fi";
 import Img from "@/components/Img";
 import { Button, Spinner } from "@/components/ui";
@@ -64,9 +64,63 @@ export default function CartDrawer() {
     }
   };
 
+  // --- swipe down to close (touch) -------------------------------------
+  // Only starts when the drag begins in the header or while the body is
+  // scrolled to the top, so normal scrolling inside a full cart still works.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const touch = useRef({ y: 0, x: 0, active: false });
+
+  const onTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    const target = e.target;
+    const inHeader = Boolean(target.closest && target.closest(".drawer-head"));
+    const body = e.currentTarget.querySelector(".drawer-body");
+    const atTop = !body || body.scrollTop <= 0;
+    if (!inHeader && !atTop) return;
+    touch.current = { y: e.touches[0].clientY, x: e.touches[0].clientX, active: true };
+  };
+
+  const onTouchMove = (e) => {
+    if (!touch.current.active) return;
+    const dy = e.touches[0].clientY - touch.current.y;
+    const dx = e.touches[0].clientX - touch.current.x;
+    // ignore horizontal gestures and upward drags
+    if (dy <= 0 || Math.abs(dx) > dy) {
+      if (dragging) { setDragging(false); setDragY(0); }
+      return;
+    }
+    setDragging(true);
+    // rubber-band: full movement for the first 140px, then heavily damped
+    setDragY(dy <= 140 ? dy : 140 + (dy - 140) * 0.35);
+  };
+
+  const onTouchEnd = () => {
+    if (!touch.current.active) return;
+    const shouldClose = dragY > 88;
+    touch.current.active = false;
+    setDragging(false);
+    setDragY(0);
+    if (shouldClose) closeDrawer();
+  };
+
   return (
     <div className="drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && closeDrawer()}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Shopping cart">
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Shopping cart"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        style={{
+          transform: dragY ? `translateY(${dragY}px)` : undefined,
+          transition: dragging ? "none" : "transform 0.24s cubic-bezier(0.2, 0.7, 0.2, 1)",
+        }}
+      >
+        <div className="drawer-grip" aria-hidden="true" />
         <div className="drawer-head">
           <h2 style={{ fontSize: "1.1rem", fontWeight: 800 }}>
             Your cart <span className="muted">({cart.totalItems})</span>
