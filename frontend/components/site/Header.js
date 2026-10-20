@@ -3,7 +3,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { FiChevronDown, FiMenu, FiSearch, FiShoppingBag, FiUser, FiX } from "react-icons/fi";
+import {
+  FiChevronDown,
+  FiGrid,
+  FiHome,
+  FiMenu,
+  FiSearch,
+  FiShoppingBag,
+  FiShoppingCart,
+  FiTag,
+  FiTruck,
+  FiUser,
+  FiX,
+} from "react-icons/fi";
 import UserAvatar from "@/components/UserAvatar";
 import Img from "@/components/Img";
 import CategoryMenu from "@/components/site/CategoryMenu";
@@ -197,7 +209,6 @@ export default function Header() {
           <CategoryMenu label="All Categories" className="header-category-menu" />
           <SearchForm className="header-search" />
         </div>
-        <SearchForm className="mobile-search" placeholder="Search products" />
       </div>
 
       </header>
@@ -212,62 +223,115 @@ export default function Header() {
                   alt={siteName || "Logo"}
                   width={logoSizes.header.width}
                   height={logoSizes.header.height}
-                  style={{ height: 30, width: "auto", maxWidth: 150, objectFit: "contain", display: "block" }}
+                  style={{ height: 42, width: "auto", maxWidth: 170, objectFit: "contain", display: "block" }}
                 />
               ) : (
-                <span className="brand-name drawer-head-brand" style={{ fontWeight: 800, color: "var(--brand)" }}>
-                  {siteName || "Menu"}
-                </span>
+                <span className="drawer-head-name">{siteName || "Menu"}</span>
               )}
-              <button type="button" className="icon-btn" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+              <button type="button" className="drawer-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
                 <FiX aria-hidden="true" />
               </button>
             </div>
-            <div className="drawer-list">
-              <Link href="/shop">All products</Link>
-              {roots.map((category) => {
-                const hasChildren = category.children.length > 0;
-                const expanded = openGroup === category.id;
-                return (
-                  <div key={category.id}>
-                    {hasChildren ? (
-                      <button type="button" onClick={() => setOpenGroup(expanded ? null : category.id)} aria-expanded={expanded}>
-                        {category.name}
-                        <FiChevronDown
-                          aria-hidden="true"
-                          style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .25s" }}
-                        />
-                      </button>
-                    ) : (
-                      <Link href={`/${category.slug}`}>{category.name}</Link>
-                    )}
-                    {hasChildren && expanded && (
-                      <div className="sub anim-fade-in">
-                        <Link href={`/${category.slug}`}>All {category.name}</Link>
-                        {category.children.map((child) => (
-                          <Link key={child.id} href={`/${child.slug}`}>
-                            {child.name}
-                          </Link>
-                        ))}
+
+            <SearchForm className="drawer-search" placeholder="Search products..." />
+
+            <div className="drawer-section">
+              <h2 className="drawer-section-title">
+                <FiGrid aria-hidden="true" className="drawer-section-icon" />
+                Product Categories
+              </h2>
+              <nav className="drawer-cards" aria-label="Product categories">
+                <Link href="/shop" className="drawer-card">
+                  <FiGrid aria-hidden="true" className="drawer-card-icon" />
+                  <span className="drawer-card-label">All Products</span>
+                </Link>
+                {roots.map((category) => {
+                  const hasChildren = category.children.length > 0;
+                  const expanded = openGroup === category.id;
+                  const count = category.productCount;
+                  return (
+                    <div className="drawer-card-group" key={category.id}>
+                      <div className={cx("drawer-card", hasChildren && "has-chevron")}>
+                        <Link href={`/${category.slug}`} className="drawer-card-link">
+                          <FiTag aria-hidden="true" className="drawer-card-icon" />
+                          <span className="drawer-card-label">{category.name}</span>
+                          {Number.isFinite(count) ? <span className="drawer-card-count">{count}</span> : null}
+                        </Link>
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            className="drawer-card-chevron"
+                            aria-expanded={expanded}
+                            aria-label={`${expanded ? "Hide" : "Show"} ${category.name} subcategories`}
+                            onClick={() => setOpenGroup(expanded ? null : category.id)}
+                          >
+                            <FiChevronDown
+                              aria-hidden="true"
+                              style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .25s" }}
+                            />
+                          </button>
+                        ) : null}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      {hasChildren && expanded ? (
+                        <div className="drawer-sub anim-fade-in">
+                          <Link href={`/${category.slug}`}>All {category.name}</Link>
+                          {category.children.map((child) => (
+                            <Link key={child.id} href={`/${child.slug}`}>
+                              {child.name}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </nav>
             </div>
-            <div className="drawer-list" style={{ marginTop: "1.25rem" }}>
-              {isAuthenticated ? (
-                <>
-                  <Link href="/user">My account</Link>
-                  <Link href="/user/orders">My orders</Link>
-                </>
-              ) : (
-                <>
-                  <Link href="/login">Sign in</Link>
-                  <Link href="/register">Create account</Link>
-                </>
-              )}
-              <Link href="/cart">Cart ({count})</Link>
+
+            <div className="drawer-section">
+              <h2 className="drawer-section-title">Quick Links</h2>
+              <nav className="drawer-cards" aria-label="Quick links">
+                <Link href="/" className="drawer-card">
+                  <FiHome aria-hidden="true" className="drawer-card-icon" />
+                  <span className="drawer-card-label">Home</span>
+                </Link>
+                <Link href="/shop" className="drawer-card">
+                  <FiShoppingBag aria-hidden="true" className="drawer-card-icon" />
+                  <span className="drawer-card-label">Shop</span>
+                </Link>
+                <Link href="/track-order" className="drawer-card">
+                  <FiTruck aria-hidden="true" className="drawer-card-icon" />
+                  <span className="drawer-card-label">Track Order</span>
+                </Link>
+                {isAuthenticated ? (
+                  <>
+                    <Link href="/user" className="drawer-card">
+                      <FiUser aria-hidden="true" className="drawer-card-icon" />
+                      <span className="drawer-card-label">My account</span>
+                    </Link>
+                    <Link href="/user/orders" className="drawer-card">
+                      <FiShoppingBag aria-hidden="true" className="drawer-card-icon" />
+                      <span className="drawer-card-label">My orders</span>
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" className="drawer-card">
+                      <FiUser aria-hidden="true" className="drawer-card-icon" />
+                      <span className="drawer-card-label">Sign in</span>
+                    </Link>
+                    <Link href="/register" className="drawer-card">
+                      <FiUser aria-hidden="true" className="drawer-card-icon" />
+                      <span className="drawer-card-label">Create account</span>
+                    </Link>
+                  </>
+                )}
+                <Link href="/cart" className="drawer-card">
+                  <FiShoppingCart aria-hidden="true" className="drawer-card-icon" />
+                  <span className="drawer-card-label">Cart</span>
+                  <span className="drawer-card-count">{count}</span>
+                </Link>
+              </nav>
             </div>
           </aside>
         </div>

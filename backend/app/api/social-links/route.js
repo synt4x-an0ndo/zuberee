@@ -11,6 +11,7 @@ function formatSocialLinks(s) {
         pinterest: s.pinterest,
         facebook_id: s.facebookId,
         whatsapp_number: s.whatsappNumber,
+        messenger: s.messenger,
         created_at: s.createdAt,
         updated_at: s.updatedAt,
     };
@@ -48,6 +49,7 @@ export async function PUT(request) {
             facebookId,
             whatsapp_number,
             whatsappNumber,
+            messenger,
         } = body;
 
         const updateData = {};
@@ -81,6 +83,8 @@ export async function PUT(request) {
                     ? null
                     : String(finalWhatsapp).trim();
         }
+
+        handleUrl(messenger, "messenger");
 
         if (Object.keys(updateData).length === 0) {
             return Response.json(

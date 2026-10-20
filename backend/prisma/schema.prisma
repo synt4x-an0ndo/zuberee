@@ -295,7 +295,12 @@ model AbandonedCheckout {
   cartItems        Json
   name             String?
   phone            String?
+  /// Only ever populated with a real value typed by the shopper - never inferred.
+  email            String?
   address          String?
+  /// District slug (matches lib/districts on the storefront); kept beside the
+  /// free-text address so shipping can be requoted without parsing it back out.
+  district         String?
   isRecovered      Boolean   @default(false)
   status           String    @default("pending")
   convertedOrderId Int?
@@ -304,6 +309,7 @@ model AbandonedCheckout {
   updatedAt        DateTime  @updatedAt
 
   @@index([sessionId])
+  @@index([userId])
   @@index([status])
   @@index([createdAt])
   @@map("abandoned_checkouts")
@@ -534,6 +540,7 @@ model SocialLinks {
   pinterest      String?
   facebookId     String?
   whatsappNumber String?
+  messenger      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

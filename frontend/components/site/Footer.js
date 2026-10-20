@@ -35,17 +35,18 @@ export default function Footer({ siteName, company, social, roots }) {
   return (
     <footer className="site-footer">
       <div className="container">
+        <Link href="/" className="brand footer-brand" style={{ color: "#fff" }}>
+          {company.logo ? (
+            <Img src={company.logo} alt={siteName || "Logo"} width={logoSizes.footer.width} height={logoSizes.footer.height} style={{ width: logoSizes.footer.width, height: logoSizes.footer.height, objectFit: "contain" }} />
+          ) : (
+            <span className="brand-name">{siteName}</span>
+          )}
+        </Link>
+
         <div className="footer-grid">
-          <div>
-            <Link href="/" className="brand" style={{ color: "#fff" }}>
-              {company.logo ? (
-                <Img src={company.logo} alt={siteName || "Logo"} width={logoSizes.footer.width} height={logoSizes.footer.height} style={{ width: logoSizes.footer.width, height: logoSizes.footer.height, objectFit: "contain" }} />
-              ) : (
-                <span className="brand-name">{siteName}</span>
-              )}
-            </Link>
+          <div className="footer-box">
             {company.description && (
-              <p style={{ marginTop: "1rem", maxWidth: "36ch" }}>{company.description}</p>
+              <p style={{ marginTop: 0, maxWidth: "36ch" }}>{company.description}</p>
             )}
             {socials.length > 0 && (
               <div className="social-row">
@@ -58,7 +59,7 @@ export default function Footer({ siteName, company, social, roots }) {
             )}
           </div>
 
-          <div>
+          <div className="footer-box">
             <h3>Main Menu</h3>
             <ul>
               <li><Link href="/">Home</Link></li>
@@ -67,7 +68,7 @@ export default function Footer({ siteName, company, social, roots }) {
             </ul>
           </div>
 
-          <div>
+          <div className="footer-box">
             <h3>Useful Link</h3>
             <ul>
               <li><Link href="/about_us">About Us</Link></li>
@@ -78,7 +79,7 @@ export default function Footer({ siteName, company, social, roots }) {
             </ul>
           </div>
 
-          <div>
+          <div className="footer-box">
             <h3>Contact</h3>
             <ul className="footer-contact">
               {company.address && (

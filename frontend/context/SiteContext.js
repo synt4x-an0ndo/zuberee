@@ -213,6 +213,7 @@ export function SiteProvider({ children }) {
         twitter: social.twitter || social.tweeter || "",
         pinterest: social.pinterest || "",
         whatsapp: social.whatsapp_number || "",
+        messenger: social.messenger || "",
       },
       categories: state.categories,
       reload: load,

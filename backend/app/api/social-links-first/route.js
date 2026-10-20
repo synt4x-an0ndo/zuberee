@@ -10,6 +10,7 @@ function formatSocialLinks(s) {
         pinterest: s.pinterest,
         facebook_id: s.facebookId,
         whatsapp_number: s.whatsappNumber,
+        messenger: s.messenger,
         created_at: s.createdAt,
         updated_at: s.updatedAt,
     };

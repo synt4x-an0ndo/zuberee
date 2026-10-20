@@ -96,13 +96,19 @@ export default function CheckoutPage() {
   };
 
   /**
-   * POST /api/abandoned-checkouts — public. Upserts one row per session so the admin
-   * "Incomplete orders" screen can see checkouts that were started but never submitted.
-   * Only fires once the shopper has given a name and a usable phone number.
+   * POST /api/abandoned-checkouts — public. Keeps the tracking row for this cart
+   * in step with what the shopper types.
+   *
+   * The row is opened by POST /api/cart the moment the first item is added; the
+   * server keys it on the cart session cookie and only falls back to the id
+   * below. Re-posts (debounced) whenever the cart or the typed details change,
+   * so correcting a name or quantity is never lost.
+   *
+   * Nothing is invented: it only runs once a real name and a valid phone exist,
+   * and email is only sent when the shopper actually typed one.
    */
-  const [snapshotDone, setSnapshotDone] = useState(false);
   useEffect(() => {
-    if (order || snapshotDone) return undefined;
+    if (order) return undefined;
     if (cart.items.length === 0) return undefined;
     const phone = normalizePhone(effective.phone);
     if (!effective.name.trim() || !isValidBdPhone(phone)) return undefined;
@@ -112,6 +118,7 @@ export default function CheckoutPage() {
         sessionId: checkoutSessionId(),
         cartItems: cart.items.map((item) => ({
           productId: item.productId,
+          variantId: item.variant?.id ?? null,
           title: item.title,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
@@ -119,15 +126,20 @@ export default function CheckoutPage() {
         name: effective.name.trim(),
         phone,
         address: [effective.address.trim(), DISTRICTS.find((d) => d.value === effective.district)?.label || ""].filter(Boolean).join(", "),
+        district: effective.district || "",
       };
+
+      const email = normalizeEmail(effective.email);
+      if (email) payload.email = email;
+
       if (isAuthenticated && user?.id) payload.userId = user.id;
+
       api.post("api/abandoned-checkouts", payload, { auth: false })
-        .then(() => setSnapshotDone(true))
         .catch(() => { /* best-effort: never block checkout on this */ });
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [order, snapshotDone, cart.items, effective.name, effective.phone, effective.address, effective.district, isAuthenticated, user]);
+  }, [order, cart.items, effective.name, effective.phone, effective.email, effective.address, effective.district, isAuthenticated, user]);
 
   const validate = () => {
     const next = {};

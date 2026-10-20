@@ -1,5 +1,6 @@
 import prisma from "@/directory/prisma/prisma.js";
 import { resolveCart } from "@/lib/cart.js";
+import { buildCartSnapshot, syncAbandonedCheckout } from "@/lib/abandonedCheckout.js";
 import {
     formatCart,
     CART_INCLUDE,
@@ -110,7 +111,7 @@ export async function POST(request) {
             resolvedVariantId = selectedVariant.id;
         }
 
-        const { cart } = await resolveCart(request);
+        const { cart, userId, sessionId } = await resolveCart(request);
 
         // The same product/variant can appear on more than one cart line
         // (for example with different colours), so capacity is checked
@@ -195,6 +196,15 @@ export async function POST(request) {
                 },
             });
         }
+
+        // Track the cart as a possible abandonment from the very first add.
+        // No contact details are stored here - only what the cart contains -
+        // and nothing is ever invented. Never throws, so it cannot break the add.
+        await syncAbandonedCheckout({
+            sessionId: sessionId ?? null,
+            userId: userId ?? null,
+            data: { cartItems: await buildCartSnapshot(cart.id) },
+        });
 
         const fullCart = await prisma.cart.findUnique({
             where: { id: cart.id },

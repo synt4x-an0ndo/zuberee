@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { CART_COOKIE_NAME } from "@/lib/cart.js";
 import { requireValidOrderContact } from "@/lib/contactValidation.js";
 import { allocateOrderEntries } from "@/lib/preorder.js";
+import { syncAbandonedCheckout } from "@/lib/abandonedCheckout.js";
 
 const ORDER_INCLUDE = {
     items: {
@@ -271,6 +272,24 @@ export async function POST(request) {
 
             return createdOrder;
         });
+
+        // The cart behind this order is no longer abandoned: link the tracking
+        // row to the finished order so it drops out of Incomplete orders.
+        // Strictly best-effort - the order is already committed, this never
+        // creates a row, and a failure here can never roll back the order.
+        try {
+            const cookieStore = await cookies();
+            const cartSessionId = cookieStore.get(CART_COOKIE_NAME)?.value || null;
+
+            await syncAbandonedCheckout({
+                sessionId: cartSessionId,
+                userId: isGuest ? null : auth.user.userId,
+                createIfMissing: false,
+                orderId: order.id,
+            });
+        } catch (abandonedError) {
+            console.error("Failed to close abandoned checkout:", abandonedError);
+        }
 
         return Response.json({ success: true, message: "Order placed successfully. Cash on delivery.", data: formatOrder(order) }, { status: 201 });
     } catch (error) {

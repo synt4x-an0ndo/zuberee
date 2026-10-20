@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import BackToTop from "@/components/site/BackToTop";
 import CartDrawer from "@/components/site/CartDrawer";
 import ChatWidget from "@/components/site/ChatWidget";
 import Footer from "@/components/site/Footer";
@@ -25,6 +26,7 @@ export default function SiteShell({ children }) {
       </main>
       <Footer siteName={site.siteName} company={site.company} social={site.social} roots={site.categories.tree} />
       <ChatWidget />
+      <BackToTop />
       {!drawerOpen && <MobileBottomNav />}
       {drawerOpen && <CartDrawer />}
     </>

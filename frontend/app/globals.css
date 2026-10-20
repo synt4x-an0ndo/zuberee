@@ -2345,22 +2345,29 @@ button {
   display: none;
 }
 
+/* ------------------------------------------------------------------
+   Mobile navigation drawer.
+   ------------------------------------------------------------------ */
+
 .mobile-drawer {
   position: fixed;
   inset: 0;
   z-index: 110;
   display: flex;
   justify-content: flex-start;
-  background: rgb(10 18 13 / 0.45);
+  background: rgb(15 23 42 / 0.48);
   animation: fade-in 0.2s ease both;
 }
 
 .mobile-drawer-panel {
-  width: min(340px, 88vw);
+  width: 88vw;
+  max-width: 360px;
   height: 100%;
   background: var(--surface);
   overflow-y: auto;
-  padding: 1.1rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 18px;
   animation: slide-in-left 0.32s var(--ease) both;
   box-shadow: var(--shadow-lg);
 }
@@ -2369,32 +2376,234 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
-.drawer-list a,
-.drawer-list button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 0.8rem 0.25rem;
-  border: 0;
-  border-bottom: 1px solid var(--line-2);
-  background: transparent;
-  font-weight: 600;
-  text-align: left;
-  font-size: 0.98rem;
+.drawer-head-brand {
+  display: block;
 }
 
-.drawer-list .sub a {
-  padding-left: 1.1rem;
-  font-weight: 500;
-  color: var(--ink-2);
-}
-
-.drawer-list a:hover {
+.drawer-head-name {
+  font-weight: 800;
+  font-size: 1.3rem;
+  line-height: 1.1;
   color: var(--brand);
+  white-space: pre-line;
+}
+
+.drawer-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease);
+}
+
+.drawer-close:hover {
+  background: #e5e7eb;
+}
+
+.drawer-close svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Search */
+
+.drawer-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  margin-bottom: 22px;
+  padding: 0 15px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.drawer-search svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.drawer-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  /* 16px keeps iOS Safari from zooming the page on focus. */
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.drawer-search input::placeholder {
+  color: var(--muted);
+}
+
+.drawer-search input:focus {
+  outline: none;
+}
+
+.drawer-search:focus-within {
+  border-color: var(--brand);
+}
+
+/* Sections */
+
+.drawer-section {
+  margin-bottom: 18px;
+}
+
+.drawer-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.drawer-section-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+
+.drawer-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-card-group {
+  min-width: 0;
+}
+
+.drawer-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #eef0f4;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.drawer-card.has-chevron {
+  padding: 0 8px 0 14px;
+}
+
+.drawer-card-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.drawer-card-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+
+.drawer-card-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-card-count {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.drawer-card-chevron {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.drawer-card-chevron svg {
+  width: 17px;
+  height: 17px;
+}
+
+.drawer-sub {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0 32px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line-2);
+}
+
+.drawer-sub a {
+  padding: 8px 4px;
+  color: var(--ink-2);
+  font-weight: 500;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+
+.drawer-sub a:hover {
+  color: var(--brand);
+}
+
+.mobile-drawer-panel a:focus-visible,
+.mobile-drawer-panel button:focus-visible,
+.mobile-drawer-panel input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 12px;
 }
 
 .site-footer {
@@ -2407,7 +2616,27 @@ button {
 .footer-grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr 1fr;
-  gap: 2.5rem;
+  gap: 1.5rem;
+}
+
+/* The footer logo sits in the top-left corner, above the section boxes. */
+
+.footer-brand {
+  display: inline-flex;
+  margin-bottom: 1.25rem;
+}
+
+/* Each footer column sits in its own bordered box. */
+
+.footer-box {
+  padding: 1.15rem 1.25rem;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: var(--radius);
+  background: rgb(255 255 255 / 0.045);
+}
+
+.footer-box .social-row {
+  margin-top: 1.5rem;
 }
 
 .site-footer h3 {
@@ -2439,7 +2668,7 @@ button {
 }
 
 .footer-bottom {
-  margin-top: 3rem;
+  margin-top: 2rem;
   padding-top: 1.25rem;
   border-top: 1px solid rgb(255 255 255 / 0.12);
   display: flex;
@@ -4459,42 +4688,6 @@ button.side-link {
   }
 }
 
-.mobile-search {
-  display: none;
-  position: relative;
-  padding: 0 0 0.85rem;
-}
-
-.mobile-search svg {
-  position: absolute;
-  left: 0.85rem;
-  top: calc(50% - 0.42rem);
-  width: 17px;
-  height: 17px;
-  color: var(--muted);
-}
-
-.mobile-search input {
-  width: 100%;
-  height: 42px;
-  padding: 0 1rem 0 2.5rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  font-size: 0.9rem;
-}
-
-.mobile-search input:focus {
-  outline: none;
-  border-color: var(--brand);
-}
-
-@media (max-width: 1024px) {
-  .mobile-search {
-    display: block;
-  }
-}
-
 .page-enter {
   animation: fade-up 0.45s var(--ease) both;
 }
@@ -6015,6 +6208,20 @@ button.side-link {
     width: 19px;
     height: 19px;
     flex: 0 0 auto;
+  }
+
+  /* Middle slot: the Zuberee brand button (opens Contact Support). Highlighted in the
+     brand orange, the way the reference screenshot highlights its centre item. */
+  .mobile-bottom-nav__brand {
+    color: #f44000;
+  }
+
+  .mobile-bottom-nav__brand-logo {
+    width: auto;
+    height: 28px;
+    max-width: 100%;
+    flex: 0 0 auto;
+    object-fit: contain;
   }
 
   .mobile-bottom-nav__item.is-active,
@@ -7562,6 +7769,30 @@ html.header-layout-changing {
 .orders-select-col {
   width: 42px;
   text-align: center;
+}
+
+/* Status is an inline <Select> now rather than a badge. The control fills its
+   own cell, and these floors stop AlignedTable from measuring Status against
+   the narrow badge it replaced and letting it crowd the Placed date. */
+.orders-status-col {
+  min-width: 150px;
+}
+
+.orders-placed-col {
+  min-width: 165px;
+}
+
+.orders-status-select {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Boxy column grid - same hairline treatment as the incomplete orders table,
+   so each column reads as its own box instead of one long strip of text.
+   Applied via the wrapper so the first column never gets a stray left edge. */
+.orders-grid table th + th,
+.orders-grid table td + td {
+  border-left: 1px solid var(--line-2);
 }
 
 .orders-select-input {
@@ -13947,5 +14178,338 @@ body .chat-launcher-anchor {
   .feature span {
     font-size: 0.76rem;
     line-height: 1.3;
+  }
+}
+
+/* =====================================================================
+   Chat v12 - smaller, lighter panel on desktop (>=761px ONLY)
+   v11 sized the desktop panel at 360 x min(560px, 100dvh - 112px) with a
+   fixed height for every view. On a normal 1366x768 / 1536x780 desktop
+   that covered most of the right column and read as a modal rather than
+   a corner widget, and the start screen carried a large empty white band
+   under the quick-start chips.
+
+   Desktop now:
+     - width  320px  (was 360px)
+     - height min(470px, 100dvh - 130px) for the chat views
+     - the start/menu view shrinks to its content, so no dead white space
+   Type sizes are untouched, so nothing becomes harder to read.
+
+   Every rule is scoped to min-width: 761px. The phone/tablet sheet
+   (<=760px) is not affected at all.
+   ===================================================================== */
+@media (min-width: 761px) {
+  body .chat-panel.chat-panel {
+    --chat-w: min(320px, calc(100vw - 40px));
+    --chat-h: min(470px, calc(100dvh - 130px));
+    right: 20px;
+    bottom: 86px;
+    max-height: calc(100dvh - 130px);
+  }
+
+  /* start screen: fit the content instead of stretching to a fixed height */
+  body .chat-panel.chat-panel.view-menu {
+    height: auto;
+    max-height: min(470px, calc(100dvh - 130px));
+  }
+
+  /* ...and stack it from the top rather than centring it in the frame */
+  body .chat-panel.chat-panel.view-menu .chat-menu {
+    justify-content: flex-start;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+}
+
+/* ======================================================================
+   Back to top
+   Sits above the chat button (bottom: 20px, 56px tall) so the two never
+   overlap, and clears the 68px mobile bottom nav on phones.
+   ====================================================================== */
+
+.back-to-top {
+  position: fixed;
+  /* 30px = the visible .chat-fab right inset (20px anchor + 10px of
+     56px-46px wrapper slack), so the two circles line up. */
+  right: 30px;
+  bottom: 88px;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--brand-contrast);
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgb(var(--brand-rgb) / 0.4);
+  animation: fade-in 0.25s ease both;
+  transition: transform 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.back-to-top:hover {
+  background: var(--brand-dark);
+  transform: translateY(-2px);
+}
+
+.back-to-top:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.back-to-top svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Match the VISIBLE chat button (.chat-launcher-anchor .chat-fab), which is
+   46px at desktop widths (top-level rule) and 48px on phones (<=760px rule),
+   and sit 12px above it. Offsets mirror the launcher anchor so the two stay
+   in one clean vertical stack and never overlap the 68px bottom nav. */
+
+@media (max-width: 760px) {
+  .back-to-top {
+    right: 14px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 76px);
+    width: 48px;
+    height: 48px;
+  }
+}
+
+@media (max-width: 420px) {
+  .back-to-top {
+    /* 10px = 12px anchor inset - 2px overflow of the 48px button */
+    right: 10px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 72px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top {
+    animation: none;
+  }
+}
+
+/* ======================================================================
+   Contact Support popup
+   Opened from the mobile bottom navigation. Rendered through
+   ViewportPortal so it escapes the fixed bottom-nav stacking context.
+   z-index 150 keeps it above the chat launcher (140) and overlay (120).
+   ====================================================================== */
+
+.cs-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(15 23 42 / 0.2);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: cs-backdrop-in 0.25s ease both;
+}
+
+/* The bottom nav stays lit (it is not covered by the backdrop); the card is
+   centred in the space above it, clear of the 68px nav + iOS home indicator. */
+@media (max-width: 760px) {
+  .cs-overlay {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    /* anchor the card just above the bottom nav instead of centring it */
+    align-items: flex-end;
+  }
+}
+
+.cs-overlay.is-closing {
+  animation: cs-backdrop-out 0.2s ease both;
+}
+
+.cs-card {
+  width: 100%;
+  max-width: 350px;
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 12px 12px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow:
+    0 14px 40px -12px rgb(15 23 42 / 0.28),
+    0 4px 12px -6px rgb(15 23 42 / 0.14);
+  animation: cs-card-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cs-card.is-closing {
+  animation: cs-card-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.cs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.cs-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #111827;
+}
+
+.cs-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+  transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.cs-close:hover {
+  opacity: 0.65;
+  transform: rotate(90deg);
+}
+
+.cs-close svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* One row of equal pills - Messenger / WhatsApp / Call. */
+.cs-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.cs-action {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 40px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-decoration: none;
+  transition: transform 0.18s var(--ease), filter 0.18s var(--ease);
+}
+
+.cs-action:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.07);
+}
+
+.cs-action:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.cs-action__icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.cs-action__label {
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.cs-action--messenger {
+  background: #2563eb;
+}
+
+.cs-action--whatsapp {
+  background: #16a34a;
+}
+
+.cs-action--call {
+  background: #111827;
+}
+
+/* Narrow phones: tighten the row so "Messenger" still fits on one line. */
+@media (max-width: 360px) {
+  .cs-actions {
+    gap: 6px;
+  }
+
+  .cs-action {
+    padding: 4px 3px;
+  }
+}
+
+.cs-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cs-close:focus-visible,
+.cs-action:focus-visible {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
+}
+
+@keyframes cs-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes cs-backdrop-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes cs-card-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes cs-card-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(16px) scale(0.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-overlay,
+  .cs-overlay.is-closing,
+  .cs-card,
+  .cs-card.is-closing {
+    animation-duration: 0.01ms;
+  }
+  .cs-action:hover,
+  .cs-close:hover {
+    transform: none;
+  }
+}
+
+/* Mobile top bar: no brand mark (the bottom nav's centre item carries the logo now).
+   Desktop (>= 1025px) keeps the header logo untouched. */
+@media (max-width: 1024px) {
+  .site-header .header-inner > .brand {
+    display: none;
+  }
+
+  /* the component sets margin-left: 0 inline, so this has to win */
+  .site-header .header-actions {
+    margin-left: auto !important;
   }
 }

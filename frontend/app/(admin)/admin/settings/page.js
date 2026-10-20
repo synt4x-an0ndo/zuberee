@@ -435,6 +435,7 @@ function SocialPanel({ initial, onSaved }) {
     pinterest: initial.pinterest || "",
     whatsapp_number: initial.whatsapp_number || "",
     facebook_id: initial.facebook_id || "",
+    messenger: initial.messenger || "",
   });
   const [busy, setBusy] = useState(false);
 
@@ -451,6 +452,7 @@ function SocialPanel({ initial, onSaved }) {
         pinterest: form.pinterest.trim(),
         whatsapp_number: form.whatsapp_number.trim(),
         facebook_id: form.facebook_id.trim(),
+        messenger: form.messenger.trim(),
       });
       toast.success("Social links saved.");
       onSaved?.();
@@ -472,7 +474,8 @@ function SocialPanel({ initial, onSaved }) {
           <Field label="YouTube" htmlFor="so-yt"><Input id="so-yt" placeholder="https://youtube.com/…" value={form.youtube} onChange={set("youtube")} /></Field>
           <Field label="X / Twitter" htmlFor="so-tw"><Input id="so-tw" placeholder="https://x.com/…" value={form.twitter} onChange={set("twitter")} /></Field>
           <Field label="Pinterest" htmlFor="so-pin"><Input id="so-pin" placeholder="https://pinterest.com/…" value={form.pinterest} onChange={set("pinterest")} /></Field>
-          <Field label="WhatsApp number" htmlFor="so-wa"><Input id="so-wa" placeholder="+8801XXXXXXXXX" value={form.whatsapp_number} onChange={set("whatsapp_number")} /></Field>
+          <Field label="WhatsApp number" htmlFor="so-wa" hint="Digits only, e.g. 8801XXXXXXXXX. Used by the mobile Contact Support popup."><Input id="so-wa" placeholder="+8801XXXXXXXXX" value={form.whatsapp_number} onChange={set("whatsapp_number")} /></Field>
+          <Field label="Messenger link" htmlFor="so-msg" hint="Full m.me or messenger.com URL. Used by the mobile Contact Support popup."><Input id="so-msg" placeholder="https://m.me/yourpage" value={form.messenger} onChange={set("messenger")} /></Field>
           <Field label="Facebook Pixel ID" htmlFor="so-fbid" hint="Stored with the social links and used by the storefront pixel."><Input id="so-fbid" value={form.facebook_id} onChange={set("facebook_id")} /></Field>
         </div>
         <div><Button type="submit" variant="primary" loading={busy} disabled={busy}>Save social links</Button></div>

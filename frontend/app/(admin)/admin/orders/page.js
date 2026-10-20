@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiDownload, FiEdit2, FiPlus, FiPrinter, FiSearch, FiTag, FiTrash2, FiTruck, FiX } from "react-icons/fi";
 import { AdminHeader, DataTable } from "@/components/admin/AdminPage";
-import { Badge, Button, EmptyState, ErrorState, Input, Pagination, Select, Skeleton } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Input, Pagination, Select, Skeleton } from "@/components/ui";
 import { useFeedback } from "@/context/FeedbackContext";
 import { api, formatMoney } from "@/lib/api";
 import { DISTRICTS } from "@/lib/districts";
@@ -63,6 +63,7 @@ export default function AdminOrdersPage() {
   const [courierError, setCourierError] = useState("");
   const [courierChecking, setCourierChecking] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [statusSavingId, setStatusSavingId] = useState(null);
   const selectAllRef = useRef(null);
 
   useEffect(() => {
@@ -265,6 +266,28 @@ export default function AdminOrdersPage() {
     }
   };
 
+  /**
+   * PATCH /api/admin/orders/:id with { status }. The backend upper-cases the value
+   * and checks it against VALID_STATUSES, so anything outside ORDER_STATUS_OPTIONS
+   * is refused before it can reach the database. The list reloads so the new
+   * value and any server-side side effects are reflected immediately.
+   */
+  const saveOrderStatus = async (order, status) => {
+    if (status === String(order.status || "").toLowerCase()) return;
+
+    setStatusSavingId(order.id);
+
+    try {
+      await api.patch(`api/admin/orders/${order.id}`, { status });
+      toast.success(`${formatOrderNumber(order)} set to ${orderStatusMeta(status).label}.`);
+      reload();
+    } catch (err) {
+      toast.error(err?.message || "Could not update this status.");
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
   const downloadCsv = async () => {
     setExportError("");
     setExporting(true);
@@ -374,7 +397,7 @@ export default function AdminOrdersPage() {
         <EmptyState title="No orders match these filters" text="Try clearing the filters or widening the dates." action={<Button variant="outline" onClick={reset}>Clear filters</Button>} />
       ) : (
         <>
-          <DataTable>
+          <DataTable className="orders-grid">
             <thead>
               <tr>
                 <th className="orders-select-col">
@@ -384,14 +407,13 @@ export default function AdminOrdersPage() {
                 <th>Customer</th>
                 <th>Address</th>
                 <th className="text-right">Total</th>
-                <th>Status</th>
-                <th>Placed</th>
+                <th className="orders-status-col">Status</th>
+                <th className="orders-placed-col">Placed</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {data.orders.map((o) => {
-                const st = orderStatusMeta(o.status);
                 const rowBadge = assignedBadge(o);
                 return (
                   <tr
@@ -411,7 +433,21 @@ export default function AdminOrdersPage() {
                     </td>
                     <td className="muted" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.address}</td>
                     <td className="text-right num">{formatMoney(o.total)}</td>
-                    <td><Badge tone={st.tone}>{st.label}</Badge></td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      {/* The row is clickable and navigates to the order, so the
+                          select has to swallow clicks before they bubble up. */}
+                      {/* Width comes from CSS, not a fixed pixel value: the
+                          column is measured by AlignedTable, so a hard width
+                          wider than the cell spills into the Placed date. */}
+                      <Select
+                        className="orders-status-select"
+                        aria-label={`Status for ${formatOrderNumber(o)}`}
+                        value={String(o.status || "").toLowerCase()}
+                        onChange={(event) => saveOrderStatus(o, event.target.value)}
+                        options={ORDER_STATUS_OPTIONS}
+                        disabled={statusSavingId === o.id}
+                      />
+                    </td>
                     <td className="muted" style={{ whiteSpace: "nowrap" }}>{formatDateTime(o.created_at)}</td>
                     <td>
                       <div className="orders-row-actions">
