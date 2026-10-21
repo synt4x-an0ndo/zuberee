@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FiHome, FiMapPin, FiMessageCircle, FiShoppingBag, FiShoppingCart } from "react-icons/fi";
+import { FiHome, FiMapPin, FiShoppingBag, FiShoppingCart } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import Img from "@/components/Img";
 import ContactSupportModal from "@/components/site/ContactSupportModal";
@@ -27,6 +27,15 @@ export default function MobileBottomNav() {
   useEffect(() => {
     setSupportOpen(false);
   }, [pathname]);
+
+  // Match the existing bottom-nav breakpoint and dismiss on desktop resize.
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    const sync = () => { if (!media.matches) setSupportOpen(false); };
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   // Any other nav item (Home / Shop / Cart / Track) also dismisses the popup.
   const dismissOnNav = (event) => {
@@ -77,9 +86,7 @@ export default function MobileBottomNav() {
               height={28}
               className="mobile-bottom-nav__brand-logo"
             />
-          ) : (
-            <FiMessageCircle aria-hidden="true" />
-          )}
+          ) : null}
         </button>
 
         <button type="button" className="mobile-bottom-nav__item cart-shortcut" onClick={openDrawer} aria-label={cartLabel}>

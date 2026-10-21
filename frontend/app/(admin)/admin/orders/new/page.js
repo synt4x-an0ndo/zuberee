@@ -204,7 +204,7 @@ export default function CreateOrderPage() {
       <form className="stack" style={{ gap: "1.25rem" }} onSubmit={submit} noValidate>
         <Card>
           <CardHeader title="Customer" subtitle="Guest orders use the name, phone and email entered here." />
-          <div className="grid" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
+          <div className="grid" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(min(230px, 100%), 1fr))" }}>
             <Field label="Full name" htmlFor="co-name" required error={errors.name}>
               <Input id="co-name" value={form.name} onChange={set("name")} autoComplete="name" aria-invalid={!!errors.name} />
             </Field>

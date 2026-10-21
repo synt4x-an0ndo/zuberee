@@ -129,6 +129,16 @@ export async function GET(request) {
                                 mode: "insensitive",
                             },
                         },
+                        {
+                            category: {
+                                is: {
+                                    OR: [
+                                        { name: { contains: search, mode: "insensitive" } },
+                                        { slug: { contains: search, mode: "insensitive" } },
+                                    ],
+                                },
+                            },
+                        },
                     ],
                 }
                 : {}),

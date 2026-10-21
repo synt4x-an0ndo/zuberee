@@ -1,4 +1,5 @@
 import path from "node:path";
+import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -6,6 +7,15 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Next dev HMR validates Origin separately from Host. Allow loopback and
+  // this machine's actual LAN addresses (phones), never arbitrary origins.
+  allowedDevOrigins: [
+    "127.0.0.1", "[::1]",
+    ...Object.values(networkInterfaces()).flat()
+      .filter((address) => address && !address.internal && address.family === "IPv4")
+      .map((address) => address.address),
+    ...(process.env.ZUBEREE_DEV_ORIGINS || "").split(",").map((host) => host.trim()).filter(Boolean),
+  ],
   turbopack: { root: projectRoot },
   async redirects() {
     return [

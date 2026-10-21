@@ -102,7 +102,7 @@ export default function BannersPage() {
       {loadError ? <ErrorState message={loadError} onRetry={reload} /> : loading || !data ? <Skeleton style={{ height: 260 }} /> : data.length === 0 ? (
         <EmptyState icon={FiImage} title="No banners yet" text="Upload a wide image to feature on the homepage." action={<Button variant="primary" onClick={() => open(null)}>Add banner</Button>} />
       ) : (
-        <div className="grid-3 stagger" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+        <div className="grid-3 stagger" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))" }}>
           {[...data].sort((a, b) => (a.display_priority ?? 0) - (b.display_priority ?? 0)).map((b) => (
             <article key={b.id} className="card" style={{ overflow: "hidden" }}>
               <div style={{ position: "relative", aspectRatio: "16 / 8", background: "var(--brand-tint)" }}>

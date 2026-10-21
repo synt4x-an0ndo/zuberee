@@ -1,5 +1,6 @@
 "use client";
 
+import ResponsiveSelect from "./ResponsiveSelect";
 import ViewportPortal from "@/components/ViewportPortal";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -72,18 +73,8 @@ export function Textarea({ className = "", rows = 4, ...props }) {
   return <textarea rows={rows} className={cx("input textarea", className)} {...props} />;
 }
 
-export function Select({ className = "", options = [], placeholder, children, ...props }) {
-  return (
-    <select className={cx("input select", className)} {...props}>
-      {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map((option) => (
-        <option key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
-        </option>
-      ))}
-      {children}
-    </select>
-  );
+export function Select(props) {
+  return <ResponsiveSelect {...props} />;
 }
 
 export function Toggle({ checked, onChange, label, disabled }) {

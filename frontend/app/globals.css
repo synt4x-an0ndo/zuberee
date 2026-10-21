@@ -642,6 +642,7 @@ button {
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   padding: 1.25rem;
+  min-width: 0;
 }
 
 .card-flush {
@@ -974,6 +975,48 @@ button {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+}
+
+/* Keep the dashboard status control compact; the existing mobile rule below
+   restores full width when these filters stack. */
+.dashboard-filters > .select {
+  width: 220px;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+/* Existing admin layouts with explicit responsive counterparts. */
+.admin-chat-layout {
+  display: grid;
+  grid-template-columns: minmax(230px, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.order-edit-item-fields, .order-edit-add-fields {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+}
+.order-edit-item-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.order-edit-add-fields { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto; }
+.inc-convert-line { grid-template-columns: minmax(0, 1fr) 92px 110px; }
+.invoice-content { padding: 2rem 2rem 0; }
+.invoice-details { min-width: 250px; text-align: right; }
+
+@media (max-width: 1024px) {
+  .admin-chat-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .card-actions { min-width: 0; max-width: 100%; }
+  .order-edit-item-fields, .order-edit-add-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .order-edit-item-fields > :first-child,
+  .order-edit-add-fields > :first-child,
+  .order-edit-add-fields > .btn { grid-column: 1 / -1; }
+  .inc-convert-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .inc-convert-line > :first-child { grid-column: 1 / -1; overflow-wrap: anywhere; }
+  .invoice-content { padding: 0; }
+  .invoice-details { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 }
 
 .dashboard-range-tabs {
@@ -1617,9 +1660,6 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
-.products-reference-table .table {
-  min-width: 1280px;
-}
 
 .products-reference-table th {
   white-space: nowrap;
@@ -1789,6 +1829,17 @@ button {
     width: 100%;
   }
 
+  /* Four balanced choices, rather than an orphaned "This year" button. */
+  .dashboard-range-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .dashboard-range-tabs button {
+    min-height: 44px;
+  }
+
   .donut-layout {
     grid-template-columns: 1fr;
   }
@@ -1889,10 +1940,56 @@ button {
 }
 
 /* Table */
-.table-wrap {
+.table-wrap,
+.size-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
+.table-wrap::-webkit-scrollbar { height: 10px; }
+.table-wrap::-webkit-scrollbar-track { background: transparent; }
+.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 3px solid var(--surface);
+  border-radius: 999px;
+}
+
+/* Boxy column grid - one shared treatment for every data table, so each column
+   reads as its own box instead of one long strip of text. The first column is
+   left alone so the container never shows a stray left edge. */
+.aligned-table > thead > tr > th + th,
+.aligned-table > tbody > tr > td + td {
+  border-left: 1px solid var(--line-2);
+}
+/* Opt-outs: these tables are not data grids, so they keep their own look.
+   - products: every row is drawn as its own rounded strip; a rule across it
+     would cut that design in two.
+   - spec tables: storefront label/value pairs, not columns of records. */
+.products-reference-table .aligned-table > tbody > tr > td + td,
+.spec-table.aligned-table > thead > tr > th + th,
+.spec-table.aligned-table > tbody > tr > td + td {
+  border-left: 0;
+}
+
+/* Semantic column minimums. A page opts in with data-col, so a width is
+   declared once - here - and every table that shares the column shares the
+   width. Native table layout honours these without caching viewport widths. */
+.aligned-table [data-col="#"] { min-width: 52px; }
+.aligned-table [data-col="name"] { min-width: 150px; }
+.aligned-table [data-col="phone"] { min-width: 132px; }
+.aligned-table [data-col="address"] { min-width: 170px; }
+.aligned-table [data-col="cart"] { min-width: 300px; }
+.aligned-table [data-col="status"] { min-width: 158px; }
+.aligned-table [data-col="conversion"] { min-width: 120px; }
+.aligned-table [data-col="date"] { min-width: 140px; }
+.aligned-table [data-col="action"] { min-width: 196px; }
 
 .table {
   width: 100%;
@@ -2370,6 +2467,30 @@ button {
   padding: 18px;
   animation: slide-in-left 0.32s var(--ease) both;
   box-shadow: var(--shadow-lg);
+}
+
+/* Retain the existing entrance; animate out before React removes the drawer. */
+.mobile-drawer.is-closing {
+  animation: mobile-menu-backdrop-out 240ms ease-in-out both;
+}
+.mobile-drawer.is-closing > .mobile-drawer-panel {
+  animation: mobile-menu-panel-out 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes mobile-menu-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes mobile-menu-panel-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-drawer, .mobile-drawer > .mobile-drawer-panel {
+    animation-duration: 0.01ms;
+  }
+  .mobile-drawer.is-closing, .mobile-drawer.is-closing > .mobile-drawer-panel {
+    animation-duration: 0.01ms;
+  }
 }
 
 .mobile-drawer-panel .drawer-head {
@@ -4478,9 +4599,6 @@ button.side-link {
   border-top: 1px solid var(--line);
 }
 
-.sales-product-details-table .table {
-  min-width: 1020px;
-}
 
 .sales-product-details-card .table th:first-child,
 .sales-product-details-card .table td:first-child {
@@ -4637,13 +4755,36 @@ button.side-link {
 
 @media (max-width: 760px) {
   .footer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .footer-box {
+    min-width: 0;
+  }
+
+  /* Keep every contact action; wrap the row instead of widening the page. */
+  .site-footer .social-row {
+    flex-wrap: wrap;
+  }
+
+  .footer-contact :is(a, span) {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .feature-strip {
     grid-template-columns: 1fr;
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .input,
+  .mobile-drawer .drawer-search input {
+    font-size: 1rem;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 2rem);
   }
   .cart-line {
     grid-template-columns: 78px minmax(0, 1fr);
@@ -6218,7 +6359,7 @@ button.side-link {
 
   .mobile-bottom-nav__brand-logo {
     width: auto;
-    height: 28px;
+    height: 34px;
     max-width: 100%;
     flex: 0 0 auto;
     object-fit: contain;
@@ -7787,13 +7928,8 @@ html.header-layout-changing {
   max-width: 100%;
 }
 
-/* Boxy column grid - same hairline treatment as the incomplete orders table,
-   so each column reads as its own box instead of one long strip of text.
-   Applied via the wrapper so the first column never gets a stray left edge. */
-.orders-grid table th + th,
-.orders-grid table td + td {
-  border-left: 1px solid var(--line-2);
-}
+/* Orders keeps .orders-grid as a page hook; its hairline column grid now
+   comes from the shared .aligned-table block near .table-wrap. */
 
 .orders-select-input {
   width: 16px;
@@ -8759,25 +8895,7 @@ html.header-layout-changing {
   font-size: 0.85rem;
 }
 
-.lb-table-wrap .table {
-  min-width: 1020px;
-  table-layout: fixed;
-}
 
-.lb-table-wrap .table th:nth-child(1),
-.lb-table-wrap .table td:nth-child(1) { width: 7%; }
-.lb-table-wrap .table th:nth-child(2),
-.lb-table-wrap .table td:nth-child(2) { width: 21%; }
-.lb-table-wrap .table th:nth-child(3),
-.lb-table-wrap .table td:nth-child(3) { width: 19%; }
-.lb-table-wrap .table th:nth-child(4),
-.lb-table-wrap .table td:nth-child(4) { width: 13%; }
-.lb-table-wrap .table th:nth-child(5),
-.lb-table-wrap .table td:nth-child(5) { width: 15%; }
-.lb-table-wrap .table th:nth-child(6),
-.lb-table-wrap .table td:nth-child(6) { width: 13%; }
-.lb-table-wrap .table th:nth-child(7),
-.lb-table-wrap .table td:nth-child(7) { width: 12%; }
 
 .lb-table-wrap .lb-cust strong,
 .lb-table-wrap .lb-customer-copy .lb-meta,
@@ -10202,7 +10320,31 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
   border-radius: 99px;
   margin: 12px 0 0;
 }
-.pd2-pill.is-pre { background: #ffd21a; color: #26200a; }
+.pd2-pill.is-pre {
+  max-width: 100%;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid rgb(var(--brand-rgb) / 0.16);
+  border-radius: 12px;
+  background: var(--brand-tint);
+  color: var(--ink-2);
+  text-align: left;
+}
+.pd2-pre-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+}
+.pd2-pre-icon svg { width: 17px; height: 17px; stroke-width: 1.6; }
+.pd2-pre-copy { display: grid; gap: 4px; min-width: 0; }
+.pd2-pre-copy strong { color: var(--brand-deep); font-size: 0.7rem; font-weight: 700; line-height: 1.35; letter-spacing: 0.08em; text-transform: uppercase; }
+.pd2-pre-copy > span { font-size: 0.8rem; font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }
 .pd2-pill.is-out { background: #f3f4f3; color: var(--muted); }
 .pd2-price { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .pd2-was { color: #9aa39c; text-decoration: line-through; font-size: 0.98rem; }
@@ -11121,6 +11263,7 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
 /* Shared table geometry: colours, typography, borders and actions remain unchanged. */
 .aligned-table.table {
   --aligned-cell-inline: 0.9rem;
+  table-layout: auto;
 }
 .products-reference-table .aligned-table.table {
   --aligned-cell-inline: 0.65rem;
@@ -11161,6 +11304,9 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
   .aligned-table { table-layout: auto !important; min-width: 0 !important; }
   .aligned-table col { width: auto !important; }
   .aligned-table > tbody > tr > :is(th, td) { height: auto; }
+  .aligned-table > thead > tr > th + th,
+  .aligned-table > tbody > tr > td + td { border-left: 0; }
+  .table-wrap, .size-table-wrap { border: 0; border-radius: 0; }
 }
 
 
@@ -11583,9 +11729,9 @@ a.lb-meta:hover { color: var(--brand); text-decoration: underline; }
 /* ===================================================================== */
 /* Size guide tables                                                     */
 /* ===================================================================== */
+/* Shares the .table-wrap container box declared with the tables; the public
+   size guide keeps its own radius. */
 .size-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--line);
   border-radius: 12px;
 }
 
@@ -14300,31 +14446,31 @@ body .chat-launcher-anchor {
    ====================================================================== */
 
 .cs-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgb(15 23 42 / 0.2);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  animation: cs-backdrop-in 0.25s ease both;
+  display: none;
 }
 
-/* The bottom nav stays lit (it is not covered by the backdrop); the card is
-   centred in the space above it, clear of the 68px nav + iOS home indicator. */
+/* Same breakpoint as the existing mobile nav. Keep its entire safe-area strip
+   outside the backdrop so all five shortcuts stay visible and usable. */
 @media (max-width: 760px) {
   .cs-overlay {
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
-    /* anchor the card just above the bottom nav instead of centring it */
+    position: fixed;
+    inset: 0 0 calc(68px + env(safe-area-inset-bottom, 0px));
+    z-index: 150;
+    display: flex;
     align-items: flex-end;
+    justify-content: center;
+    padding: 16px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: rgb(15 23 42 / 0.2);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    animation: cs-backdrop-in 0.25s ease both;
   }
 }
 
 .cs-overlay.is-closing {
-  animation: cs-backdrop-out 0.2s ease both;
+  animation: cs-backdrop-out 240ms ease-in-out both;
 }
 
 .cs-card {
@@ -14343,7 +14489,7 @@ body .chat-launcher-anchor {
 }
 
 .cs-card.is-closing {
-  animation: cs-card-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: cs-card-out 240ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 .cs-head {
@@ -14371,7 +14517,7 @@ body .chat-launcher-anchor {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: transparent;
+  background: var(--hover);
   color: #111827;
   cursor: pointer;
   transition: opacity 0.2s var(--ease), transform 0.2s var(--ease);
@@ -14401,8 +14547,10 @@ body .chat-launcher-anchor {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 4px 6px;
+  border: 0;
+  font-family: inherit;
   border-radius: 10px;
   color: #fff;
   font-weight: 600;
@@ -14455,14 +14603,31 @@ body .chat-launcher-anchor {
   }
 }
 
+.cs-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cs-retry {
+  margin-top: 8px;
+  color: var(--brand);
+  background: var(--hover);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
 .cs-empty {
-  margin: 0;
+  margin: 10px 0 0;
   color: var(--muted);
   font-size: 0.9rem;
   line-height: 1.5;
 }
 
 .cs-close:focus-visible,
+.cs-retry:focus-visible,
 .cs-action:focus-visible {
   outline: 3px solid #111827;
   outline-offset: 2px;
@@ -14479,13 +14644,13 @@ body .chat-launcher-anchor {
 }
 
 @keyframes cs-card-in {
-  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
   to   { opacity: 1; transform: none; }
 }
 
 @keyframes cs-card-out {
   from { opacity: 1; transform: none; }
-  to   { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 0; transform: translateY(12px) scale(0.985); }
 }
 
 @media (prefers-reduced-motion: reduce) {

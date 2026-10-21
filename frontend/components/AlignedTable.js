@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-// Geometry only; no records or user data are cached. Remounting a paginated table
-// keeps the column proportions instead of sizing them from the next page's text.
+// Cache row geometry only, never records or column widths. Native auto layout
+// keeps header/body tracks aligned and reflows when content or the viewport changes.
 const layouts = new Map();
 const MIN_ROW_HEIGHT = 56;
 
 export default function AlignedTable({ children, className = "", style, ...props }) {
   const ref = useRef(null);
-  const [columns, setColumns] = useState(null);
 
   useEffect(() => {
     const table = ref.current;
@@ -29,18 +28,6 @@ export default function AlignedTable({ children, className = "", style, ...props
       let cached = layouts.get(key);
 
       if (heads.length && records.length && !table.querySelector("thead [colspan], thead [rowspan]")) {
-        if (!cached?.columns) {
-          const widths = heads.map(cell => cell.getBoundingClientRect().width);
-          const total = widths.reduce((sum, width) => sum + width, 0);
-          if (total > 0) {
-            cached = { ...cached, columns: widths.map(width => `${width / total * 100}%`), minWidth: Math.ceil(total) };
-            layouts.set(key, cached);
-          }
-        }
-        if (cached?.columns && !table.dataset.columnsLocked) {
-          table.dataset.columnsLocked = "true";
-          setColumns({ widths: cached.columns, minWidth: cached.minWidth });
-        }
         heads.forEach((head, index) => {
           const cells = records.map(row => row.cells[index]).filter(Boolean);
           const action = /^actions?$/i.test(head.textContent.trim());
@@ -85,9 +72,7 @@ export default function AlignedTable({ children, className = "", style, ...props
     };
   }, []);
 
-  return <table {...props} ref={ref} className={`aligned-table ${className}`.trim()}
-    style={{ ...style, ...(columns ? { tableLayout: "fixed", minWidth: columns.minWidth } : {}) }}>
-    {columns ? <colgroup>{columns.widths.map((width, index) => <col key={index} style={{ width }} />)}</colgroup> : null}
+  return <table {...props} ref={ref} className={`aligned-table ${className}`.trim()} style={style}>
     {children}
   </table>;
 }

@@ -1,10 +1,27 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, API_CONFIGURED, imgUrl, listOf, unwrap } from "@/lib/api";
 import { applyPalette, buildPalette, DEFAULT_BRAND, normalizeHex, THEME_STORAGE_KEY } from "@/lib/theme";
 
 const SiteContext = createContext(null);
+
+// Coalesce concurrent boot reads (including Strict Mode's effect replay).
+// This is NOT a TTL cache: explicit reload/save always starts a fresh request.
+let pendingSiteRead = null;
+function readSiteResources(fresh) {
+  if (!fresh && pendingSiteRead) return pendingSiteRead;
+  const request = Promise.allSettled([
+    api.get("api/site-settings", { auth: false }),
+    api.get("api/footer-settings", { auth: false }),
+    api.get("api/social-links-first", { auth: false }),
+    api.get("api/categories", { auth: false }),
+  ]);
+  pendingSiteRead = request;
+  request.finally(() => { if (pendingSiteRead === request) pendingSiteRead = null; });
+  return request;
+}
+
 
 /**
  * Logo display boxes (px) for every place the logo appears. Admins can
@@ -83,32 +100,33 @@ function buildCategoryTree(rows) {
 }
 
 export function SiteProvider({ children }) {
+  const generation = useRef(0);
   const [state, setState] = useState({
     loading: API_CONFIGURED,
     error: "",
     settings: null,
     footer: null,
     social: null,
+    contactError: "",
     categories: { tree: [], flat: [], bySlug: new Map() },
   });
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (fresh = true) => {
+    const id = ++generation.current;
     if (!API_CONFIGURED) {
       setState((s) => ({ ...s, loading: false, error: "API not configured" }));
       return;
     }
     setState((s) => ({ ...s, loading: true }));
-    const [settings, footer, social, categories] = await Promise.allSettled([
-      api.get("api/site-settings", { auth: false }),
-      api.get("api/footer-settings", { auth: false }),
-      api.get("api/social-links-first", { auth: false }),
-      api.get("api/categories", { auth: false }),
-    ]);
+    const [settings, footer, social, categories] = await readSiteResources(fresh);
+    if (generation.current !== id) return;
 
     const failed = [settings, footer, social, categories].every((r) => r.status === "rejected");
     setState({
       loading: false,
       error: failed ? "The storefront could not reach the server." : "",
+      contactError: social.status === "rejected" || footer.status === "rejected"
+        ? "Some contact options could not be loaded. Please try again." : "",
       settings: settings.status === "fulfilled" ? unwrap(settings.value) || null : null,
       footer: footer.status === "fulfilled" ? unwrap(footer.value) || null : null,
       social: social.status === "fulfilled" ? unwrap(social.value) || null : null,
@@ -120,7 +138,8 @@ export function SiteProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    load();
+    load(false);
+    return () => { generation.current += 1; };
   }, [load]);
 
   // Theme: derived from the admin-chosen primary colour.
@@ -191,6 +210,7 @@ export function SiteProvider({ children }) {
     return {
       loading: state.loading,
       error: state.error,
+      contactError: state.contactError,
       backendAvailable: API_CONFIGURED && !state.error && !state.loading,
       settings,
       siteName: (settings.site_name || "").trim() || "Zuberee",

@@ -310,7 +310,7 @@ export default function AdminOrderEditPage() {
             <CardHeader title="Customer & delivery" />
             <div className="stack" style={{ padding: "0 1.25rem 1.25rem" }}>
               <Field label="Customer name" htmlFor="eo-name" required><Input id="eo-name" value={form.name} onChange={set("name")} /></Field>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="form-grid" style={{ gap: 12 }}>
                 <Field label="Phone" htmlFor="eo-phone" required><Input id="eo-phone" className="num" inputMode="tel" autoComplete="tel" value={form.phone} onChange={set("phone")} /></Field>
                 <Field label="Email" htmlFor="eo-email" hint="Must be valid if entered."><Input id="eo-email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={set("email")} /></Field>
               </div>
@@ -335,7 +335,7 @@ export default function AdminOrderEditPage() {
                     </p>
                     <Button type="button" variant="ghost" size="sm" icon={FiTrash2} onClick={() => removeItem(item)}>Remove</Button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, alignItems: "end" }}>
+                  <div className="order-edit-item-fields">
                     <Field label="Size / variant" htmlFor={`eo-size-${item.key}`}><Input id={`eo-size-${item.key}`} value={item.size} onChange={(e) => patchItem(item.key, "size", e.target.value)} placeholder="—" /></Field>
                     <Field label="Qty" htmlFor={`eo-qty-${item.key}`}><Input id={`eo-qty-${item.key}`} type="number" min="1" step="1" className="num" value={item.qty} onChange={(e) => patchItem(item.key, "qty", e.target.value)} /></Field>
                     <Field label="Unit price (BDT)" htmlFor={`eo-price-${item.key}`}><Input id={`eo-price-${item.key}`} type="number" min="0" step="1" className="num" value={item.unitPrice} onChange={(e) => patchItem(item.key, "unitPrice", e.target.value)} /></Field>
@@ -346,7 +346,7 @@ export default function AdminOrderEditPage() {
 
               <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 14, display: "grid", gap: 10 }}>
                 <strong>Add product</strong>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+                <div className="order-edit-add-fields">
                   <Field label="Product" htmlFor="eo-add-product">
                     <Select id="eo-add-product" placeholder={productOptions ? "Select product" : "Loading products…"} value={newProductId} onChange={(e) => setNewProductId(e.target.value)} options={(productOptions || []).map((p) => ({ value: String(p.id), label: p.sku ? `${p.title} (${p.sku})` : p.title }))} />
                   </Field>

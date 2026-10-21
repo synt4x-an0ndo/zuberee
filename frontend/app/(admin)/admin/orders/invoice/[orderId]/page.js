@@ -80,7 +80,7 @@ export default function AdminOrderInvoicePage() {
       </div>
 
       <Card className="invoice-sheet" >
-        <div style={{ padding: "2rem 2rem 0" }}>
+        <div className="invoice-content">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 24, flexWrap: "wrap", alignItems: "start" }}>
             <div style={{ display: "grid", gap: 10 }}>
               {company.logo ? (
@@ -98,7 +98,7 @@ export default function AdminOrderInvoicePage() {
               </div>
             </div>
 
-            <dl style={{ margin: 0, textAlign: "right", display: "grid", gap: 7, minWidth: 250 }}>
+            <dl className="invoice-details" style={{ margin: 0, display: "grid", gap: 7 }}>
               <dt style={{ fontSize: "1.05rem", fontWeight: 700 }}>Invoice Details</dt>
               <dd style={{ margin: 0 }}><span className="muted" style={{ fontWeight: 600 }}>Invoice No:</span> <strong className="num">#{inv.number}</strong></dd>
               <dd style={{ margin: 0 }}><span className="muted" style={{ fontWeight: 600 }}>Date:</span> {formatDateTime(inv.createdAt)}</dd>
@@ -109,7 +109,7 @@ export default function AdminOrderInvoicePage() {
 
           <hr style={{ border: "none", borderTop: "1px solid var(--line)", margin: "1.5rem 0" }} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 20 }}>
             <section>
               <h2 style={{ fontSize: "1rem", margin: "0 0 10px", borderBottom: "1px solid var(--line)", paddingBottom: 8, maxWidth: 420 }}>Bill To:</h2>
               <p style={{ margin: "0 0 6px", fontWeight: 700 }}>{inv.customer.name || "Guest"}</p>

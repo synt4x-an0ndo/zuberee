@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiChevronDown, FiChevronUp, FiFilter, FiSearch, FiX } from "react-icons/fi";
 import ProductCard from "@/components/ProductCard";
+import ViewportPortal from "@/components/ViewportPortal";
 import { Button, cx, EmptyState, ErrorState, Skeleton } from "@/components/ui";
 import { useSite } from "@/context/SiteContext";
 import { api, listOf } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [suggest, setSuggest] = useState({ loading: false, items: [], error: "" });
+  const filterCloseRef = useRef(null);
   const requestRef = useRef(0);
   const lastLoadedRef = useRef({ key: "", page: 0 });
 
@@ -90,7 +92,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   }, [searchDraft, q, update]);
 
   /**
-   * Instant suggestions while typing, from GET /api/product-search (public, unpaginated, title/sku/
+   * Instant suggestions while typing, from GET /api/product-search (public, server-limited, title/sku/
    * description match). The grid itself keeps using api/product-pagination, so this never duplicates
    * the filtered query: it is skipped until two characters are typed, debounced, and dropped as soon
    * as the suggestion matches the query already applied to the grid.
@@ -102,10 +104,11 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
       return undefined;
     }
     let alive = true;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
       setSuggest((current) => ({ ...current, loading: true, error: "" }));
       api
-        .get("api/product-search", { auth: false, params: { q: term } })
+        .get("api/product-search", { auth: false, params: { q: term, limit: 5 }, signal: controller.signal })
         .then((response) => {
           if (!alive) return;
           const items = listOf(response)
@@ -118,6 +121,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     }, 300);
     return () => {
       alive = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [searchDraft, q]);
@@ -202,12 +206,47 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     setFiltersOpen(false);
   };
 
+  // The mobile filter is a modal drawer: keep scrolling inside it and return
+  // keyboard focus to the opener when it closes, just like the other dialogs.
+  useEffect(() => {
+    if (!filtersOpen) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    filterCloseRef.current?.focus();
+    const keydown = (event) => {
+      if (event.key === "Escape") {
+        setFiltersOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = filterCloseRef.current?.closest('[role="dialog"]');
+      const controls = Array.from(dialog?.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') || [])
+        .filter((control) => control.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", keydown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [filtersOpen]);
+
   const renderFilters = (inDrawer = false) => (
     <aside className={cx("filters", inDrawer && "in-drawer")} aria-label="Product filters">
       <div className="filter-panel-head">
         <h2>Filters</h2>
         {inDrawer && (
-          <button type="button" className="icon-btn" onClick={() => setFiltersOpen(false)} aria-label="Close filters">
+          <button type="button" className="icon-btn" ref={filterCloseRef} onClick={() => setFiltersOpen(false)} aria-label="Close filters">
             <FiX aria-hidden="true" />
           </button>
         )}
@@ -472,13 +511,15 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
         </section>
       </div>
 
+      <ViewportPortal>
       {filtersOpen && (
         <div className="overlay filter-overlay" onMouseDown={(event) => event.target === event.currentTarget && setFiltersOpen(false)}>
-          <div className="mobile-drawer-panel" style={{ width: "min(360px, 90vw)", height: "100%", overflowY: "auto", padding: "1rem" }}>
+          <div className="mobile-drawer-panel" role="dialog" aria-modal="true" aria-label="Product filters" style={{ width: "min(360px, 90vw)", height: "100%", overflowY: "auto", padding: "1rem" }}>
             {renderFilters(true)}
           </div>
         </div>
       )}
+      </ViewportPortal>
     </div>
   );
 }

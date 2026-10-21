@@ -78,10 +78,15 @@ export async function GET(request) {
 
         const q = searchParams.get("q")?.trim();
         const category = searchParams.get("category")?.trim();
+        // Opt-in bounded suggestions; existing full-search clients are unchanged.
+        const limit = searchParams.has("limit")
+            ? Math.max(1, Math.min(12, Math.floor(toFiniteNumber(searchParams.get("limit")) ?? 6)))
+            : undefined;
         const minPrice = toFiniteNumber(searchParams.get("min_price"));
         const maxPrice = toFiniteNumber(searchParams.get("max_price"));
 
         const products = await prisma.product.findMany({
+            ...(limit !== undefined ? { take: limit } : {}),
             where: {
                 isActive: true,
 
@@ -110,6 +115,16 @@ export async function GET(request) {
                                 shortDescription: {
                                     contains: q,
                                     mode: "insensitive",
+                                },
+                            },
+                            {
+                                category: {
+                                    is: {
+                                        OR: [
+                                            { name: { contains: q, mode: "insensitive" } },
+                                            { slug: { contains: q, mode: "insensitive" } },
+                                        ],
+                                    },
                                 },
                             },
                         ],

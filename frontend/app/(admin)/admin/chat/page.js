@@ -126,14 +126,7 @@ export default function AdminChatPage() {
 
       {listError && <p className="notice notice-danger" role="alert">{listError}</p>}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(230px, 320px) minmax(0, 1fr)",
-          gap: "1rem",
-          alignItems: "start",
-        }}
-      >
+      <div className="admin-chat-layout">
         <Card>
           <div className="stack" style={{ gap: 6 }}>
             <strong style={{ padding: "2px 2px 6px" }}>

@@ -71,41 +71,19 @@ const DISTRICT_OPTIONS = [{ value: "", label: "Select district" }, ...DISTRICTS]
  *
  * DataTable measures the header cells once, converts the result to percentages
  * and then switches the table to `table-layout: fixed`. Anything measured too
- * narrow stays narrow, so every header declares a minimum and never wraps -
- * otherwise "Conversion" and "Date" break in half and the labels run together.
+ * narrow stays narrow, so every column declares a minimum - in globals.css -
+ * and the header never wraps; otherwise "Conversion" and "Date" break in half
+ * and the labels run together.
  *
- * `COL_DIVIDE` draws the hairline that keeps one section from bleeding into the
- * next; the first column is left alone so there is no stray edge on the left.
+ * The hairline between columns, the cell padding and those minimums all live in
+ * the shared data-grid block in globals.css, keyed off data-col. The class and
+ * attribute also change AlignedTable's cache key, so a layout measured before
+ * the shared rules existed can never be reused.
  */
-const COL_DIVIDE = {
-  borderLeft: "1px solid var(--line-2)",
-  paddingLeft: 12,
-  paddingRight: 12,
-};
+const head = (key) => ({ className: "inc-col", "data-col": key });
 
-const COL_MIN = {
-  name: 150,
-  phone: 132,
-  address: 170,
-  cart: 300,
-  status: 158,
-  conversion: 120,
-  date: 140,
-  action: 196,
-};
-
-/** Header cell: fixed minimum, a divider, and never wrapped.
- *  The class also changes AlignedTable's cache key, so a layout measured before
- *  these minimums existed can never be reused. */
-const head = (key) => ({
-  className: "inc-col",
-  whiteSpace: "nowrap",
-  ...(key === "#" ? {} : COL_DIVIDE),
-  ...(key === "#" ? { minWidth: 52 } : { minWidth: COL_MIN[key] }),
-});
-
-/** Body cell: the same divider and padding as its header. */
-const cell = (key) => (key === "#" ? undefined : COL_DIVIDE);
+/** Body cell: the same hairline and padding as its header. */
+const cell = (key) => ({ "data-col": key });
 
 /**
  * Cart lines with a thumbnail each, matching the reference layout. Falls back to
@@ -354,9 +332,9 @@ function ConvertModal({ row, onClose, onConverted }) {
               {items.map((item, index) => (
                 <div
                   key={`${item.product_id ?? "row"}-${index}`}
+                  className="inc-convert-line"
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) 92px 110px",
                     gap: 10,
                     alignItems: "center",
                     padding: "8px 10px",
@@ -394,7 +372,7 @@ function ConvertModal({ row, onClose, onConverted }) {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: 12 }}>
             <Field label="Customer name" htmlFor="cv-name" required>
               <Input
                 id="cv-name"
@@ -440,7 +418,7 @@ function ConvertModal({ row, onClose, onConverted }) {
             />
           </Field>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", gap: 12 }}>
             <Field label="District" htmlFor="cv-district">
               <Select
                 id="cv-district"
@@ -577,7 +555,7 @@ export default function IncompleteOrdersPage() {
           title="Filter incomplete orders"
           subtitle="Narrow by date range and status."
           actions={
-            <div style={{ minWidth: 260 }}>
+            <div style={{ width: 260, maxWidth: "100%", minWidth: 0 }}>
               <Input
                 id="inc-search"
                 type="search"
@@ -632,15 +610,15 @@ export default function IncompleteOrdersPage() {
           <DataTable key="inc-cols-9">
             <thead>
               <tr>
-                <th style={head("#")}>#</th>
-                <th style={head("name")}>Name</th>
-                <th style={head("phone")}>Phone</th>
-                <th style={head("address")}>Address</th>
-                <th style={head("cart")}>Cart Items</th>
-                <th style={head("status")}>Status</th>
-                <th style={head("conversion")}>Conversion</th>
-                <th style={head("date")}>Date</th>
-                <th style={head("action")}>Action</th>
+                <th className="inc-col" data-col="#">#</th>
+                <th className="inc-col" data-col="name">Name</th>
+                <th className="inc-col" data-col="phone">Phone</th>
+                <th className="inc-col" data-col="address">Address</th>
+                <th className="inc-col" data-col="cart">Cart Items</th>
+                <th className="inc-col" data-col="status">Status</th>
+                <th className="inc-col" data-col="conversion">Conversion</th>
+                <th className="inc-col" data-col="date">Date</th>
+                <th className="inc-col" data-col="action">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -651,22 +629,22 @@ export default function IncompleteOrdersPage() {
                 return (
                   <tr key={row.id}>
                     <td className="num">{row.id}</td>
-                    <td style={cell("name")}>
+                    <td data-col="name">
                       <strong>{row.name || "Guest"}</strong>
                       {row.email ? (
                         <span className="muted" style={{ display: "block", fontSize: "0.75rem" }}>{row.email}</span>
                       ) : null}
                     </td>
-                    <td style={{ ...cell("phone"), whiteSpace: "nowrap" }}>
+                    <td data-col="phone" style={{ whiteSpace: "nowrap" }}>
                       {row.phone || <span className="muted">—</span>}
                     </td>
-                    <td className="muted" style={{ ...cell("address"), maxWidth: 240 }}>
+                    <td className="muted" data-col="address" style={{ maxWidth: 240 }}>
                       {[row.address, row.district].filter(Boolean).join(", ") || "—"}
                     </td>
-                    <td style={{ ...cell("cart"), minWidth: 280, maxWidth: 380 }}>
+                    <td data-col="cart" style={{ minWidth: 280, maxWidth: 380 }}>
                       <CartItemsCell items={row.cart_items} />
                     </td>
-                    <td style={cell("status")}>
+                    <td data-col="status">
                       {/* Same plain <Select> the Orders page uses - matched to the
                           column so it sits in the cell without stretching it. */}
                       <Select
@@ -678,7 +656,7 @@ export default function IncompleteOrdersPage() {
                         style={{ width: 150 }}
                       />
                     </td>
-                    <td style={cell("conversion")}>
+                    <td data-col="conversion">
                       {row.converted_order_id ? (
                         <>
                           <Badge tone="success">Converted</Badge>
@@ -690,7 +668,7 @@ export default function IncompleteOrdersPage() {
                         <Badge tone="warn">No order</Badge>
                       )}
                     </td>
-                    <td className="muted" style={cell("date")}>
+                    <td className="muted" data-col="date">
                       {formatDateTime(row.created_at)}
                       {row.converted_at ? (
                         <span style={{ display: "block", fontSize: "0.75rem" }}>
@@ -698,7 +676,7 @@ export default function IncompleteOrdersPage() {
                         </span>
                       ) : null}
                     </td>
-                    <td style={cell("action")}>
+                    <td data-col="action">
                       <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                         <Button
                           size="sm"

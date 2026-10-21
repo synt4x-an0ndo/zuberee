@@ -14,7 +14,7 @@ import {
   FiPlus,
   FiShoppingCart,
   FiTruck,
-  FiZap,
+  FiClock,
   FiZoomIn,
   FiZoomOut,
 } from "react-icons/fi";
@@ -394,7 +394,11 @@ export default function ProductPage() {
             )}
             {preorder && (
               <p className="pd2-pill is-pre">
-                <FiZap aria-hidden="true" /> Pre Order — delivery time will be confirmed after ordering
+                <span className="pd2-pre-icon" aria-hidden="true"><FiClock /></span>
+                <span className="pd2-pre-copy">
+                  <strong>Pre Order</strong>
+                  <span>delivery time will be confirmed after ordering</span>
+                </span>
               </p>
             )}
             {unavailable && <p className="pd2-pill is-out">This product is currently sold out</p>}

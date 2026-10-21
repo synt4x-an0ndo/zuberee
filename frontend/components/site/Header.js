@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import useExitPresence from "@/lib/useExitPresence";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   FiChevronDown,
   FiGrid,
   FiHome,
   FiMenu,
-  FiSearch,
   FiShoppingBag,
   FiShoppingCart,
   FiTag,
@@ -18,37 +18,12 @@ import {
 } from "react-icons/fi";
 import UserAvatar from "@/components/UserAvatar";
 import Img from "@/components/Img";
+import LiveProductSearch from "@/components/site/LiveProductSearch";
 import CategoryMenu from "@/components/site/CategoryMenu";
 import { cx } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useSite } from "@/context/SiteContext";
-
-function SearchForm({ className, placeholder = "Search products" }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-
-  const submit = (event) => {
-    event.preventDefault();
-    const q = value.trim();
-    router.push(q ? `/shop?q=${encodeURIComponent(q)}` : "/shop");
-    setValue("");
-  };
-
-  return (
-    <form className={className} onSubmit={submit} role="search">
-      <FiSearch aria-hidden="true" />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        aria-label="Search products"
-        enterKeyHint="search"
-      />
-    </form>
-  );
-}
 
 export default function Header() {
   const pathname = usePathname() || "/";
@@ -62,6 +37,7 @@ export default function Header() {
   const scrollDirection = useRef(0);
   const compactNavRef = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuPresent = useExitPresence(menuOpen);
   const [openGroup, setOpenGroup] = useState(null);
 
   useEffect(() => {
@@ -137,7 +113,7 @@ export default function Header() {
   }, [pathname]);
 
   useEffect(() => {
-    if (!menuOpen) return undefined;
+    if (!menuPresent) return undefined;
     document.body.style.overflow = "hidden";
     const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
     window.addEventListener("keydown", onKey);
@@ -145,7 +121,7 @@ export default function Header() {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
+  }, [menuPresent]);
 
   const roots = categories.tree;
   const isActive = (href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
@@ -207,13 +183,13 @@ export default function Header() {
         </div>
         <div className="header-category-row">
           <CategoryMenu label="All Categories" className="header-category-menu" />
-          <SearchForm className="header-search" />
+          <LiveProductSearch className="header-search" />
         </div>
       </div>
 
       </header>
-      {menuOpen && (
-        <div className="mobile-drawer" onMouseDown={(e) => e.target === e.currentTarget && setMenuOpen(false)}>
+      {menuPresent && (
+        <div className={cx("mobile-drawer", !menuOpen && "is-closing")} onMouseDown={(e) => e.target === e.currentTarget && setMenuOpen(false)}>
           <aside className="mobile-drawer-panel" aria-label="Menu">
             <div className="drawer-head">
               {logo ? (
@@ -233,7 +209,7 @@ export default function Header() {
               </button>
             </div>
 
-            <SearchForm className="drawer-search" placeholder="Search products..." />
+            <LiveProductSearch className="drawer-search" placeholder="Search products..." />
 
             <div className="drawer-section">
               <h2 className="drawer-section-title">

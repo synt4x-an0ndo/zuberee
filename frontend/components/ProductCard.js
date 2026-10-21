@@ -4,19 +4,35 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { FiShoppingCart, FiX } from "react-icons/fi";
+import { FiShoppingBag, FiShoppingCart, FiX } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import Img from "@/components/Img";
 import { useCart } from "@/context/CartContext";
 import { useFeedback } from "@/context/FeedbackContext";
 import { formatMoney } from "@/lib/api";
 import { normalizeProduct } from "@/lib/format";
+import styles from "./ProductCardVariants.module.css";
 
 const AVAILABILITY = {
   "in-stock": { label: "IN-STOCK", tone: "solid" },
   "pre-order": { label: "Pre-order", tone: "info" },
   "sold-out": { label: "Sold out", tone: "neutral" },
 };
+
+function ColorVariantOption({ color, selected, onSelect, disabled, displayOnly = false }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const Tag = displayOnly ? "span" : "button";
+  const attributes = displayOnly
+    ? { role: "img", "aria-label": `${color.name} variant`, "data-variant-preview": true }
+    : { type: "button", onClick: onSelect, disabled, "aria-label": `Choose ${color.name}`, "aria-pressed": selected };
+  return (
+    <Tag {...attributes} className={displayOnly ? styles.preview : cx(styles.option, selected && styles.selected)} title={color.name}>
+      {color.image && !imageFailed ? (
+        <Img src={color.image} alt="" width={displayOnly ? 30 : 44} height={displayOnly ? 30 : 44} onError={() => setImageFailed(true)} />
+      ) : <span className={styles.fallback} style={{ background: color.code || "var(--line)" }} aria-hidden="true" />}
+    </Tag>
+  );
+}
 
 export default function ProductCard({ product: raw, index = 0 }) {
   const product = raw?.images !== undefined && raw?.hasSale !== undefined ? raw : normalizeProduct(raw);
@@ -94,7 +110,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
   if (!product) return null;
 
   const status = AVAILABILITY[product.availability];
-  const swatches = product.colors.filter((color) => color.code).slice(0, 5);
+  const swatches = product.colors.slice(0, 5);
   const extraColors = Math.max(0, product.colors.length - swatches.length);
   // Gallery fallback: the backend can reference files that are no longer on
   // disk, so drop any image that has failed and use what is left. images[0]
@@ -105,6 +121,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
   // clamp defensively: photos can drop out of the gallery after a 404
   const activeIndex = galleryCount ? ((activeImage % galleryCount) + galleryCount) % galleryCount : 0;
   const primaryImage = usableImages[0]?.url || null;
+  const chooseColor = (color) => setSelectedColorId(color.id);
   const markImageFailed = (url) => {
     if (!url) return;
     setFailedImages((current) => (current.includes(url) ? current : [...current, url]));
@@ -192,17 +209,9 @@ export default function ProductCard({ product: raw, index = 0 }) {
                 </div>
                 <div className="quick-add-colors">
                   {product.colors.map((color, colorIndex) => (
-                    <button
-                      key={color.id ?? `${color.name}-${colorIndex}`}
-                      type="button"
-                      className={cx("quick-add-color", String(selectedColorId) === String(color.id) && "is-active")}
-                      onClick={() => setSelectedColorId(color.id)}
-                      aria-label={`Choose ${color.name}`}
-                      aria-pressed={String(selectedColorId) === String(color.id)}
-                      title={color.name}
-                    >
-                      <span style={{ background: color.code || "#e5e7eb" }} />
-                    </button>
+                    <ColorVariantOption key={`${color.id ?? colorIndex}-${color.image || ""}`} color={color}
+                      selected={String(selectedColorId) === String(color.id)}
+                      onSelect={() => chooseColor(color)} disabled={Boolean(busyAction)} />
                   ))}
                 </div>
               </div>
@@ -302,21 +311,28 @@ export default function ProductCard({ product: raw, index = 0 }) {
         </div>
 
         <div className="product-body">
+          <div className={styles.metadata}>
+            <span className={styles.sku}>SKU: {product.sku || "—"}</span>
+            {swatches.length > 0 && (
+              <div className={styles.group} role="group" aria-label="Available colors">
+                {swatches.map((color, colorIndex) => (
+                  <ColorVariantOption key={`${color.id ?? colorIndex}-${color.image || ""}`} color={color} displayOnly />
+                ))}
+                {extraColors > 0 && <span className={styles.more}>+{extraColors}</span>}
+              </div>
+            )}
+          </div>
           <h3 className="product-title">
-            <Link href={`/product-page/${product.id}`}>{product.title}</Link>
+            <Link href={`/product-page/${product.id}`} title={product.title}>{product.title}</Link>
           </h3>
           <div className="price">
             <span className="price-now">{formatMoney(product.salePrice)}</span>
             {product.hasSale && <span className="price-was">{formatMoney(product.price)}</span>}
           </div>
-          {swatches.length > 0 && (
-            <div className="swatches" aria-label="Available colors">
-              {swatches.map((color, colorIndex) => (
-                <span key={`${color.name}-${colorIndex}`} className="swatch" style={{ background: color.code }} title={color.name} />
-              ))}
-              {extraColors > 0 && <span className="swatch-more">+{extraColors}</span>}
-            </div>
-          )}
+          <Link href={`/product-page/${product.id}`} className={cx("btn", "btn-outline", styles.viewProduct)}
+            aria-label={`View ${product.title}`}>
+            <FiShoppingBag aria-hidden="true" /><span>View Product</span>
+          </Link>
         </div>
       </article>
       {quickDialog}

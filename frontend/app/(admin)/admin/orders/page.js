@@ -505,11 +505,11 @@ export default function AdminOrdersPage() {
               <div className="orders-modal-content">
                 <div className="orders-modal-field">
                   <label htmlFor="order-customer-badge">Badge</label>
-                  <select id="order-customer-badge" className="orders-modal-select" value={badgeDraft} onChange={(event) => setBadgeDraft(event.target.value)}>
+                  <Select id="order-customer-badge" className="orders-modal-select" value={badgeDraft} onChange={(event) => setBadgeDraft(event.target.value)}>
                     <option value="">No badge</option>
                     {badgeDraft && !BADGE_OPTIONS.includes(badgeDraft) && <option value={badgeDraft}>{badgeDraft}</option>}
                     {BADGE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  </Select>
                 </div>
                 <p className="orders-modal-note">Saved with PATCH /api/admin/customer-leaderboard/:key/badge. For an account order the badge is stored on the user; for a guest order it is written to that phone number&rsquo;s orders.</p>
               </div>

@@ -13,9 +13,18 @@ export default function CartDrawer() {
     const { cart, drawerOpen, closeDrawer, updateItem, removeItem, clearCart, loading } = useCart();
   const { toast, confirm } = useFeedback();
   const [clearing, setClearing] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const touch = useRef({ y: 0, x: 0, active: false });
+
 
   useEffect(() => {
-    if (!drawerOpen) return undefined;
+    if (!drawerOpen) {
+      setDragY(0);
+      setDragging(false);
+      touch.current.active = false;
+      return undefined;
+    }
     document.body.style.overflow = "hidden";
     const onKey = (e) => e.key === "Escape" && closeDrawer();
     window.addEventListener("keydown", onKey);
@@ -67,9 +76,6 @@ export default function CartDrawer() {
   // --- swipe down to close (touch) -------------------------------------
   // Only starts when the drag begins in the header or while the body is
   // scrolled to the top, so normal scrolling inside a full cart still works.
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const touch = useRef({ y: 0, x: 0, active: false });
 
   const onTouchStart = (e) => {
     if (e.touches.length !== 1) return;
