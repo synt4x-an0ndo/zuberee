@@ -1487,10 +1487,14 @@ button {
 
 .donut-layout {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 1.5rem;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
   min-height: 260px;
+}
+
+.donut-layout > * {
+  min-width: 0;
 }
 
 .donut-chart {
@@ -1574,11 +1578,11 @@ button {
 
 .donut-legend-row {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
   width: 100%;
-  padding: 0.5rem 0.6rem;
+  padding: 0.5rem 0.4rem;
   border: 1px solid transparent;
   border-radius: 0.8rem;
   background: transparent;
@@ -1604,13 +1608,28 @@ button {
   box-shadow: 0 1px 4px rgb(24 32 27 / 0.18);
 }
 
+.donut-legend-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.donut-legend-values {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
 .donut-legend-count {
   color: var(--muted);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 
-.donut-legend-row strong {
+.donut-legend-values strong {
   min-width: 3ch;
   color: var(--ink);
   text-align: right;

@@ -181,9 +181,11 @@ function StatusChart({ rows }) {
               onClick={() => setActiveIndex(activeIndex === index ? null : index)}
             >
               <span className="legend-dot" style={{ background: segment.color }} />
-              <span>{segment.label}</span>
-              <span className="donut-legend-count">{segment.orders}</span>
-              <strong>{Math.round(segment.pct)}%</strong>
+              <span className="donut-legend-label">{segment.label}</span>
+              <span className="donut-legend-values">
+                <span className="donut-legend-count">{segment.orders}</span>
+                <strong>{Math.round(segment.pct)}%</strong>
+              </span>
             </button>
           </li>
         ))}
