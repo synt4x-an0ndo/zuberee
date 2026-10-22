@@ -1485,6 +1485,11 @@ button {
   }
 }
 
+.donut-card-content {
+  container-type: inline-size;
+  width: 100%;
+}
+
 .donut-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1634,6 +1639,33 @@ button {
   color: var(--ink);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 460px) {
+  .donut-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    min-height: 0;
+  }
+
+  .donut-chart {
+    width: min(196px, 100%);
+  }
+
+  .donut-legend {
+    width: min(100%, 300px);
+    margin-inline: auto;
+  }
+
+  .donut-legend-row {
+    padding-inline: 0.55rem;
+  }
+
+  .donut-legend-label {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 @keyframes donut-in {

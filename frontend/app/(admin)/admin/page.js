@@ -141,7 +141,8 @@ function StatusChart({ rows }) {
   const active = activeIndex != null ? segments[activeIndex] : null;
 
   return (
-    <div className="donut-layout">
+    <div className="donut-card-content">
+      <div className="donut-layout">
       <div className="donut-chart">
         <svg viewBox="0 0 200 200" className="donut-ring" role="img" aria-label={`Order status distribution, ${total} orders`} focusable="false">
           <circle cx="100" cy="100" r="80" className="donut-track" />
@@ -178,7 +179,7 @@ function StatusChart({ rows }) {
               onMouseLeave={() => setActiveIndex(null)}
               onFocus={() => setActiveIndex(index)}
               onBlur={() => setActiveIndex(null)}
-              onClick={() => setActiveIndex(activeIndex === index ? null : index)}
+              onClick={() => setActiveIndex(null)}
             >
               <span className="legend-dot" style={{ background: segment.color }} />
               <span className="donut-legend-label">{segment.label}</span>
@@ -190,6 +191,7 @@ function StatusChart({ rows }) {
           </li>
         ))}
       </ul>
+      </div>
     </div>
   );
 }
