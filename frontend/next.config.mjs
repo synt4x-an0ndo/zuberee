@@ -7,6 +7,7 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: { agentUpgrade: "security" },
   // Next dev HMR validates Origin separately from Host. Allow loopback and
   // this machine's actual LAN addresses (phones), never arbitrary origins.
   allowedDevOrigins: [
