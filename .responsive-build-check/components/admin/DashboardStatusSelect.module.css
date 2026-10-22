@@ -1,9 +1,0 @@
-.root { min-width: 0; width: 220px; max-width: 100%; flex: 0 0 auto; }
-@media (max-width: 760px) { .root { width: 100%; } .trigger { min-height: 44px; } }
-.trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; text-align: left; cursor: pointer; font: inherit; }
-.trigger > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.trigger:focus-visible { outline: 2px solid var(--brand, #f44000); outline-offset: 2px; }
-.list { position: fixed; z-index: 1200; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; padding: 4px; border: 1px solid var(--line, #ddd); border-radius: 10px; background: var(--surface, #fff); color: var(--ink, #202926); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); font: inherit; }
-.option { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 9px 12px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; }
-.option[data-active="true"] { background: var(--surface-2, #f3f4f6); outline: 1px solid var(--line, #ddd); outline-offset: -1px; }
-.option[aria-selected="true"] { font-weight: 600; }
