@@ -22,16 +22,13 @@ import { useAsync } from "@/lib/useAsync";
  *   GET/PUT api/admin/site-settings  -> inventory_enforcement_enabled ("Counting only" toggle)
  *   GET api/admin/inventory/products ?search -> { data: [{ id, title, sku, track_inventory }] }
  *        (Receive Stock modal, product search; backend commit cf971f5)
- *   POST api/admin/inventory/receive-stock { product_variant_id, quantity, note? }
- *        -> { data: { stock_after } } and writes a StockMovement row
+ *   POST api/admin/inventory/receive-stock { product_variant_id | product_id, quantity, note? }
+ *        -> { data: { stock_after } } and writes the applicable stock ledger row
  *   Stock History button -> /admin/inventory/movements (GET inventory/movements ledger)
  *
- * Stock is received against a ProductVariant (a specific colour/size), never a
- * bare product, so the modal always resolves product -> variant before posting.
- * Variants for the chosen product come from the inventory/variants endpoint
- * above (filtered to the selected product id). "Grid" still opens the product
- * editor for full variant edits; there is no decrease/adjust endpoint, so the
- * per-row action is Receive (add stock) only.
+ * In per-size mode stock is received against a specific variant. Products in
+ * product-level mode (and products with no sizes) receive against the product
+ * itself. Both use the existing receive-stock endpoint and stock history.
  */
 
 const FILTERS = [
@@ -102,9 +99,13 @@ export default function InventoryPage() {
   const openReceiveForVariant = (row) => {
     resetReceive();
     setReceiveLocked(true);
-    setSelectedProduct(row.product ? { id: row.product.id, title: row.product.title, sku: row.product.sku } : null);
-    setVariantOptions([{ id: row.id, label: cleanVariantLabel(row), stock: row.stock }]);
-    setVariantId(String(row.id));
+    setSelectedProduct(row.product ? { id: row.product.id, title: row.product.title, sku: row.product.sku, product_level: Boolean(row.product_level) } : null);
+    if (row.product_level) {
+      setVariantOptions([]);
+    } else {
+      setVariantOptions([{ id: row.id, label: cleanVariantLabel(row), stock: row.stock }]);
+      setVariantId(String(row.id));
+    }
     setReceiveOpen(true);
   };
 
@@ -132,6 +133,10 @@ export default function InventoryPage() {
     setVariantId("");
     setVariantOptions([]);
     setReceiveError("");
+    if (product.product_level) {
+      setVariantsLoading(false);
+      return;
+    }
     setVariantsLoading(true);
     try {
       const body = await api.get("api/admin/inventory/variants", {
@@ -155,13 +160,15 @@ export default function InventoryPage() {
   const submitReceive = async (event) => {
     event?.preventDefault?.();
     const qty = Number(receiveQty);
-    if (!variantId) return setReceiveError("Choose the colour/size variant that is receiving stock.");
+    const isProductLevel = Boolean(selectedProduct?.product_level);
+    if (!selectedProduct) return setReceiveError("Choose a product first.");
+    if (!isProductLevel && !variantId) return setReceiveError("Choose the colour/size variant that is receiving stock.");
     if (!Number.isInteger(qty) || qty <= 0) return setReceiveError("Enter a whole quantity of at least 1.");
     setReceiving(true);
     setReceiveError("");
     try {
       const body = await api.post("api/admin/inventory/receive-stock", {
-        product_variant_id: Number(variantId),
+        ...(isProductLevel ? { product_id: Number(selectedProduct.id) } : { product_variant_id: Number(variantId) }),
         quantity: qty,
         note: receiveNote.trim() || "Stock received",
       });
@@ -276,14 +283,14 @@ export default function InventoryPage() {
       </div>
 
       {list.error ? <ErrorState message={list.error} onRetry={list.reload} /> : !list.data ? <Skeleton style={{ height: 420 }} /> : list.data.rows.length === 0 ? (
-        <EmptyState icon={FiAlertTriangle} title="No variants match" text="Try another filter or search term." />
+        <EmptyState icon={FiAlertTriangle} title="No inventory rows match" text="Try another filter or search term." />
       ) : (
         <>
           <DataTable>
             <thead>
               <tr>
                 <th>Product</th>
-                <th>Variant</th>
+                <th>Stock source</th>
                 <th className="text-right">On hand</th>
                 <th className="text-right">Held</th>
                 <th className="text-right">Available</th>
@@ -309,7 +316,7 @@ export default function InventoryPage() {
                           {v.product?.id ? <Link href={`/admin/products/${v.product.id}`}><strong>{v.product.title || "Product"}</strong></Link> : <strong>{v.product?.title || "Product"}</strong>}
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 2 }}>
                             {v.sku && <span className="num" style={{ fontSize: "0.78rem", padding: "1px 8px", borderRadius: 6, background: "var(--brand-soft, #e4ebe6)", color: "var(--muted)" }}>{v.sku}</span>}
-                            {!tracked && <Badge tone="neutral">not tracked</Badge>}
+                            {v.product_level ? <Badge tone="neutral">product-level</Badge> : !tracked && <Badge tone="neutral">not tracked</Badge>}
                           </div>
                         </div>
                       </div>
@@ -321,7 +328,7 @@ export default function InventoryPage() {
                       </span>
                     </td>
                     <td className="text-right num">{fmt(v.stock)}</td>
-                    <td className="text-right num">{fmt((v.reserved ?? 0) + (v.held ?? 0))}</td>
+                    <td className="text-right num">{fmt(v.held ?? v.reserved ?? 0)}</td>
                     <td className="text-right num" style={{ fontWeight: 700, color: (v.available ?? 0) <= 0 ? "var(--danger)" : undefined }}>{fmt(v.available)}</td>
                     <td><Badge tone={status.tone}>{status.label}</Badge></td>
                     <td>
@@ -352,7 +359,7 @@ export default function InventoryPage() {
         footer={(
           <>
             <Button variant="ghost" onClick={() => setReceiveOpen(false)}>Cancel</Button>
-            <Button variant="primary" loading={receiving} disabled={!variantId || variantsLoading} onClick={submitReceive}>Receive Units</Button>
+            <Button variant="primary" loading={receiving} disabled={!selectedProduct || (!selectedProduct?.product_level && (!variantId || variantsLoading))} onClick={submitReceive}>Receive Units</Button>
           </>
         )}
       >
@@ -388,7 +395,7 @@ export default function InventoryPage() {
                       }}
                     >
                       <strong>{p.title || "Product"}</strong>
-                      <span className="muted" style={{ display: "block", fontSize: "0.8rem" }}>{p.sku || "No SKU"}{p.track_inventory ? " · tracked" : ""}</span>
+                      <span className="muted" style={{ display: "block", fontSize: "0.8rem" }}>{p.sku || "No SKU"}{p.product_level ? " · product-level stock" : " · per-size stock"}</span>
                     </button>
                   ))}
                 </div>
@@ -398,17 +405,23 @@ export default function InventoryPage() {
             </>
           )}
 
-          <Field label="Colour / Size variant" htmlFor="recv-variant" required>
-            <Select
-              id="recv-variant"
-              value={variantId}
-              onChange={(e) => setVariantId(e.target.value)}
-              placeholder={variantsLoading ? "Loading variants…" : selectedProduct ? "Choose colour / size" : "Pick a product first"}
-              options={variantOptions.map((v) => ({ value: v.id, label: `${v.label} (on hand ${fmt(v.stock)})` }))}
-            />
-          </Field>
-          {selectedProduct && !variantsLoading && variantOptions.length === 0 && (
-            <p className="notice notice-info" role="note">This product has no colour/size variants, so there is nothing to receive stock against. Add variants in the product editor (Grid) first.</p>
+          {selectedProduct?.product_level ? (
+            <p className="notice notice-info" role="note">This product uses product-level stock. The received quantity will be shared by every size choice.</p>
+          ) : (
+            <>
+              <Field label="Colour / Size variant" htmlFor="recv-variant" required>
+                <Select
+                  id="recv-variant"
+                  value={variantId}
+                  onChange={(e) => setVariantId(e.target.value)}
+                  placeholder={variantsLoading ? "Loading variants…" : selectedProduct ? "Choose colour / size" : "Pick a product first"}
+                  options={variantOptions.map((v) => ({ value: v.id, label: `${v.label} (on hand ${fmt(v.stock)})` }))}
+                />
+              </Field>
+              {selectedProduct && !variantsLoading && variantOptions.length === 0 && (
+                <p className="notice notice-info" role="note">This product has no colour/size variants. It can receive product-level stock from the product editor after saving its inventory mode.</p>
+              )}
+            </>
           )}
 
           <Field label="Quantity received" htmlFor="recv-qty" required>

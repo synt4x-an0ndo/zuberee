@@ -2,6 +2,14 @@ import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { requireValidOrderContact } from "@/lib/contactValidation.js";
 import { allocateOrderEntries } from "@/lib/preorder.js";
+import {
+    adjustProductStock,
+    adjustVariantStock,
+    inventoryError,
+    isTransactionConflict,
+    lockProductFamilies,
+    syncVariantProductStock,
+} from "@/lib/inventory.js";
 
 const VALID_STATUSES = [
     "pending",
@@ -243,73 +251,29 @@ export async function GET(request) {
 export async function POST(request) {
     try {
         const auth = await authenticateRequest(request);
-
         if (!auth.authenticated || auth.user.role !== "ADMIN") {
-            return Response.json(
-                {
-                    success: false,
-                    message: "Admin access required.",
-                },
-                { status: 403 }
-            );
+            return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
         }
 
         const body = await request.json();
-
         const {
-            userId,
-            guestName,
-            guestPhone,
-            guestEmail,
-            guestAddress,
-            name,
-            phone,
-            email,
-            contactName,
-            contactPhone,
-            contactEmail,
-            district,
-            shippingAddress,
-            shippingFee = 0,
-            advancePayment = 0,
-            paymentMethod = "cash",
-            items: bodyItems,
+            userId, guestName, guestPhone, guestEmail, guestAddress,
+            name, phone, email, contactName, contactPhone, contactEmail,
+            district, shippingAddress, shippingFee = 0, advancePayment = 0,
+            paymentMethod = "cash", items: bodyItems,
         } = body;
-
         if (!Array.isArray(bodyItems) || bodyItems.length === 0) {
-            return Response.json(
-                {
-                    success: false,
-                    message: "Items are required.",
-                },
-                { status: 400 }
-            );
+            return Response.json({ success: false, message: "Items are required." }, { status: 400 });
         }
 
         let finalName = null;
         let finalPhone = null;
         let finalEmail = null;
         let finalUserId = null;
-        let finalShippingAddress = shippingAddress
-            ? String(shippingAddress).trim()
-            : null;
-
+        let finalShippingAddress = shippingAddress ? String(shippingAddress).trim() : null;
         if (userId) {
-            const user = await prisma.user.findUnique({
-                where: { id: Number(userId) },
-                select: { id: true, name: true, phone: true, email: true },
-            });
-
-            if (!user) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "User not found.",
-                    },
-                    { status: 404 }
-                );
-            }
-
+            const user = await prisma.user.findUnique({ where: { id: Number(userId) }, select: { id: true, name: true, phone: true, email: true } });
+            if (!user) return Response.json({ success: false, message: "User not found." }, { status: 404 });
             finalUserId = user.id;
             finalName = contactName ?? name ?? guestName ?? user.name;
             finalPhone = contactPhone ?? phone ?? guestPhone ?? user.phone;
@@ -318,148 +282,54 @@ export async function POST(request) {
             finalName = contactName ?? name ?? guestName;
             finalPhone = contactPhone ?? phone ?? guestPhone;
             finalEmail = contactEmail ?? email ?? guestEmail;
-
-            if (guestAddress) {
-                finalShippingAddress = String(guestAddress).trim();
-            }
+            if (guestAddress) finalShippingAddress = String(guestAddress).trim();
         }
-
         finalName = finalName ? String(finalName).trim() : "";
-        if (!finalName) {
-            return Response.json(
-                {
-                    success: false,
-                    message: "Customer name is required.",
-                },
-                { status: 400 }
-            );
-        }
-
+        if (!finalName) return Response.json({ success: false, message: "Customer name is required." }, { status: 400 });
         try {
             const contact = requireValidOrderContact({ phone: finalPhone, email: finalEmail });
             finalPhone = contact.phone;
             finalEmail = contact.email;
         } catch (validationError) {
-            return Response.json(
-                { success: false, message: validationError.message },
-                { status: validationError.status || 400 }
-            );
+            return Response.json({ success: false, message: validationError.message }, { status: validationError.status || 400 });
         }
-
-        if (!finalShippingAddress) {
-            return Response.json(
-                {
-                    success: false,
-                    message: "Shipping address is required.",
-                },
-                { status: 400 }
-            );
-        }
-
-        const productIds = [
-            ...new Set(
-                bodyItems.map((i) =>
-                    Number(i.productId ?? i.product_id)
-                )
-            ),
-        ];
-
-        const products = await prisma.product.findMany({
-            where: { id: { in: productIds } },
-            include: { variants: true },
-        });
-
-        const productMap = new Map(
-            products.map((p) => [p.id, p])
-        );
-
-        const orderItemsData = [];
-        let totalAmount = 0;
-
-        for (const raw of bodyItems) {
-            const productId = Number(
-                raw.productId ?? raw.product_id
-            );
-            const variantId =
-                raw.variantId ?? raw.variant_id ?? null;
-            const quantity = Number(raw.quantity ?? 1);
-
-            if (!Number.isInteger(quantity) || quantity < 1) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: "Invalid item quantity.",
-                    },
-                    { status: 400 }
-                );
-            }
-
-            const product = productMap.get(productId);
-
-            if (!product || !product.isActive) {
-                return Response.json(
-                    {
-                        success: false,
-                        message: `Product ${productId} not available.`,
-                    },
-                    { status: 404 }
-                );
-            }
-
-            let unitPrice = Number(product.price);
-
-            if (product.discount !== null) {
-                unitPrice = Number(product.discount);
-            }
-
-            let variant = null;
-
-            if (variantId !== null) {
-                variant = product.variants.find(
-                    (v) => v.id === Number(variantId)
-                );
-
-                if (!variant) {
-                    return Response.json(
-                        {
-                            success: false,
-                            message: `Variant ${variantId} not found.`,
-                        },
-                        { status: 404 }
-                    );
-                }
-
-                if (variant.price !== null) {
-                    unitPrice = Number(variant.price);
-                }
-            }
-
-            orderItemsData.push({
-                product,
-                variant,
-                productId,
-                variantId: variant ? variant.id : null,
-                size: variant?.value ? String(variant.value) : raw.size ?? raw.selected_size ?? null,
-                quantity,
-                unitPrice,
-            });
-
-            totalAmount += unitPrice * quantity;
-        }
-
-        try {
-            allocateOrderEntries(orderItemsData);
-        } catch (allocationError) {
-            return Response.json(
-                { success: false, message: allocationError.message },
-                { status: allocationError.status || 400 }
-            );
-        }
+        if (!finalShippingAddress) return Response.json({ success: false, message: "Shipping address is required." }, { status: 400 });
 
         const finalShippingFee = Number(shippingFee) || 0;
         const finalAdvancePayment = Number(advancePayment) || 0;
-
         const order = await prisma.$transaction(async (tx) => {
+            const productIds = [...new Set(bodyItems.map((item) => Number(item.productId ?? item.product_id)).filter((id) => Number.isInteger(id) && id > 0))];
+            if (!productIds.length) throw inventoryError("Invalid product in order.", 400);
+            await lockProductFamilies(tx, productIds);
+            const products = await tx.product.findMany({ where: { id: { in: productIds } }, include: { variants: true, inventory: true } });
+            const productMap = new Map(products.map((product) => [product.id, product]));
+            const entries = [];
+            let totalAmount = 0;
+
+            for (const raw of bodyItems) {
+                const productId = Number(raw.productId ?? raw.product_id);
+                const variantId = raw.variantId ?? raw.variant_id ?? null;
+                const quantity = Number(raw.quantity ?? 1);
+                if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity < 1) {
+                    throw inventoryError("Invalid item quantity or product.", 400);
+                }
+                const product = productMap.get(productId);
+                if (!product || !product.isActive) throw inventoryError(`Product ${productId} not available.`, 404);
+                let variant = null;
+                let unitPrice = product.discount !== null ? Number(product.discount) : Number(product.price);
+                if (variantId !== null && variantId !== "") {
+                    variant = product.variants.find((row) => row.id === Number(variantId)) || null;
+                    if (!variant) throw inventoryError(`Variant ${variantId} not found.`, 404);
+                    if (!variant.isActive) throw inventoryError(`Variant ${variant.value} is not available.`, 400);
+                    if (variant.price !== null) unitPrice = Number(variant.price);
+                } else if (product.variants.length > 0) {
+                    throw inventoryError(`Please select a variant for ${product.name}.`, 400);
+                }
+                entries.push({ product, variant, productId, variantId: variant?.id ?? null, size: variant?.value ? String(variant.value) : raw.size ?? raw.selected_size ?? null, quantity, unitPrice });
+                totalAmount += unitPrice * quantity;
+            }
+            allocateOrderEntries(entries);
+
             const createdOrder = await tx.order.create({
                 data: {
                     userId: finalUserId,
@@ -468,97 +338,41 @@ export async function POST(request) {
                     contactName: finalName,
                     contactPhone: finalPhone,
                     contactEmail: finalEmail,
-
                     status: "PENDING",
                     paymentStatus: "PENDING",
-
-                    totalAmount:
-                        totalAmount + finalShippingFee,
+                    totalAmount: totalAmount + finalShippingFee,
                     shippingFee: finalShippingFee,
                     shippingAddress: finalShippingAddress,
-                    district: district
-                        ? String(district).trim()
-                        : null,
+                    district: district ? String(district).trim() : null,
                     advancePayment: finalAdvancePayment,
                     paymentMethod: String(paymentMethod),
-
-                    items: {
-                        create: orderItemsData.map((item) => ({
-                            productId: item.productId,
-                            variantId: item.variantId,
-                            size: item.size ? String(item.size) : null,
-                            quantity: item.quantity,
-                            unitPrice: item.unitPrice,
-                            isPreorder: item.isPreorder,
-                            preorderQuantity: item.preorderQuantity,
-                        })),
-                    },
+                    items: { create: entries.map((item) => ({ productId: item.productId, variantId: item.variantId, size: item.size ? String(item.size) : null, quantity: item.quantity, unitPrice: item.unitPrice, isPreorder: item.isPreorder, preorderQuantity: item.preorderQuantity, stockMode: item.usesVariantStock ? "VARIANT" : "PRODUCT" })) },
                 },
                 include: ORDER_INCLUDE,
             });
 
-            for (const item of orderItemsData) {
-                if (item.variantId !== null && item.stockQuantity > 0) {
-                    const updatedVariant =
-                        await tx.productVariant.update({
-                            where: { id: item.variantId },
-                            data: {
-                                stock: { decrement: item.stockQuantity },
-                                ...(item.preorderQuantity > 0
-                                    ? { preorderCount: { increment: item.preorderQuantity } }
-                                    : {}),
-                            },
-                        });
-
-                    await tx.stockMovement.create({
-                        data: {
-                            productVariantId: item.variantId,
-                            type: "sale",
-                            quantity: -item.stockQuantity,
-                            stockAfter: updatedVariant.stock,
-                            reservedAfter: updatedVariant.held,
-                            orderId: createdOrder.id,
-                            note: "Order placed",
-                            userId: auth.user.userId,
-                        },
-                    });
-                } else if (item.variantId !== null && item.preorderQuantity > 0) {
-                    await tx.productVariant.update({
-                        where: { id: item.variantId },
-                        data: { preorderCount: { increment: item.preorderQuantity } },
-                    });
+            const variantProductIds = new Set();
+            for (const item of entries) {
+                if (item.usesVariantStock && item.stockQuantity > 0) {
+                    await adjustVariantStock(tx, { variantId: item.variantId, delta: -item.stockQuantity, type: "sale", note: "Admin order placed", userId: auth.user.userId, orderId: createdOrder.id });
+                    variantProductIds.add(item.productId);
                 }
-
-                if (item.stockQuantity > 0) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: {
-                            stock: { decrement: item.stockQuantity },
-                        },
-                    });
+                if (item.usesVariantStock && item.preorderQuantity > 0) {
+                    await tx.productVariant.update({ where: { id: item.variantId }, data: { preorderCount: { increment: item.preorderQuantity } } });
+                }
+                if (!item.usesVariantStock && item.stockQuantity > 0) {
+                    await adjustProductStock(tx, { productId: item.productId, delta: -item.stockQuantity, type: "sale", note: "Admin order placed", userId: auth.user.userId, orderId: createdOrder.id });
                 }
             }
-
+            await syncVariantProductStock(tx, [...variantProductIds]);
             return createdOrder;
-        });
+        }, { isolationLevel: "Serializable" });
 
-        return Response.json(
-            {
-                success: true,
-                message: "Order created successfully.",
-                data: formatOrder(order),
-            },
-            { status: 201 }
-        );
+        return Response.json({ success: true, message: "Order created successfully.", data: formatOrder(order) }, { status: 201 });
     } catch (error) {
+        if (Number.isInteger(error?.status)) return Response.json({ success: false, message: error.message }, { status: error.status });
+        if (isTransactionConflict(error)) return Response.json({ success: false, message: "Stock changed while the order was being created. Please try again." }, { status: 409 });
         console.error("Admin create order API error:", error);
-
-        return Response.json(
-            {
-                success: false,
-                message: "Failed to create order.",
-            },
-            { status: 500 }
-        );
+        return Response.json({ success: false, message: "Failed to create order." }, { status: 500 });
     }
 }

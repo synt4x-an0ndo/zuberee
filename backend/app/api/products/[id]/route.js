@@ -1,6 +1,14 @@
 import prisma from "@/directory/prisma/prisma.js";
-import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
+import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder, tracksStockPerSize } from "@/lib/preorder.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import {
+    adjustProductStock,
+    adjustVariantStock,
+    inventoryError,
+    isTransactionConflict,
+    lockProductFamilies,
+    syncVariantProductStock,
+} from "@/lib/inventory.js";
 
 const VALID_STATUSES = [
     "IN_STOCK",
@@ -23,7 +31,16 @@ function parsePreorderLimit(size, fallback = null) {
     return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function parseStock(value, label = "Stock") {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+        throw inventoryError(`${label} must be a whole number of 0 or more.`, 400);
+    }
+    return parsed;
+}
+
 function formatProduct(product) {
+    const usesVariantStock = tracksStockPerSize(product);
     return {
         id: product.id,
         title: product.name,
@@ -49,7 +66,7 @@ function formatProduct(product) {
             code: color.code,
             image: color.image,
         })),
-        sizes: product.variants.map((variant) => ({
+        sizes: product.variants.filter((variant) => variant.isActive !== false).map((variant) => ({
             id: variant.id,
             size: variant.value,
             pivot: {
@@ -58,12 +75,12 @@ function formatProduct(product) {
                         ? Number(product.price)
                         : Number(variant.price),
                 stock: variant.stock,
-                allow_preorder: isPreorderEligible(product, variant),
+                allow_preorder: usesVariantStock ? isPreorderEligible(product, variant) : isPreorderEligible(product),
                 variant_allow_preorder: variant.allowPreorder,
                 preorder_limit: variant.preorderLimit,
                 preorder_count: variant.preorderCount,
                 preorder_available: getPreorderRemaining(variant),
-                order_capacity: getVariantOrderCapacity(product, variant),
+                order_capacity: usesVariantStock ? getVariantOrderCapacity(product, variant) : getProductOrderCapacity(product),
             },
         })),
         category: product.category
@@ -334,228 +351,147 @@ export async function PUT(request, { params }) {
             );
         }
 
-        const updatedProduct =
-            await prisma.$transaction(async (tx) => {
+        const updatedProduct = await prisma.$transaction(async (tx) => {
+                await lockProductFamilies(tx, [id]);
+                const lockedProduct = await tx.product.findUnique({
+                    where: { id },
+                    include: { variants: true, inventory: true },
+                });
+                if (!lockedProduct) throw inventoryError("Product not found.", 404);
+                const tracksPerSize = inventory && typeof inventory === "object" && inventory.track_inventory !== undefined
+                    ? Boolean(inventory.track_inventory)
+                    : Boolean(lockedProduct.inventory?.trackInventory ?? false);
+
+                // Persist the mode before any stock helper runs so direct-product
+                // adjustments are allowed in product-level mode.
+                if (inventory && typeof inventory === "object" && inventory.track_inventory !== undefined) {
+                    await tx.productInventory.upsert({
+                        where: { productId: id },
+                        create: { productId: id, trackInventory: tracksPerSize },
+                        update: { trackInventory: tracksPerSize },
+                    });
+                }
+
                 await tx.product.update({
                     where: { id },
-
                     data: {
                         name: productName.trim(),
-
                         sku: newSku,
-
-                        price:
-                            price !== undefined
-                                ? Number(price)
-                                : existingProduct.price,
-
-                        discount:
-                            discount !== undefined
-                                ? discount === null ||
-                                discount === ""
-                                    ? null
-                                    : Number(discount)
-                                : existingProduct.discount,
-
+                        price: price !== undefined ? Number(price) : lockedProduct.price,
+                        discount: discount !== undefined
+                            ? discount === null || discount === "" ? null : Number(discount)
+                            : lockedProduct.discount,
                         status: newStatus,
-
-                        shortDescription:
-                            short_description ??
-                            shortDescription ??
-                            existingProduct.shortDescription,
-
-                        description:
-                            description !== undefined
-                                ? description
-                                : existingProduct.description,
-
-                        videoUrl:
-                            video_url ??
-                            videoUrl ??
-                            existingProduct.videoUrl,
-
+                        shortDescription: short_description ?? shortDescription ?? lockedProduct.shortDescription,
+                        description: description !== undefined ? description : lockedProduct.description,
+                        videoUrl: video_url ?? videoUrl ?? lockedProduct.videoUrl,
                         categoryId: Number(newCategoryId),
-
-                        stock:
-                            body.stock !== undefined
-                                ? Number(body.stock)
-                                : existingProduct.stock,
-
-                        isActive:
-                            body.isActive !== undefined
-                                ? Boolean(body.isActive)
-                                : existingProduct.isActive,
+                        isActive: body.isActive !== undefined ? Boolean(body.isActive) : lockedProduct.isActive,
                     },
                 });
 
                 if (Array.isArray(images)) {
-                    await tx.productImage.deleteMany({
-                        where: { productId: id },
-                    });
-
+                    await tx.productImage.deleteMany({ where: { productId: id } });
                     await tx.productImage.createMany({
                         data: images.map((image, index) => ({
                             productId: id,
-
-                            imageUrl:
-                                typeof image === "string"
-                                    ? image
-                                    : image.image,
-
-                            isPrimary:
-                                typeof image === "object"
-                                    ? Boolean(image.isPrimary)
-                                    : index === 0,
+                            imageUrl: typeof image === "string" ? image : image.image,
+                            isPrimary: typeof image === "object" ? Boolean(image.isPrimary) : index === 0,
                         })),
                     });
                 }
 
                 if (Array.isArray(sizes)) {
-                    // Update matched size variants in place so order-item
-                    // links, the stock-movement ledger, and pre-order
-                    // counts survive a normal product edit. Only sizes
-                    // removed from the payload are deleted.
-                    const existingVariants = await tx.productVariant.findMany({
-                        where: { productId: id },
-                        orderBy: { id: "asc" },
-                    });
+                    const existingVariants = await tx.productVariant.findMany({ where: { productId: id }, orderBy: { id: "asc" } });
                     const usedVariantIds = new Set();
-
                     for (const [index, size] of sizes.entries()) {
                         const value = String(size.size ?? size.value ?? "");
                         const requestedId = Number(size.id ?? size.variantId ?? size.variant_id);
                         const matched = existingVariants.find((variant) => (
                             !usedVariantIds.has(variant.id)
-                            && (Number.isInteger(requestedId) && requestedId > 0
-                                ? variant.id === requestedId
-                                : variant.value === value)
+                            && (Number.isInteger(requestedId) && requestedId > 0 ? variant.id === requestedId : variant.value === value)
                         ));
+                        const desiredStock = tracksPerSize
+                            ? parseStock(size.stock ?? size.pivot?.stock ?? matched?.stock ?? 0, `Stock for ${value || "variant"}`)
+                            : matched?.stock ?? 0;
                         const data = {
                             name: "size",
                             value,
-                            price:
-                                size.price === undefined ||
-                                size.price === null ||
-                                size.price === ""
-                                    ? null
-                                    : Number(size.price),
-                            stock: Number(size.stock ?? size.pivot?.stock ?? matched?.stock ?? 0),
-                            allowPreorder: parseAllowPreorder(size, matched?.allowPreorder ?? false),
-                            preorderLimit: parsePreorderLimit(size, matched?.preorderLimit ?? null),
+                            price: size.price === undefined || size.price === null || size.price === "" ? null : Number(size.price),
                             position: index,
+                            isActive: true,
+                            ...(tracksPerSize ? {
+                                allowPreorder: parseAllowPreorder(size, matched?.allowPreorder ?? false),
+                                preorderLimit: parsePreorderLimit(size, matched?.preorderLimit ?? null),
+                            } : {}),
                         };
-
                         if (matched) {
                             usedVariantIds.add(matched.id);
-                            await tx.productVariant.update({
-                                where: { id: matched.id },
-                                data,
-                            });
+                            await tx.productVariant.update({ where: { id: matched.id }, data });
+                            if (tracksPerSize && desiredStock !== matched.stock) {
+                                await adjustVariantStock(tx, {
+                                    variantId: matched.id,
+                                    delta: desiredStock - matched.stock,
+                                    type: "adjustment",
+                                    note: "Stock adjusted from product editor",
+                                    userId: auth.user.userId,
+                                });
+                            }
                         } else {
-                            await tx.productVariant.create({
-                                data: { productId: id, ...data },
-                            });
+                            const created = await tx.productVariant.create({ data: { productId: id, ...data, stock: 0, held: 0, reserved: 0 } });
+                            if (tracksPerSize && desiredStock > 0) {
+                                await adjustVariantStock(tx, {
+                                    variantId: created.id,
+                                    delta: desiredStock,
+                                    type: "purchase",
+                                    note: "Opening stock from product editor",
+                                    userId: auth.user.userId,
+                                });
+                            }
                         }
                     }
-
-                    const removedVariantIds = existingVariants
-                        .filter((variant) => !usedVariantIds.has(variant.id))
-                        .map((variant) => variant.id);
+                    const removedVariantIds = existingVariants.filter((variant) => !usedVariantIds.has(variant.id)).map((variant) => variant.id);
+                    // Never delete a SKU that could be referenced by an order or
+                    // ledger entry. It remains historically intact but cannot be sold.
                     if (removedVariantIds.length > 0) {
-                        await tx.productVariant.deleteMany({
-                            where: { id: { in: removedVariantIds } },
+                        await tx.productVariant.updateMany({ where: { id: { in: removedVariantIds } }, data: { isActive: false } });
+                    }
+                    if (tracksPerSize) await syncVariantProductStock(tx, [id]);
+                }
+                if (body.stock !== undefined && (!Array.isArray(sizes) || !tracksPerSize)) {
+                    const desiredStock = parseStock(body.stock);
+                    if (tracksPerSize && lockedProduct.variants.length > 0) {
+                        if (desiredStock !== lockedProduct.stock) {
+                            throw inventoryError("Set stock per variant; product stock is derived from its variants.", 400);
+                        }
+                    } else if (desiredStock !== lockedProduct.stock) {
+                        await adjustProductStock(tx, {
+                            productId: id,
+                            delta: desiredStock - lockedProduct.stock,
+                            type: "adjustment",
+                            note: "Stock adjusted from product editor",
+                            userId: auth.user.userId,
                         });
                     }
                 }
 
                 if (Array.isArray(colors)) {
-                    await tx.productColor.deleteMany({
-                        where: { productId: id },
-                    });
-
-                    if (colors.length > 0) {
-                        await tx.productColor.createMany({
-                            data: colors.map((color) => ({
-                                productId: id,
-                                name: color.name,
-                                code: color.code,
-                                image: color.image ?? null,
-                            })),
-                        });
-                    }
+                    await tx.productColor.deleteMany({ where: { productId: id } });
+                    if (colors.length > 0) await tx.productColor.createMany({ data: colors.map((color) => ({ productId: id, name: color.name, code: color.code, image: color.image ?? null })) });
                 }
-
                 if (Array.isArray(specifications)) {
-                    await tx.productSpecification.deleteMany({
-                        where: { productId: id },
-                    });
-
-                    if (specifications.length > 0) {
-                        await tx.productSpecification.createMany({
-                            data: specifications.map((specification) => ({
-                                productId: id,
-                                key: specification.key,
-                                value: specification.value,
-                            })),
-                        });
-                    }
+                    await tx.productSpecification.deleteMany({ where: { productId: id } });
+                    if (specifications.length > 0) await tx.productSpecification.createMany({ data: specifications.map((specification) => ({ productId: id, key: specification.key, value: specification.value })) });
                 }
-
                 if (Array.isArray(faqs)) {
-                    await tx.productFaq.deleteMany({
-                        where: { productId: id },
-                    });
-
-                    if (faqs.length > 0) {
-                        await tx.productFaq.createMany({
-                            data: faqs.map((faq) => ({
-                                productId: id,
-                                question: faq.question,
-                                answer: faq.answer,
-                            })),
-                        });
-                    }
+                    await tx.productFaq.deleteMany({ where: { productId: id } });
+                    if (faqs.length > 0) await tx.productFaq.createMany({ data: faqs.map((faq) => ({ productId: id, question: faq.question, answer: faq.answer })) });
                 }
-
-                if (
-                    inventory &&
-                    typeof inventory === "object" &&
-                    inventory.track_inventory !== undefined
-                ) {
-                    await tx.productInventory.upsert({
-                        where: { productId: id },
-
-                        create: {
-                            productId: id,
-                            trackInventory: Boolean(
-                                inventory.track_inventory
-                            ),
-                        },
-
-                        update: {
-                            trackInventory: Boolean(
-                                inventory.track_inventory
-                            ),
-                        },
-                    });
-                }
-
                 return tx.product.findUnique({
                     where: { id },
-
                     include: {
-                        category: {
-                            select: {
-                                id: true,
-                                name: true,
-                                slug: true,
-                            },
-                        },
-                        images: {
-                            orderBy: {
-                                isPrimary: "desc",
-                            },
-                        },
+                        category: { select: { id: true, name: true, slug: true } },
+                        images: { orderBy: { isPrimary: "desc" } },
                         variants: true,
                         colors: true,
                         specifications: true,
@@ -563,7 +499,7 @@ export async function PUT(request, { params }) {
                         inventory: true,
                     },
                 });
-            });
+            }, { isolationLevel: "Serializable" });
 
         return Response.json({
             success: true,
@@ -571,6 +507,12 @@ export async function PUT(request, { params }) {
             data: formatProduct(updatedProduct),
         });
     } catch (error) {
+        if (Number.isInteger(error?.status)) {
+            return Response.json({ success: false, message: error.message }, { status: error.status });
+        }
+        if (isTransactionConflict(error)) {
+            return Response.json({ success: false, message: "Inventory changed while the product was being saved. Reload and try again." }, { status: 409 });
+        }
         console.error("Update product API error:", error);
 
         return Response.json(

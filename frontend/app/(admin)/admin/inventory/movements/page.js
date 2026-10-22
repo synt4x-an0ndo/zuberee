@@ -117,7 +117,7 @@ export default function InventoryMovementsPage() {
           <>
             <DataTable>
               <thead><tr>
-                <th>When</th><th>Product</th><th>Variant</th><th>Type</th>
+                <th>When</th><th>Product</th><th>Stock source</th><th>Type</th>
                 <th className="text-right">Change</th><th className="text-right">Stock after</th>
                 <th>Reference</th><th>By</th>
               </tr></thead>

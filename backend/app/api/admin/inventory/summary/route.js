@@ -6,32 +6,17 @@ const DEFAULT_LOW_STOCK_THRESHOLD = 3;
 export async function GET(request) {
     try {
         const auth = await authenticateRequest(request);
-
         if (!auth.authenticated || auth.user.role !== "ADMIN") {
-            return Response.json(
-                { message: "failed", data: "Admin access required." },
-                { status: 403 }
-            );
+            return Response.json({ message: "failed", data: "Admin access required." }, { status: 403 });
         }
 
-        const variants = await prisma.productVariant.findMany({
+        const products = await prisma.product.findMany({
             select: {
-                productId: true,
+                id: true,
                 stock: true,
-                held: true,
-                lowStockThreshold: true,
-                trackInventory: true,
                 price: true,
-                product: {
-                    select: {
-                        price: true,
-                        inventory: {
-                            select: {
-                                trackInventory: true,
-                            },
-                        },
-                    },
-                },
+                inventory: { select: { trackInventory: true } },
+                variants: { select: { stock: true, held: true, lowStockThreshold: true, price: true } },
             },
         });
 
@@ -40,49 +25,42 @@ export async function GET(request) {
         let lowStock = 0;
         let outOfStock = 0;
         let stockValue = 0;
-        const trackedProductIds = new Set();
-        const totalVariants = variants.length;
+        let totalRows = 0;
+        let trackedProducts = 0;
 
-        for (const v of variants) {
-            const trackInv =
-                v.trackInventory ||
-                v.product?.inventory?.trackInventory ||
-                false;
+        for (const product of products) {
+            const tracksPerSize = Boolean(product.inventory?.trackInventory);
+            if (tracksPerSize) trackedProducts += 1;
+            const rows = tracksPerSize && product.variants.length > 0
+                ? product.variants.map((variant) => ({
+                    stock: variant.stock,
+                    held: variant.held,
+                    threshold: variant.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
+                    price: variant.price === null ? Number(product.price) : Number(variant.price),
+                }))
+                : [{
+                    stock: product.stock,
+                    held: 0,
+                    threshold: DEFAULT_LOW_STOCK_THRESHOLD,
+                    price: Number(product.price),
+                }];
 
-            const available = Math.max(0, v.stock - v.held);
-            const threshold =
-                v.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD;
-
-            unitsOnHand += v.stock;
-            unitsReserved += v.held;
-
-            if (trackInv) {
-                trackedProductIds.add(v.productId);
-
-                if (available > 0 && available <= threshold) {
-                    lowStock += 1;
-                }
-
-                if (available <= 0) {
-                    outOfStock += 1;
-                }
+            totalRows += rows.length;
+            for (const row of rows) {
+                const available = Math.max(0, row.stock - row.held);
+                unitsOnHand += row.stock;
+                unitsReserved += row.held;
+                if (available > 0 && available <= row.threshold) lowStock += 1;
+                if (available <= 0) outOfStock += 1;
+                stockValue += row.price * row.stock;
             }
-
-            const priceValue =
-                v.price !== null
-                    ? Number(v.price)
-                    : v.product?.price
-                        ? Number(v.product.price)
-                        : 0;
-
-            stockValue += priceValue * v.stock;
         }
 
         return Response.json({
             message: "success",
             data: {
-                tracked_products: trackedProductIds.size,
-                total_variants: totalVariants,
+                tracked_products: trackedProducts,
+                total_variants: totalRows,
                 units_on_hand: unitsOnHand,
                 units_reserved: unitsReserved,
                 low_stock: lowStock,
@@ -93,10 +71,6 @@ export async function GET(request) {
         });
     } catch (error) {
         console.error("Inventory summary API error:", error);
-
-        return Response.json(
-            { message: "failed", data: null },
-            { status: 500 }
-        );
+        return Response.json({ message: "failed", data: null }, { status: 500 });
     }
 }

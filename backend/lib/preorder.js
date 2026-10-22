@@ -15,8 +15,13 @@ export function isProductPreorder(product) {
     return product?.status === "PRE_ORDER";
 }
 
+/** Per-size stock is authoritative only when the product-level toggle is on. */
+export function tracksStockPerSize(product) {
+    return Boolean(product?.inventory?.trackInventory ?? product?.trackInventory ?? false);
+}
+
 export function isPreorderEligible(product, variant = null) {
-    if (!product || UNAVAILABLE_STATUSES.has(product.status)) return false;
+    if (!product || UNAVAILABLE_STATUSES.has(product.status) || variant?.isActive === false) return false;
     return isProductPreorder(product) || Boolean(variant?.allowPreorder);
 }
 
@@ -26,8 +31,8 @@ export function getPreorderRemaining(variant) {
 }
 
 export function getVariantOrderCapacity(product, variant) {
-    if (!variant || isProductUnavailable(product)) return 0;
-    const stock = Math.max(0, Number(variant.stock || 0));
+    if (!variant || variant.isActive === false || isProductUnavailable(product)) return 0;
+    const stock = Math.max(0, Number(variant.stock || 0) - Math.max(0, Number(variant.held || 0)));
     if (!isPreorderEligible(product, variant)) return stock;
     const remaining = getPreorderRemaining(variant);
     return remaining === null ? null : stock + remaining;
@@ -72,10 +77,16 @@ export function allocateOrderEntries(entries) {
 
         let allocation;
 
-        if (variant) {
+        if (variant?.isActive === false) {
+            throw preorderError(`Variant ${variant.value} is not available.`, 400);
+        }
+        const usesVariantStock = Boolean(variant && tracksStockPerSize(product));
+        entry.usesVariantStock = usesVariantStock;
+
+        if (usesVariantStock) {
             if (!variantState.has(variant.id)) {
                 variantState.set(variant.id, {
-                    stock: Number(variant.stock || 0),
+                    stock: Math.max(0, Number(variant.stock || 0) - Math.max(0, Number(variant.held || 0))),
                     preorderCount: Number(variant.preorderCount || 0),
                 });
             }
@@ -94,7 +105,7 @@ export function allocateOrderEntries(entries) {
             if (!allocation) {
                 const capacity = getVariantOrderCapacity(
                     product,
-                    { ...variant, stock: state.stock, preorderCount: state.preorderCount }
+                    { ...variant, stock: state.stock, held: 0, preorderCount: state.preorderCount }
                 );
                 throw preorderError(
                     isPreorderEligible(product, variant) && capacity !== null

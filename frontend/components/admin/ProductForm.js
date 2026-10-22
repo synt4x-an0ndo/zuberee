@@ -116,7 +116,7 @@ export default function ProductForm({ mode, productId, initial }) {
     if (form.discount !== "" && Number(form.discount) >= price) next.discount = "The sale price must be lower than the regular price.";
     if (categories.flat.length && !form.categoryId) next.categoryId = "Choose a category.";
     if (form.videoUrl && !/^https?:\/\//i.test(form.videoUrl)) next.videoUrl = "Use a full link starting with https://";
-    if (form.sizes.length === 0 && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 0)) next.stock = "Enter a valid stock quantity.";
+    if ((!form.trackInventory || form.sizes.length === 0) && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 0)) next.stock = "Enter a valid stock quantity.";
     if (form.sizes.some((s) => s.preorderLimit !== "" && s.preorderLimit !== null && (!Number.isInteger(Number(s.preorderLimit)) || Number(s.preorderLimit) < 0))) next.sizes = "Pre-order limits must be whole numbers of 0 or more.";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -137,10 +137,15 @@ export default function ProductForm({ mode, productId, initial }) {
     sizes: form.sizes.map((s) => ({
       id: s.id ?? undefined,
       size: s.label,
-      stock: Number(s.stock) || 0,
       price: s.price === "" ? null : Number(s.price),
-      allow_preorder: Boolean(s.allowPreorder),
-      preorder_limit: s.preorderLimit === "" || s.preorderLimit === null ? null : Number(s.preorderLimit),
+      // In product-level mode omit size inventory fields entirely. This keeps
+      // dormant per-size quantities/pre-order settings untouched if the mode
+      // is switched back on later.
+      ...(form.trackInventory ? {
+        stock: Number(s.stock) || 0,
+        allow_preorder: Boolean(s.allowPreorder),
+        preorder_limit: s.preorderLimit === "" || s.preorderLimit === null ? null : Number(s.preorderLimit),
+      } : {}),
     })),
     colors: form.colors.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), code: c.code, image: c.image.trim() || null })),
     specifications: form.specifications.filter((s) => s.key.trim()).map((s) => ({ key: s.key.trim(), value: s.value.trim() })),
@@ -339,8 +344,9 @@ export default function ProductForm({ mode, productId, initial }) {
             <CardHeader title="Inventory & sizes" />
             <div className="stack">
               <Toggle checked={form.trackInventory} onChange={(v) => set("trackInventory", v)} label="Track stock per size" />
-              {form.sizes.length === 0 && (
-                <Field label="Product stock" htmlFor="product-stock" error={errors.stock} hint="Used when this product has no sizes. Set the received quantity here before shipping a pre-order.">
+              {!form.trackInventory && <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>Product-level stock is shared by every size choice. Size quantities and size pre-order settings are preserved but not used while this is off.</p>}
+              {(!form.trackInventory || form.sizes.length === 0) && (
+                <Field label="Product stock" htmlFor="product-stock" error={errors.stock} hint={form.trackInventory ? "Used when this product has no sizes. Set the received quantity here before shipping a pre-order." : "The authoritative quantity for this product, including every size choice."}>
                   <Input id="product-stock" type="number" min="0" step="1" value={form.stock} onChange={(e) => set("stock", e.target.value)} style={{ width: 160 }} />
                 </Field>
               )}
@@ -354,15 +360,15 @@ export default function ProductForm({ mode, productId, initial }) {
               {form.sizes.length > 0 && (
                 <div className="table-wrap">
                   <AlignedTable className="table">
-                    <thead><tr><th>Size</th><th>Stock</th><th>Price override (৳)</th><th>Pre-order</th><th>Pre-order limit</th><th /></tr></thead>
+                    <thead><tr><th>Size</th>{form.trackInventory && <th>Stock</th>}<th>Price override (৳)</th>{form.trackInventory && <><th>Pre-order</th><th>Pre-order limit</th></>}<th /></tr></thead>
                     <tbody>
                       {form.sizes.map((s, i) => (
                         <tr key={s.label}>
                           <td><strong>{s.label}</strong></td>
-                          <td><Input aria-label={`Stock for ${s.label}`} type="number" min="0" value={s.stock} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, stock: e.target.value } : x)))} style={{ width: 96 }} /></td>
+                          {form.trackInventory && <td><Input aria-label={`Stock for ${s.label}`} type="number" min="0" value={s.stock} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, stock: e.target.value } : x)))} style={{ width: 96 }} /></td>}
                           <td><Input aria-label={`Price for ${s.label}`} type="number" min="0" placeholder={form.price || "Default"} value={s.price} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} style={{ width: 120 }} /></td>
-                          <td><Toggle checked={s.allowPreorder} onChange={(v) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, allowPreorder: v } : x)))} label="" /></td>
-                          <td><Input aria-label={`Pre-order limit for ${s.label}`} type="number" min="0" step="1" placeholder="No limit" value={s.preorderLimit} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, preorderLimit: e.target.value } : x)))} style={{ width: 110 }} /></td>
+                          {form.trackInventory && <><td><Toggle checked={s.allowPreorder} onChange={(v) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, allowPreorder: v } : x)))} label="" /></td>
+                          <td><Input aria-label={`Pre-order limit for ${s.label}`} type="number" min="0" step="1" placeholder="No limit" value={s.preorderLimit} onChange={(e) => setList("sizes", (l) => l.map((x, j) => (j === i ? { ...x, preorderLimit: e.target.value } : x)))} style={{ width: 110 }} /></td></>}
                           <td><button type="button" className="icon-btn" aria-label={`Remove ${s.label}`} onClick={() => toggleSize(s.label)}><FiTrash2 aria-hidden="true" /></button></td>
                         </tr>
                       ))}

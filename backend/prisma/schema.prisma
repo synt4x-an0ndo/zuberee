@@ -38,18 +38,18 @@ enum SizeGuideType {
 }
 
 model User {
-  id           Int            @id @default(autoincrement())
-  name         String
-  email        String         @unique
-  passwordHash String
+  id                        Int            @id @default(autoincrement())
+  name                      String
+  email                     String         @unique
+  passwordHash              String
   phone                     String?
   image                     String?
-  emailVerificationRequired Boolean  @default(false)
+  emailVerificationRequired Boolean        @default(false)
   emailVerifiedAt           DateTime?
-  badge        String?
-  role         SystemRoleEnum @default(CUSTOMER)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  badge                     String?
+  role                      SystemRoleEnum @default(CUSTOMER)
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
 
   addresses           Address[]
   orders              Order[]
@@ -182,15 +182,16 @@ model Product {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  category       Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  images         ProductImage[]
-  variants       ProductVariant[]
-  colors         ProductColor[]
-  specifications ProductSpecification[]
-  faqs           ProductFaq[]
-  inventory      ProductInventory?
-  orderItems     OrderItem[]
-  cartItem       CartItem[]
+  category              Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  images                ProductImage[]
+  variants              ProductVariant[]
+  colors                ProductColor[]
+  specifications        ProductSpecification[]
+  faqs                  ProductFaq[]
+  inventory             ProductInventory?
+  orderItems            OrderItem[]
+  cartItem              CartItem[]
+  productStockMovements ProductStockMovement[]
 
   @@index([categoryId])
   @@index([status])
@@ -350,10 +351,10 @@ model Order {
   // Contact details supplied for this specific order. Guest fields above are
   // retained for existing customer aggregation; these snapshot fields are
   // populated for both guest and account orders.
-  contactName  String?
-  contactPhone String?
-  contactEmail String?
-  courierEntry String?
+  contactName   String?
+  contactPhone  String?
+  contactEmail  String?
+  courierEntry  String?
   deliveryNotes String?
 
   status          OrderStatus   @default(PENDING)
@@ -392,6 +393,10 @@ model OrderItem {
   // to zero when received stock is allocated for shipment/delivery.
   isPreorder       Boolean  @default(false)
   preorderQuantity Int      @default(0)
+  // Inventory source selected when this line was allocated. This is a stable
+  // historical snapshot so cancellations, reactivation and fulfilment do not
+  // change behaviour if the product setting is later toggled.
+  stockMode        String?  @db.VarChar(16)
   createdAt        DateTime @default(now())
 
   order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -609,4 +614,23 @@ model StockMovement {
   @@index([productVariantId])
   @@index([createdAt])
   @@map("stock_movements")
+}
+
+model ProductStockMovement {
+  id         Int      @id @default(autoincrement())
+  productId  Int
+  type       String // "purchase" | "sale" | "release" | "adjustment"
+  quantity   Int
+  stockAfter Int
+  note       String?
+  userId     Int?
+  orderId    Int?
+  createdAt  DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("product_stock_movements")
 }

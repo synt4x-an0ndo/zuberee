@@ -9,6 +9,7 @@ import {
     getVariantOrderCapacity,
     isPreorderEligible,
     isProductUnavailable,
+    tracksStockPerSize,
 } from "@/lib/preorder.js";
 
 export async function PUT(request, { params }) {
@@ -71,22 +72,33 @@ export async function PUT(request, { params }) {
                 { status: 400 }
             );
         }
+        if (existingItem.variantId && (!variant || !variant.isActive)) {
+            return Response.json(
+                { success: false, message: "This variant is not available." },
+                { status: 400 }
+            );
+        }
+        if (!existingItem.variantId && existingItem.product.variants.length > 0) {
+            return Response.json(
+                { success: false, message: "Please select a product variant." },
+                { status: 400 }
+            );
+        }
 
-        const trackInventory =
-            existingItem.product.inventory?.trackInventory ?? false;
-
-        const capacity = variant
+        const usesVariantStock = Boolean(variant && tracksStockPerSize(existingItem.product));
+        const capacity = usesVariantStock
             ? getVariantOrderCapacity(existingItem.product, variant)
             : getProductOrderCapacity(existingItem.product);
-        const preorderEligible = isPreorderEligible(existingItem.product, variant);
-        const enforceCapacity = trackInventory || (preorderEligible && capacity !== null);
+        const preorderEligible = usesVariantStock
+            ? isPreorderEligible(existingItem.product, variant)
+            : isPreorderEligible(existingItem.product);
 
-        if (enforceCapacity && capacity !== null) {
+        if (capacity !== null) {
             const otherItems = await prisma.cartItem.findMany({
                 where: {
                     cartId: cart.id,
                     productId: existingItem.productId,
-                    variantId: existingItem.variantId,
+                    ...(usesVariantStock ? { variantId: existingItem.variantId } : {}),
                     NOT: { id: cartItemId },
                 },
                 select: { quantity: true },

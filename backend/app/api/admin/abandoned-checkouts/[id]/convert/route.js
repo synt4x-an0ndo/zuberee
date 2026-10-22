@@ -2,6 +2,15 @@ import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { requireValidOrderContact } from "@/lib/contactValidation.js";
 import { allocateOrderEntries } from "@/lib/preorder.js";
+import {
+    adjustProductStock,
+    adjustVariantStock,
+    inventoryError,
+    isTransactionConflict,
+    lockAbandonedCheckout,
+    lockProductFamilies,
+    syncVariantProductStock,
+} from "@/lib/inventory.js";
 
 const ORDER_INCLUDE = {
     items: {
@@ -59,229 +68,87 @@ function formatCheckout(c) {
 export async function POST(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
-
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
-            return Response.json(
-                { success: false, message: "Admin access required." },
-                { status: 403 }
-            );
-        }
+        if (!auth.authenticated || auth.user.role !== "ADMIN") return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
 
         const { id } = await params;
         const checkoutId = Number(id);
+        if (!Number.isInteger(checkoutId) || checkoutId <= 0) return Response.json({ success: false, message: "Invalid checkout id." }, { status: 400 });
 
-        if (!Number.isInteger(checkoutId)) {
-            return Response.json(
-                { success: false, message: "Invalid checkout id." },
-                { status: 400 }
-            );
-        }
+        let body;
+        try { body = await request.json(); } catch { return Response.json({ success: false, message: "Request body is required." }, { status: 400 }); }
+        const { items: bodyItems, district, shippingAddress, contactName, contactPhone, contactEmail, shippingFee = 0, advancePayment = 0, paymentMethod = "cash" } = body;
 
-        let body = {};
+        // This preliminary read is only used to prefill the confirmation form.
+        // The transaction below locks and re-reads the row before conversion.
+        const checkout = await prisma.abandonedCheckout.findUnique({ where: { id: checkoutId } });
+        if (!checkout) return Response.json({ success: false, message: "Checkout not found." }, { status: 404 });
+        if (checkout.convertedOrderId) return Response.json({ success: false, message: `This checkout was already converted to order #${checkout.convertedOrderId}.` }, { status: 409 });
 
-        try {
-            body = await request.json();
-        } catch {
-            return Response.json(
-                { success: false, message: "Request body is required." },
-                { status: 400 }
-            );
-        }
-
-        const {
-            items: bodyItems,
-            district,
-            shippingAddress,
-            contactName,
-            contactPhone,
-            contactEmail,
-            shippingFee = 0,
-            advancePayment = 0,
-            paymentMethod = "cash",
-        } = body;
-
-        const checkout = await prisma.abandonedCheckout.findUnique({
-            where: { id: checkoutId },
-        });
-
-        if (!checkout) {
-            return Response.json(
-                { success: false, message: "Checkout not found." },
-                { status: 404 }
-            );
-        }
-
-        if (checkout.convertedOrderId) {
-            return Response.json(
-                {
-                    success: false,
-                    message: `This checkout was already converted to order #${checkout.convertedOrderId}.`,
-                },
-                { status: 409 }
-            );
-        }
-
-        const finalShippingAddress = shippingAddress
-            ? String(shippingAddress).trim()
-            : String(checkout.address || "").trim();
-
-        if (!finalShippingAddress) {
-            return Response.json(
-                { success: false, message: "Shipping address is required." },
-                { status: 400 }
-            );
-        }
-
-        const finalContactName = String(
-            contactName ?? checkout.name ?? ""
-        ).trim();
-
-        if (!finalContactName) {
-            return Response.json(
-                { success: false, message: "Customer name is required." },
-                { status: 400 }
-            );
-        }
+        const finalShippingAddress = shippingAddress ? String(shippingAddress).trim() : String(checkout.address || "").trim();
+        if (!finalShippingAddress) return Response.json({ success: false, message: "Shipping address is required." }, { status: 400 });
+        const finalContactName = String(contactName ?? checkout.name ?? "").trim();
+        if (!finalContactName) return Response.json({ success: false, message: "Customer name is required." }, { status: 400 });
 
         let finalContact;
-
-        try {
-            finalContact = requireValidOrderContact({
-                phone: contactPhone ?? checkout.phone ?? "",
-                email: contactEmail ?? "",
-            });
-        } catch (validationError) {
-            return Response.json(
-                { success: false, message: validationError.message },
-                { status: validationError.status || 400 }
-            );
-        }
-
-        let rawItems = Array.isArray(bodyItems) ? bodyItems : [];
-
-        if (rawItems.length === 0) {
-            rawItems = Array.isArray(checkout.cartItems) ? checkout.cartItems : [];
-        }
-
-        if (rawItems.length === 0) {
-            return Response.json(
-                { success: false, message: "No items to convert." },
-                { status: 400 }
-            );
-        }
-
-        const productIds = [
-            ...new Set(
-                rawItems
-                    .map((item) => Number(item?.productId ?? item?.product_id))
-                    .filter((value) => Number.isInteger(value))
-            ),
-        ];
-
-        if (productIds.length === 0) {
-            return Response.json(
-                { success: false, message: "No valid products in this checkout." },
-                { status: 400 }
-            );
-        }
-
-        const products = await prisma.product.findMany({
-            where: { id: { in: productIds } },
-            include: { variants: true },
-        });
-
-        const productMap = new Map(products.map((product) => [product.id, product]));
-
-        const orderItemsData = [];
-        let subtotal = 0;
-
-        for (const raw of rawItems) {
-            const productId = Number(raw?.productId ?? raw?.product_id);
-            const quantity = Number(raw?.quantity ?? 1);
-
-            if (!Number.isInteger(quantity) || quantity < 1) {
-                return Response.json(
-                    { success: false, message: "Invalid item quantity." },
-                    { status: 400 }
-                );
-            }
-
-            const product = productMap.get(productId);
-
-            if (!product || !product.isActive) {
-                return Response.json(
-                    { success: false, message: `Product ${productId} not available.` },
-                    { status: 404 }
-                );
-            }
-
-            // Same rule as POST /api/orders: the discounted price wins when set.
-            // The snapshot's stored unitPrice is only ever shown as a reference.
-            let unitPrice = Number(product.price);
-
-            if (product.discount !== null && product.discount !== undefined) {
-                unitPrice = Number(product.discount);
-            }
-
-            orderItemsData.push({
-                product,
-                variant: null,
-                productId,
-                variantId: null,
-                size: raw?.size ?? null,
-                quantity,
-                unitPrice,
-            });
-
-            subtotal += unitPrice * quantity;
-        }
-
-        try {
-            allocateOrderEntries(orderItemsData);
-        } catch (allocationError) {
-            return Response.json(
-                { success: false, message: allocationError.message },
-                { status: allocationError.status || 400 }
-            );
-        }
+        try { finalContact = requireValidOrderContact({ phone: contactPhone ?? checkout.phone ?? "", email: contactEmail ?? "" }); }
+        catch (validationError) { return Response.json({ success: false, message: validationError.message }, { status: validationError.status || 400 }); }
 
         let computedShippingFee = null;
-
         try {
-            const rates = await prisma.shippingCost.findFirst({
-                orderBy: { createdAt: "desc" },
-            });
-
+            const rates = await prisma.shippingCost.findFirst({ orderBy: { createdAt: "desc" } });
             if (rates) {
-                if (
-                    rates.oneShippingCost !== null &&
-                    rates.oneShippingCost !== undefined
-                ) {
-                    computedShippingFee = Number(rates.oneShippingCost);
-                } else if (district) {
-                    computedShippingFee =
-                        String(district).trim().toLowerCase() === "dhaka"
-                            ? Number(rates.insideDhaka)
-                            : Number(rates.outsideDhaka);
-                }
+                if (rates.oneShippingCost !== null && rates.oneShippingCost !== undefined) computedShippingFee = Number(rates.oneShippingCost);
+                else if (district) computedShippingFee = String(district).trim().toLowerCase() === "dhaka" ? Number(rates.insideDhaka) : Number(rates.outsideDhaka);
             }
-        } catch (rateError) {
-            console.error("Shipping rate lookup failed:", rateError);
-        }
-
-        const finalShippingFee =
-            computedShippingFee !== null && Number.isFinite(computedShippingFee)
-                ? computedShippingFee
-                : Number(shippingFee) || 0;
-
+        } catch (rateError) { console.error("Shipping rate lookup failed:", rateError); }
+        const finalShippingFee = computedShippingFee !== null && Number.isFinite(computedShippingFee) ? computedShippingFee : Number(shippingFee) || 0;
         const finalAdvancePayment = Number(advancePayment) || 0;
 
         const result = await prisma.$transaction(async (tx) => {
+            if (!await lockAbandonedCheckout(tx, checkoutId)) throw inventoryError("Checkout not found.", 404);
+            const lockedCheckout = await tx.abandonedCheckout.findUnique({ where: { id: checkoutId } });
+            if (!lockedCheckout) throw inventoryError("Checkout not found.", 404);
+            if (lockedCheckout.convertedOrderId) throw inventoryError(`This checkout was already converted to order #${lockedCheckout.convertedOrderId}.`, 409);
+
+            const rawItems = Array.isArray(bodyItems) && bodyItems.length > 0
+                ? bodyItems
+                : Array.isArray(lockedCheckout.cartItems) ? lockedCheckout.cartItems : [];
+            if (!rawItems.length) throw inventoryError("No items to convert.", 400);
+            const productIds = [...new Set(rawItems.map((item) => Number(item?.productId ?? item?.product_id)).filter((value) => Number.isInteger(value) && value > 0))];
+            if (!productIds.length) throw inventoryError("No valid products in this checkout.", 400);
+
+            await lockProductFamilies(tx, productIds);
+            const products = await tx.product.findMany({ where: { id: { in: productIds } }, include: { variants: true, inventory: true } });
+            const productMap = new Map(products.map((product) => [product.id, product]));
+            const entries = [];
+            let subtotal = 0;
+            for (const raw of rawItems) {
+                const productId = Number(raw?.productId ?? raw?.product_id);
+                const variantId = raw?.variantId ?? raw?.variant_id ?? null;
+                const quantity = Number(raw?.quantity ?? 1);
+                if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity < 1) throw inventoryError("Invalid item quantity or product.", 400);
+                const product = productMap.get(productId);
+                if (!product || !product.isActive) throw inventoryError(`Product ${productId} not available.`, 404);
+                let variant = null;
+                let unitPrice = product.discount !== null && product.discount !== undefined ? Number(product.discount) : Number(product.price);
+                if (variantId !== null && variantId !== "") {
+                    variant = product.variants.find((row) => row.id === Number(variantId)) || null;
+                    if (!variant) throw inventoryError(`Variant ${variantId} not found.`, 404);
+                    if (!variant.isActive) throw inventoryError(`Variant ${variant.value} is not available.`, 400);
+                    if (variant.price !== null) unitPrice = Number(variant.price);
+                } else if (product.variants.length > 0) {
+                    throw inventoryError(`Please select a variant for ${product.name}.`, 400);
+                }
+                entries.push({ product, variant, productId, variantId: variant?.id ?? null, size: variant?.value ? String(variant.value) : raw?.size ?? raw?.selected_size ?? null, quantity, unitPrice });
+                subtotal += unitPrice * quantity;
+            }
+            allocateOrderEntries(entries);
+
             const order = await tx.order.create({
                 data: {
-                    userId: checkout.userId ?? null,
-                    guestName: checkout.userId ? null : finalContactName,
-                    guestPhone: checkout.userId ? null : finalContact.phone,
+                    userId: lockedCheckout.userId ?? null,
+                    guestName: lockedCheckout.userId ? null : finalContactName,
+                    guestPhone: lockedCheckout.userId ? null : finalContact.phone,
                     contactName: finalContactName,
                     contactPhone: finalContact.phone,
                     contactEmail: finalContact.email,
@@ -293,74 +160,52 @@ export async function POST(request, { params }) {
                     district: district ? String(district).trim() : null,
                     advancePayment: finalAdvancePayment,
                     paymentMethod: String(paymentMethod),
-                    items: {
-                        create: orderItemsData.map((item) => ({
-                            productId: item.productId,
-                            variantId: item.variantId,
-                            size: item.size ? String(item.size) : null,
-                            quantity: item.quantity,
-                            unitPrice: item.unitPrice,
-                            isPreorder: item.isPreorder,
-                            preorderQuantity: item.preorderQuantity,
-                        })),
-                    },
+                    items: { create: entries.map((item) => ({ productId: item.productId, variantId: item.variantId, size: item.size ? String(item.size) : null, quantity: item.quantity, unitPrice: item.unitPrice, isPreorder: item.isPreorder, preorderQuantity: item.preorderQuantity, stockMode: item.usesVariantStock ? "VARIANT" : "PRODUCT" })) },
                 },
                 include: ORDER_INCLUDE,
             });
 
-            // Variant-less lines draw from product-level stock, matching the
-            // behaviour of POST /api/orders when no variant is supplied.
-            for (const item of orderItemsData) {
-                if (item.stockQuantity > 0) {
-                    await tx.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { decrement: item.stockQuantity } },
-                    });
+            const variantProductIds = new Set();
+            for (const item of entries) {
+                if (item.usesVariantStock && item.stockQuantity > 0) {
+                    await adjustVariantStock(tx, { variantId: item.variantId, delta: -item.stockQuantity, type: "sale", note: "Abandoned checkout converted", userId: auth.user.userId, orderId: order.id });
+                    variantProductIds.add(item.productId);
+                }
+                if (item.usesVariantStock && item.preorderQuantity > 0) {
+                    await tx.productVariant.update({ where: { id: item.variantId }, data: { preorderCount: { increment: item.preorderQuantity } } });
+                }
+                if (!item.usesVariantStock && item.stockQuantity > 0) {
+                    await adjustProductStock(tx, { productId: item.productId, delta: -item.stockQuantity, type: "sale", note: "Abandoned checkout converted", userId: auth.user.userId, orderId: order.id });
                 }
             }
+            await syncVariantProductStock(tx, [...variantProductIds]);
 
             const updatedCheckout = await tx.abandonedCheckout.update({
                 where: { id: checkoutId },
-                data: {
-                    isRecovered: true,
-                    status: "converted",
-                    convertedOrderId: order.id,
-                    convertedAt: new Date(),
-                },
+                data: { isRecovered: true, status: "converted", convertedOrderId: order.id, convertedAt: new Date() },
             });
-
             return { order, checkout: updatedCheckout };
-        });
+        }, { isolationLevel: "Serializable" });
 
-        return Response.json(
-            {
-                success: true,
-                message: `Converted to order #${result.order.id}.`,
-                data: {
-                    order: {
-                        id: result.order.id,
-                        status: "pending",
-                        payment_status: "pending",
-                        total_amount: Number(result.order.totalAmount),
-                        shipping_fee: Number(result.order.shippingFee),
-                        items: result.order.items.map((item) => ({
-                            product_id: item.productId,
-                            title: item.product?.name ?? null,
-                            quantity: item.quantity,
-                            unit_price: Number(item.unitPrice),
-                        })),
-                    },
-                    checkout: formatCheckout(result.checkout),
+        return Response.json({
+            success: true,
+            message: `Converted to order #${result.order.id}.`,
+            data: {
+                order: {
+                    id: result.order.id,
+                    status: "pending",
+                    payment_status: "pending",
+                    total_amount: Number(result.order.totalAmount),
+                    shipping_fee: Number(result.order.shippingFee),
+                    items: result.order.items.map((item) => ({ product_id: item.productId, product_variant_id: item.variantId ?? null, title: item.product?.name ?? null, quantity: item.quantity, unit_price: Number(item.unitPrice) })),
                 },
+                checkout: formatCheckout(result.checkout),
             },
-            { status: 201 }
-        );
+        }, { status: 201 });
     } catch (error) {
+        if (Number.isInteger(error?.status)) return Response.json({ success: false, message: error.message }, { status: error.status });
+        if (isTransactionConflict(error)) return Response.json({ success: false, message: "Stock changed while this checkout was being converted. Please try again." }, { status: 409 });
         console.error("Convert abandoned checkout API error:", error);
-
-        return Response.json(
-            { success: false, message: "Failed to convert checkout into an order." },
-            { status: 500 }
-        );
+        return Response.json({ success: false, message: "Failed to convert checkout into an order." }, { status: 500 });
     }
 }

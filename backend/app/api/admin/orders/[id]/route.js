@@ -2,6 +2,15 @@ import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { isValidBdPhone, isValidEmail, normalizeBdPhone, normalizeEmail } from "@/lib/contactValidation.js";
 import { getItemPreorderQuantity, getItemStockQuantity, getPreorderRemaining, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
+import {
+    adjustProductStock,
+    adjustVariantStock,
+    inventoryError,
+    isTransactionConflict,
+    lockOrder,
+    lockProductFamilies,
+    syncVariantProductStock,
+} from "@/lib/inventory.js";
 
 const VALID_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
 const VALID_PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "REFUNDED"];
@@ -89,25 +98,43 @@ function formatOrder(order) {
  * so only their product stock can be restored in that case.
  */
 async function getLedgerTotals(tx, orderId) {
-    const rows = await tx.stockMovement.findMany({
-        where: { orderId, type: { in: ["sale", "release"] } },
-        select: { productVariantId: true, type: true, quantity: true },
-        orderBy: { id: "asc" },
-    });
-    const totals = new Map();
-    for (const row of rows) {
-        const entry = totals.get(row.productVariantId) || { netQty: 0, originalQty: 0 };
-        entry.netQty += row.quantity;
-        entry.originalQty = Math.max(entry.originalQty, -entry.netQty, 0);
-        totals.set(row.productVariantId, entry);
-    }
-    return totals;
+    const [variantRows, productRows] = await Promise.all([
+        tx.stockMovement.findMany({
+            where: { orderId, type: { in: ["sale", "release"] } },
+            select: { productVariantId: true, type: true, quantity: true },
+            orderBy: { id: "asc" },
+        }),
+        tx.productStockMovement.findMany({
+            where: { orderId, type: { in: ["sale", "release"] } },
+            select: { productId: true, type: true, quantity: true },
+            orderBy: { id: "asc" },
+        }),
+    ]);
+    const toTotals = (rows, key) => {
+        const totals = new Map();
+        for (const row of rows) {
+            const entry = totals.get(row[key]) || { netQty: 0, originalQty: 0 };
+            entry.netQty += row.quantity;
+            entry.originalQty = Math.max(entry.originalQty, -entry.netQty, 0);
+            totals.set(row[key], entry);
+        }
+        return totals;
+    };
+    return {
+        variantTotals: toTotals(variantRows, "productVariantId"),
+        productTotals: toTotals(productRows, "productId"),
+    };
+}
+
+function itemUsesVariantStock(item) {
+    // Null is a legacy row created before the snapshot column existed.
+    return item.stockMode ? item.stockMode === "VARIANT" : Boolean(item.variantId);
 }
 
 function getVariantStockQuantities(items) {
     const quantities = new Map();
     for (const item of items) {
-        if (!item.variantId) continue;
+        if (!item.variantId || !itemUsesVariantStock(item)) continue;
         quantities.set(item.variantId, (quantities.get(item.variantId) || 0) + getItemStockQuantity(item));
     }
     return quantities;
@@ -116,7 +143,7 @@ function getVariantStockQuantities(items) {
 function getVariantPreorderQuantities(items) {
     const quantities = new Map();
     for (const item of items) {
-        if (!item.variantId) continue;
+        if (!item.variantId || !itemUsesVariantStock(item)) continue;
         const quantity = getItemPreorderQuantity(item);
         if (quantity > 0) quantities.set(item.variantId, (quantities.get(item.variantId) || 0) + quantity);
     }
@@ -126,6 +153,7 @@ function getVariantPreorderQuantities(items) {
 function getProductStockQuantities(items) {
     const quantities = new Map();
     for (const item of items) {
+        if (itemUsesVariantStock(item)) continue;
         quantities.set(item.productId, (quantities.get(item.productId) || 0) + getItemStockQuantity(item));
     }
     return quantities;
@@ -152,52 +180,48 @@ async function adjustVariantPreorderCount(tx, variantId, delta) {
 }
 
 async function restoreOrderStock(tx, order, userId, note) {
-    const totals = await getLedgerTotals(tx, order.id);
-    for (const [productVariantId, total] of totals) {
+    const { variantTotals, productTotals } = await getLedgerTotals(tx, order.id);
+    const variantProductIds = new Set();
+    for (const [productVariantId, total] of variantTotals) {
         const restoreQty = total.netQty < 0 ? -total.netQty : 0;
         if (restoreQty <= 0) continue;
-        const updatedVariant = await tx.productVariant.update({
-            where: { id: productVariantId },
-            data: { stock: { increment: restoreQty } },
+        const updatedVariant = await adjustVariantStock(tx, {
+            variantId: productVariantId,
+            delta: restoreQty,
+            type: "release",
+            orderId: order.id,
+            note,
+            userId,
         });
-        await tx.stockMovement.create({
-            data: {
-                productVariantId,
-                type: "release",
-                quantity: restoreQty,
-                stockAfter: updatedVariant.stock,
-                reservedAfter: updatedVariant.held,
-                orderId: order.id,
-                note,
-                userId,
-            },
-        });
+        variantProductIds.add(updatedVariant.productId);
     }
     for (const [variantId, quantity] of getVariantPreorderQuantities(order.items)) {
         await adjustVariantPreorderCount(tx, variantId, -quantity);
     }
-    for (const [productId, quantity] of getProductStockQuantities(order.items)) {
-        if (quantity <= 0) continue;
-        await tx.product.update({
-            where: { id: productId },
-            data: { stock: { increment: quantity } },
-        });
+    // Replay product-level ledger rows exactly. This covers an order that
+    // retained a selected variant id while product-level stock was active.
+    for (const [productId, total] of productTotals) {
+        const restoreQty = total.netQty < 0 ? -total.netQty : 0;
+        if (restoreQty <= 0) continue;
+        await adjustProductStock(tx, { productId, delta: restoreQty, type: "release", orderId: order.id, note, userId });
     }
+    // Legacy lines without a product movement retain their original fallback.
+    for (const [productId, quantity] of getProductStockQuantities(order.items)) {
+        if (quantity <= 0 || productTotals.has(productId)) continue;
+        await adjustProductStock(tx, { productId, delta: quantity, type: "release", orderId: order.id, note, userId });
+    }
+    await syncVariantProductStock(tx, [...variantProductIds]);
 }
-
 async function redeductOrderStock(tx, order, userId) {
     const insufficient = (label) => {
         const error = new Error(`Not enough stock to reactivate this order (${label}).`);
         error.code = "INSUFFICIENT_STOCK";
         return error;
     };
-    const totals = await getLedgerTotals(tx, order.id);
+    const { variantTotals, productTotals } = await getLedgerTotals(tx, order.id);
     const desiredVariantQuantities = getVariantStockQuantities(order.items);
-    const ledgerVariantRows = totals.size
-        ? await tx.productVariant.findMany({
-            where: { id: { in: [...totals.keys()] } },
-            select: { id: true, productId: true },
-        })
+    const ledgerVariantRows = variantTotals.size
+        ? await tx.productVariant.findMany({ where: { id: { in: [...variantTotals.keys()] } }, select: { id: true, productId: true } })
         : [];
     const ledgerVariantProduct = new Map(ledgerVariantRows.map((row) => [row.id, row.productId]));
     const ledgerVariantsByProduct = new Map();
@@ -209,7 +233,7 @@ async function redeductOrderStock(tx, order, userId) {
     const legacyItemsByProduct = new Map();
     const explicitVariantProductIds = new Set();
     for (const item of order.items) {
-        if (item.variantId) explicitVariantProductIds.add(item.productId);
+        if (item.variantId && itemUsesVariantStock(item)) explicitVariantProductIds.add(item.productId);
         else {
             const list = legacyItemsByProduct.get(item.productId) || [];
             list.push(item);
@@ -217,7 +241,8 @@ async function redeductOrderStock(tx, order, userId) {
         }
     }
 
-    for (const [productVariantId, total] of totals) {
+    const variantProductIds = new Set();
+    for (const [productVariantId, total] of variantTotals) {
         const currentlyDeductedQty = total.netQty < 0 ? -total.netQty : 0;
         let desiredQty;
         if (desiredVariantQuantities.has(productVariantId)) {
@@ -226,49 +251,31 @@ async function redeductOrderStock(tx, order, userId) {
             const productId = ledgerVariantProduct.get(productVariantId);
             const legacyItems = legacyItemsByProduct.get(productId) || [];
             const ledgerVariants = ledgerVariantsByProduct.get(productId) || [];
-            if (legacyItems.length === 1 && ledgerVariants.length === 1) {
-                desiredQty = getItemStockQuantity(legacyItems[0]);
-            } else if (productId && explicitVariantProductIds.has(productId)) {
-                desiredQty = 0;
-            } else {
-                desiredQty = total.originalQty;
-            }
+            if (legacyItems.length === 1 && ledgerVariants.length === 1) desiredQty = getItemStockQuantity(legacyItems[0]);
+            else if (productId && explicitVariantProductIds.has(productId)) desiredQty = 0;
+            else desiredQty = total.originalQty;
         }
         const deductQty = desiredQty - currentlyDeductedQty;
         if (deductQty <= 0) continue;
-        const variant = await tx.productVariant.findUnique({
-            where: { id: productVariantId },
-            select: { stock: true, value: true },
-        });
-        if (!variant) continue;
-        if (variant.stock < deductQty) throw insufficient(`variant ${variant.value}`);
-        const updatedVariant = await tx.productVariant.update({
-            where: { id: productVariantId },
-            data: { stock: { decrement: deductQty } },
-        });
-        await tx.stockMovement.create({
-            data: {
-                productVariantId,
+        try {
+            const updatedVariant = await adjustVariantStock(tx, {
+                variantId: productVariantId,
+                delta: -deductQty,
                 type: "sale",
-                quantity: -deductQty,
-                stockAfter: updatedVariant.stock,
-                reservedAfter: updatedVariant.held,
                 orderId: order.id,
                 note: "Order reactivated",
                 userId,
-            },
-        });
+            });
+            variantProductIds.add(updatedVariant.productId);
+        } catch (error) {
+            if (Number.isInteger(error?.status)) throw insufficient(`variant ${ledgerVariantProduct.get(productVariantId) || productVariantId}`);
+            throw error;
+        }
     }
     for (const [variantId, quantity] of getVariantPreorderQuantities(order.items)) {
         const variant = await tx.productVariant.findUnique({
             where: { id: variantId },
-            select: {
-                value: true,
-                allowPreorder: true,
-                preorderLimit: true,
-                preorderCount: true,
-                product: { select: { status: true, isActive: true } },
-            },
+            select: { value: true, isActive: true, allowPreorder: true, preorderLimit: true, preorderCount: true, product: { select: { status: true, isActive: true } } },
         });
         if (!variant) continue;
         const remaining = getPreorderRemaining(variant);
@@ -277,21 +284,28 @@ async function redeductOrderStock(tx, order, userId) {
         }
         await adjustVariantPreorderCount(tx, variantId, quantity);
     }
-
-    // products.stock is a legacy denormalised counter (it is 0/negative
-    // for several products whose real stock lives on variants), so
-    // availability is enforced on variant stock above. Only the physical
-    // portion of a pre-order line is mirrored here; pre-order units do
-    // not decrement it until received stock is allocated at shipment.
-    for (const [productId, quantity] of getProductStockQuantities(order.items)) {
-        if (quantity <= 0) continue;
-        await tx.product.update({
-            where: { id: productId },
-            data: { stock: { decrement: quantity } },
-        });
+    for (const [productId, total] of productTotals) {
+        const currentlyDeductedQty = total.netQty < 0 ? -total.netQty : 0;
+        const deductQty = total.originalQty - currentlyDeductedQty;
+        if (deductQty <= 0) continue;
+        try {
+            await adjustProductStock(tx, { productId, delta: -deductQty, type: "sale", orderId: order.id, note: "Order reactivated", userId });
+        } catch (error) {
+            if (Number.isInteger(error?.status)) throw insufficient(`product ${productId}`);
+            throw error;
+        }
     }
+    for (const [productId, quantity] of getProductStockQuantities(order.items)) {
+        if (quantity <= 0 || productTotals.has(productId)) continue;
+        try {
+            await adjustProductStock(tx, { productId, delta: -quantity, type: "sale", orderId: order.id, note: "Order reactivated", userId });
+        } catch (error) {
+            if (Number.isInteger(error?.status)) throw insufficient(`product ${productId}`);
+            throw error;
+        }
+    }
+    await syncVariantProductStock(tx, [...variantProductIds]);
 }
-
 
 function orderUpdateError(status, message) {
     const error = new Error(message);
@@ -319,9 +333,9 @@ async function allocatePreorderStock(tx, orderId, userId) {
     const productOnlyQuantities = new Map();
     for (const item of items) {
         const quantity = getItemPreorderQuantity(item);
-        productQuantities.set(item.productId, (productQuantities.get(item.productId) || 0) + quantity);
-        if (!item.variantId) {
+        if (!itemUsesVariantStock(item)) {
             productOnlyQuantities.set(item.productId, (productOnlyQuantities.get(item.productId) || 0) + quantity);
+            productQuantities.set(item.productId, (productQuantities.get(item.productId) || 0) + quantity);
         }
     }
 
@@ -332,8 +346,8 @@ async function allocatePreorderStock(tx, orderId, userId) {
             select: { stock: true, held: true, value: true },
         });
         if (!variant) continue;
-        if (variant.stock < quantity) {
-            throw orderUpdateError(409, `Receive enough stock for variant ${variant.value} before shipping or delivering this pre-order.`);
+        if (variant.stock - variant.held < quantity) {
+            throw orderUpdateError(409, `Receive enough available stock for variant ${variant.value} before shipping or delivering this pre-order.`);
         }
         variantRows.set(variantId, variant);
     }
@@ -351,33 +365,32 @@ async function allocatePreorderStock(tx, orderId, userId) {
         }
     }
 
+    const variantProductIds = new Set();
     for (const [variantId, quantity] of variantQuantities) {
         if (!variantRows.has(variantId)) continue;
-        const updatedVariant = await tx.productVariant.update({
-            where: { id: variantId },
-            data: { stock: { decrement: quantity } },
+        const updatedVariant = await adjustVariantStock(tx, {
+            variantId,
+            delta: -quantity,
+            type: "sale",
+            orderId,
+            note: "Pre-order fulfilled from received stock",
+            userId,
         });
-        await tx.stockMovement.create({
-            data: {
-                productVariantId: variantId,
-                type: "sale",
-                quantity: -quantity,
-                stockAfter: updatedVariant.stock,
-                reservedAfter: updatedVariant.held,
-                orderId,
-                note: "Pre-order fulfilled from received stock",
-                userId,
-            },
-        });
+        variantProductIds.add(updatedVariant.productId);
         await adjustVariantPreorderCount(tx, variantId, -quantity);
     }
 
     for (const [productId, quantity] of productQuantities) {
-        await tx.product.update({
-            where: { id: productId },
-            data: { stock: { decrement: quantity } },
+        await adjustProductStock(tx, {
+            productId,
+            delta: -quantity,
+            type: "sale",
+            orderId,
+            note: "Pre-order fulfilled from received stock",
+            userId,
         });
     }
+    await syncVariantProductStock(tx, [...variantProductIds]);
 
     await tx.orderItem.updateMany({
         where: { orderId, preorderQuantity: { gt: 0 } },
@@ -427,6 +440,7 @@ function buildDesiredItems(rawItems, existingOrder, productMap) {
             if (!Number.isInteger(variantId) || variantId <= 0) throw orderUpdateError(400, "Invalid product variant.");
             variant = (product.variants || []).find((entry) => entry.id === variantId) || null;
             if (!variant) throw orderUpdateError(404, `Variant ${variantId} not found for ${product.name}.`);
+            if (!variant.isActive) throw orderUpdateError(400, `Variant ${variant.value} is not available.`);
         } else if (variantId) {
             variant = (product.variants || []).find((entry) => entry.id === variantId) || null;
         }
@@ -446,6 +460,7 @@ function buildDesiredItems(rawItems, existingOrder, productMap) {
             unitPrice,
             isPreorder: Boolean(existingItem?.isPreorder || getItemPreorderQuantity(existingItem || {}) > 0),
             preorderQuantity: existingItem ? getItemPreorderQuantity(existingItem) : 0,
+            stockMode: existingItem?.stockMode ?? (variantId && product.inventory?.trackInventory ? "VARIANT" : "PRODUCT"),
         };
     });
 }
@@ -461,16 +476,16 @@ function itemsCompositionChanged(existingItems, desiredItems) {
 }
 
 async function resolveLegacyVariantIds(tx, existingOrder, desiredItems) {
-    const totals = await getLedgerTotals(tx, existingOrder.id);
-    if (totals.size === 0) return { desiredItems, existingVariantByItemId: new Map() };
+    const { variantTotals } = await getLedgerTotals(tx, existingOrder.id);
+    if (variantTotals.size === 0) return { desiredItems, existingVariantByItemId: new Map() };
 
     const variantRows = await tx.productVariant.findMany({
-        where: { id: { in: [...totals.keys()] } },
+        where: { id: { in: [...variantTotals.keys()] } },
         select: { id: true, productId: true },
     });
     const deductedByProduct = new Map();
     for (const row of variantRows) {
-        const total = totals.get(row.id);
+        const total = variantTotals.get(row.id);
         if (!total || total.netQty >= 0) continue;
         const list = deductedByProduct.get(row.productId) || [];
         list.push({ variantId: row.id, quantity: -total.netQty });
@@ -490,7 +505,7 @@ async function resolveLegacyVariantIds(tx, existingOrder, desiredItems) {
 
     for (const item of existingOrder.items) {
         if (item.variantId) {
-            existingVariantByItemId.set(item.id, item.variantId);
+            existingVariantByItemId.set(item.id, itemUsesVariantStock(item) ? item.variantId : null);
             continue;
         }
         const candidates = deductedByProduct.get(item.productId) || [];
@@ -549,14 +564,14 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
 
     for (const item of existingOrder.items) {
         const variantId = existingVariantByItemId.get(item.id) || item.variantId || null;
-        const group = variantId ? getVariantGroup(variantId) : getProductOnlyGroup(item.productId);
+        const group = variantId && itemUsesVariantStock(item) ? getVariantGroup(variantId) : getProductOnlyGroup(item.productId);
         group.existingQuantity += item.quantity;
         group.existingStockQuantity += getItemStockQuantity(item);
         group.existingPreorderQuantity += getItemPreorderQuantity(item);
     }
 
     for (const item of desiredItems) {
-        const group = item.variantId ? getVariantGroup(item.variantId) : getProductOnlyGroup(item.productId);
+        const group = item.variantId && itemUsesVariantStock(item) ? getVariantGroup(item.variantId) : getProductOnlyGroup(item.productId);
         group.desiredQuantity += item.quantity;
         group.items.push(item);
     }
@@ -575,6 +590,7 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
         }
     };
 
+    const variantProductIds = new Set();
     for (const [variantId, group] of variantGroups) {
         const variant = await tx.productVariant.findUnique({
             where: { id: variantId },
@@ -585,7 +601,7 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
                 allowPreorder: true,
                 preorderLimit: true,
                 preorderCount: true,
-                product: { select: { status: true, isActive: true, name: true } },
+                product: { select: { id: true, status: true, isActive: true, name: true } },
             },
         });
         if (!variant) continue;
@@ -603,7 +619,7 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
                 throw orderUpdateError(400, `Product ${variant.product.name} is not available.`);
             }
             const increase = group.desiredQuantity - group.existingQuantity;
-            const stockAllocation = Math.min(increase, Math.max(0, variant.stock));
+            const stockAllocation = Math.min(increase, Math.max(0, variant.stock - variant.held));
             const preorderIncrease = increase - stockAllocation;
             if (preorderIncrease > 0) {
                 const remaining = getPreorderRemaining(variant);
@@ -622,22 +638,15 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
 
         const stockDelta = desiredStockQuantity - group.existingStockQuantity;
         if (stockDelta !== 0) {
-            const updatedVariant = await tx.productVariant.update({
-                where: { id: variantId },
-                data: { stock: stockDelta > 0 ? { decrement: stockDelta } : { increment: -stockDelta } },
+            await adjustVariantStock(tx, {
+                variantId,
+                delta: -stockDelta,
+                type: stockDelta > 0 ? "sale" : "release",
+                orderId: existingOrder.id,
+                note: stockDelta > 0 ? "Order items updated, stock deducted" : "Order items updated, stock returned",
+                userId,
             });
-            await tx.stockMovement.create({
-                data: {
-                    productVariantId: variantId,
-                    type: stockDelta > 0 ? "sale" : "release",
-                    quantity: -stockDelta,
-                    stockAfter: updatedVariant.stock,
-                    reservedAfter: updatedVariant.held,
-                    orderId: existingOrder.id,
-                    note: stockDelta > 0 ? "Order items updated, stock deducted" : "Order items updated, stock returned",
-                    userId,
-                },
-            });
+            variantProductIds.add(variant.product.id);
         }
         await adjustVariantPreorderCount(
             tx,
@@ -653,6 +662,7 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
                 name: true,
                 status: true,
                 stock: true,
+                inventory: { select: { trackInventory: true } },
                 _count: { select: { variants: true } },
             },
         });
@@ -670,21 +680,14 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
                 throw orderUpdateError(400, `Product ${product.name} is not available.`);
             }
             const increase = group.desiredQuantity - group.existingQuantity;
-            if (product._count.variants > 0) {
-                // A line without a variant cannot be allocated to a specific
-                // size. Preserve the existing product-counter behaviour for
-                // in-stock products, and treat added units on a PRE_ORDER
-                // product as pre-order units.
-                desiredStockQuantity = isProductPreorder(product)
-                    ? group.existingStockQuantity
-                    : group.existingStockQuantity + increase;
-            } else {
-                const stockAllocation = Math.min(increase, Math.max(0, product.stock));
-                if (stockAllocation < increase && !isProductPreorder(product)) {
-                    throw orderUpdateError(400, `Not enough stock for ${product.name}.`);
-                }
-                desiredStockQuantity = group.existingStockQuantity + stockAllocation;
+            if (product._count.variants > 0 && product.inventory?.trackInventory) {
+                throw orderUpdateError(400, `Select a variant for ${product.name} before increasing this order item.`);
             }
+            const stockAllocation = Math.min(increase, Math.max(0, product.stock));
+            if (stockAllocation < increase && !isProductPreorder(product)) {
+                throw orderUpdateError(400, `Not enough stock for ${product.name}.`);
+            }
+            desiredStockQuantity = group.existingStockQuantity + stockAllocation;
         }
 
         assignGroupAllocation(group, desiredStockQuantity, product);
@@ -693,6 +696,7 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
     const existingProductStockQty = getProductStockQuantities(existingOrder.items);
     const desiredProductStockQty = new Map();
     for (const item of desiredItems) {
+        if (itemUsesVariantStock(item)) continue;
         const stockQuantity = item.quantity - getItemPreorderQuantity(item);
         desiredProductStockQty.set(
             item.productId,
@@ -704,11 +708,16 @@ async function applyItemStockDeltas(tx, existingOrder, desiredItems, existingVar
     for (const productId of productIds) {
         const delta = (desiredProductStockQty.get(productId) || 0) - (existingProductStockQty.get(productId) || 0);
         if (delta === 0) continue;
-        await tx.product.update({
-            where: { id: productId },
-            data: { stock: delta > 0 ? { decrement: delta } : { increment: -delta } },
+        await adjustProductStock(tx, {
+            productId,
+            delta: -delta,
+            type: delta > 0 ? "sale" : "release",
+            orderId: existingOrder.id,
+            note: delta > 0 ? "Order items updated, stock deducted" : "Order items updated, stock returned",
+            userId,
         });
     }
+    await syncVariantProductStock(tx, [...variantProductIds]);
 
     return desiredItems;
 }
@@ -729,6 +738,7 @@ async function replaceOrderItems(tx, existingOrder, desiredItems) {
             unitPrice: item.unitPrice,
             isPreorder: Boolean(item.isPreorder || item.preorderQuantity > 0),
             preorderQuantity: getItemPreorderQuantity(item),
+            stockMode: item.stockMode ?? (item.variantId ? "VARIANT" : "PRODUCT"),
         };
         if (item.id) await tx.orderItem.update({ where: { id: item.id }, data });
         else await tx.orderItem.create({ data: { orderId: existingOrder.id, ...data } });
@@ -916,7 +926,7 @@ export async function PATCH(request, { params }) {
             const products = productIds.length
                 ? await prisma.product.findMany({
                     where: { id: { in: productIds } },
-                    include: { variants: { select: { id: true, productId: true, name: true, value: true } } },
+                    include: { inventory: true, variants: { select: { id: true, productId: true, name: true, value: true, isActive: true } } },
                 })
                 : [];
             desiredItems = buildDesiredItems(body.items, existingOrder, new Map(products.map((product) => [product.id, product])));
@@ -957,43 +967,69 @@ export async function PATCH(request, { params }) {
 
         if (!recognized) return Response.json({ success: false, message: "No valid fields to update." }, { status: 400 });
 
+        const statusOnlyRequest = !desiredItems
+            && Object.keys(updateData).length === 1
+            && Object.prototype.hasOwnProperty.call(updateData, "status");
+        const expectedUpdatedAt = existingOrder.updatedAt?.getTime?.() ?? null;
+
         const updatedOrder = await prisma.$transaction(async (tx) => {
+            if (!await lockOrder(tx, orderId)) throw orderUpdateError(404, "Order not found.");
+            const lockedOrder = await tx.order.findUnique({
+                where: { id: orderId },
+                include: { items: true, user: { select: { id: true, name: true, phone: true, email: true } } },
+            });
+            if (!lockedOrder) throw orderUpdateError(404, "Order not found.");
+
+            // Do not execute stock side effects from a stale request. A second
+            // identical cancel/reactivation is explicitly idempotent.
+            const lockedUpdatedAt = lockedOrder.updatedAt?.getTime?.() ?? null;
+            if (expectedUpdatedAt !== null && lockedUpdatedAt !== expectedUpdatedAt) {
+                if (statusOnlyRequest && finalNewStatus === lockedOrder.status) {
+                    return tx.order.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
+                }
+                throw orderUpdateError(409, "This order was changed by another request. Reload it and try again.");
+            }
+
+            const lockedProductIds = [
+                ...lockedOrder.items.map((item) => item.productId),
+                ...(desiredItems || []).map((item) => item.productId),
+            ];
+            await lockProductFamilies(tx, lockedProductIds);
+
             if (desiredItems) {
-                const resolved = await resolveLegacyVariantIds(tx, existingOrder, desiredItems);
+                const resolved = await resolveLegacyVariantIds(tx, lockedOrder, desiredItems);
                 let effectiveDesiredItems = resolved.desiredItems;
                 if (compositionChanged && !cancellationTransition) {
-                    effectiveDesiredItems = await applyItemStockDeltas(tx, existingOrder, effectiveDesiredItems, resolved.existingVariantByItemId, auth.user.userId);
+                    effectiveDesiredItems = await applyItemStockDeltas(tx, lockedOrder, effectiveDesiredItems, resolved.existingVariantByItemId, auth.user.userId);
                 }
-                await replaceOrderItems(tx, existingOrder, effectiveDesiredItems);
+                await replaceOrderItems(tx, lockedOrder, effectiveDesiredItems);
             }
 
             if (Object.keys(updateData).length > 0) {
                 await tx.order.update({ where: { id: orderId }, data: updateData });
             }
 
-            // Stock was deducted when the order was placed. Cancelling
-            // returns it (release); moving a cancelled order back to an
-            // active status deducts the current item quantities again.
-            if (finalNewStatus === "CANCELLED" && existingOrder.status !== "CANCELLED") {
-                await restoreOrderStock(tx, existingOrder, auth.user.userId, "Order cancelled, stock returned");
-            } else if (finalNewStatus && finalNewStatus !== "CANCELLED" && existingOrder.status === "CANCELLED") {
-                await redeductOrderStock(tx, existingOrder, auth.user.userId);
+            const lockedFinalStatus = updateData.status || lockedOrder.status;
+            if (finalNewStatus === "CANCELLED" && lockedOrder.status !== "CANCELLED") {
+                await restoreOrderStock(tx, lockedOrder, auth.user.userId, "Order cancelled, stock returned");
+            } else if (finalNewStatus && finalNewStatus !== "CANCELLED" && lockedOrder.status === "CANCELLED") {
+                await redeductOrderStock(tx, lockedOrder, auth.user.userId);
             }
 
-            // A pre-order can only enter shipment/delivery once received
-            // stock covers its remaining pre-order units. Allocation turns
-            // those units into a normal ledger-backed sale at that point.
-            if (finalStatus === "SHIPPED" || finalStatus === "DELIVERED") {
+            if (lockedFinalStatus === "SHIPPED" || lockedFinalStatus === "DELIVERED") {
                 await allocatePreorderStock(tx, orderId, auth.user.userId);
             }
 
             return tx.order.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
-        });
+        }, { isolationLevel: "Serializable" });
 
         return Response.json({ success: true, message: "Order updated.", data: formatOrder(updatedOrder) });
     } catch (error) {
         if (error?.code === "INSUFFICIENT_STOCK" || Number.isInteger(error?.status)) {
             return Response.json({ success: false, message: error.message }, { status: error.status || 400 });
+        }
+        if (isTransactionConflict(error)) {
+            return Response.json({ success: false, message: "Inventory changed while the order was being updated. Reload and try again." }, { status: 409 });
         }
         console.error("Admin update order API error:", error);
         return Response.json({ success: false, message: "Failed to update order." }, { status: 500 });
@@ -1014,17 +1050,22 @@ export async function DELETE(request, { params }) {
         if (existingOrder.status === "DELIVERED") return Response.json({ success: false, message: "Delivered orders cannot be deleted." }, { status: 409 });
 
         await prisma.$transaction(async (tx) => {
+            if (!await lockOrder(tx, orderId)) throw orderUpdateError(404, "Order not found.");
+            const lockedOrder = await tx.order.findUnique({ where: { id: orderId }, include: { items: true } });
+            if (!lockedOrder) throw orderUpdateError(404, "Order not found.");
+            if (lockedOrder.status === "DELIVERED") throw orderUpdateError(409, "Delivered orders cannot be deleted.");
+            await lockProductFamilies(tx, lockedOrder.items.map((item) => item.productId));
             // Deleting an order that was never cancelled must not silently
             // keep its stock: return it first, exactly like a cancellation.
-            // (StockMovement.orderId is a plain Int, so the release rows
-            // survive the order deletion as history.)
-            if (existingOrder.status !== "CANCELLED") {
-                await restoreOrderStock(tx, existingOrder, auth.user.userId, "Order deleted, stock returned");
+            if (lockedOrder.status !== "CANCELLED") {
+                await restoreOrderStock(tx, lockedOrder, auth.user.userId, "Order deleted, stock returned");
             }
             await tx.order.delete({ where: { id: orderId } });
-        });
+        }, { isolationLevel: "Serializable" });
         return Response.json({ success: true, message: "Order deleted." });
     } catch (error) {
+        if (Number.isInteger(error?.status)) return Response.json({ success: false, message: error.message }, { status: error.status });
+        if (isTransactionConflict(error)) return Response.json({ success: false, message: "Inventory changed while the order was being deleted. Try again." }, { status: 409 });
         console.error("Admin delete order API error:", error);
         return Response.json({ success: false, message: "Failed to delete order." }, { status: 500 });
     }

@@ -159,13 +159,17 @@ export function normalizeProduct(raw) {
     ? productPreorder ? null : Math.max(0, stock)
     : raw.order_capacity === null ? null : num(raw.order_capacity, 0);
   const hasSizeCapacity = sizes.some((size) => size.orderCapacity === null || size.orderCapacity > 0);
+  const everySizeUnavailable = sizes.length > 0 && sizes.every((size) => size.orderCapacity === 0);
 
+  // `order_capacity` is supplied by the backend after stock, held stock and
+  // preorder capacity are considered. Use it rather than raw on-hand stock so
+  // storefront availability matches the quantity an order may actually buy.
   let availability = "in-stock";
   if (productPreorder) availability = sizes.length === 0 || hasSizeCapacity ? "pre-order" : "sold-out";
   else if (status === "out-of-stock" || status === "sold-out") availability = "sold-out";
   else if (sizes.length > 0 && sizes.every((size) => size.stock <= 0) && hasSizeCapacity) availability = "pre-order";
-  else if (tracked && sizes.length > 0 && sizes.every((size) => size.stock <= 0)) availability = "sold-out";
-  else if (tracked && sizes.length === 0 && orderCapacity === 0) availability = "sold-out";
+  else if (everySizeUnavailable) availability = "sold-out";
+  else if (sizes.length === 0 && orderCapacity === 0) availability = "sold-out";
 
   return {
     id: raw.id,

@@ -1,7 +1,8 @@
 import prisma from "@/directory/prisma/prisma.js";
-import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
+import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder, tracksStockPerSize } from "@/lib/preorder.js";
 
 function formatSearchProduct(product) {
+    const usesVariantStock = tracksStockPerSize(product);
     return {
         id: product.id,
         title: product.name,
@@ -38,12 +39,12 @@ function formatSearchProduct(product) {
                         ? null
                         : Number(variant.price),
                 stock: variant.stock,
-                allow_preorder: isPreorderEligible(product, variant),
+                allow_preorder: usesVariantStock ? isPreorderEligible(product, variant) : isPreorderEligible(product),
                 variant_allow_preorder: variant.allowPreorder,
                 preorder_limit: variant.preorderLimit,
                 preorder_count: variant.preorderCount,
                 preorder_available: getPreorderRemaining(variant),
-                order_capacity: getVariantOrderCapacity(product, variant),
+                order_capacity: usesVariantStock ? getVariantOrderCapacity(product, variant) : getProductOrderCapacity(product),
             },
         })),
         track_inventory:
@@ -170,7 +171,7 @@ export async function GET(request) {
                         isPrimary: "desc",
                     },
                 },
-                variants: true,
+                variants: { where: { isActive: true } },
                 colors: true,
                 inventory: true,
             },
