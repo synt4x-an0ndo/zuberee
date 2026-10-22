@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   FiCheck,
   FiFilter,
@@ -18,7 +18,7 @@ import { useFeedback } from "@/context/FeedbackContext";
 
 /**
  * GET /api/admin/abandoned-checkouts   (admin JWT)
- *   query: search, status (pending|cancelled|completed|converted), recovered (true|false), page, per_page
+ *   query: search, status (pending|cancelled|completed|converted), recovered (true|false), scope=all, page, per_page
  *   -> { success, message, data:[{ id, session_id, user_id, cart_items, name, phone, address,
  *                                  is_recovered, status, converted_order_id, converted_at,
  *                                  created_at, updated_at }],
@@ -53,10 +53,10 @@ const CHECKOUT_STATUSES = [
   { value: "order-sent-to-china", label: "Order Sent To China", tone: "info" },
   { value: "file-completed", label: "File Completed", tone: "success" },
   { value: "order-confirmed", label: "Order Confirmed", tone: "success" },
-  { value: "converted", label: "Converted", tone: "brand" },
+  { value: "converted", label: "Completed (converted)", tone: "success" },
 ];
 
-const EMPTY_FILTERS = { from: "", to: "", status: "", search: "", recovered: "", scope: "actionable" };
+const EMPTY_FILTERS = { from: "", to: "", status: "", search: "", recovered: "", scope: "all" };
 
 const PAYMENT_OPTIONS = [
   { value: "cash", label: "Cash on delivery" },
@@ -176,7 +176,6 @@ function CartItemsCell({ items }) {
  * out-of-stock line is visible before it becomes an order.
  */
 function ConvertModal({ row, onClose, onConverted }) {
-  const { toast } = useFeedback();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -291,8 +290,7 @@ function ConvertModal({ row, onClose, onConverted }) {
         paymentMethod: form.paymentMethod,
       });
 
-      toast.success(body?.message || `Converted to order #${body?.data?.order?.id}.`);
-      onConverted();
+      await onConverted(body);
     } catch (submitError) {
       setError(submitError?.message || "Could not convert this checkout.");
     } finally {
@@ -303,12 +301,12 @@ function ConvertModal({ row, onClose, onConverted }) {
   return (
     <Modal
       open
-      onClose={onClose}
+      onClose={() => { if (!saving) onClose(); }}
       title={`Convert checkout #${row.id} into an order`}
       width="720px"
       footer={
         <>
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
           <Button type="submit" form="convert-form" variant="primary" loading={saving} disabled={loading || usableItems.length === 0}>
@@ -495,12 +493,13 @@ export default function IncompleteOrdersPage() {
     return () => clearTimeout(timer);
   }, [filters.search]);
 
-  const { data, loading, error, reload } = useAsync(async () => {
-    const params = { page, per_page: 20 };
+  // History scope is intentional: the backend persists converted checkouts and
+  // exposes them with scope=all, so this list remains a reliable audit trail.
+  const fetchHistory = useCallback(async () => {
+    const params = { page, per_page: 20, scope: "all" };
     if (applied.search.trim()) params.search = applied.search.trim();
     if (applied.status) params.status = applied.status;
     if (applied.recovered) params.recovered = applied.recovered;
-    if (applied.scope) params.scope = applied.scope;
     if (applied.from) params.from = applied.from;
     if (applied.to) params.to = applied.to;
     const body = await api.get("api/admin/abandoned-checkouts", { params });
@@ -509,6 +508,16 @@ export default function IncompleteOrdersPage() {
       meta: body.meta || {},
     };
   }, [applied, page]);
+
+  const { data, loading, error, reload, setData } = useAsync(fetchHistory, [fetchHistory]);
+
+  // Used after a confirmed mutation. This never synthesizes a converted row;
+  // it renders only the record the persisted API returns.
+  const refetchHistory = useCallback(async () => {
+    const next = await fetchHistory();
+    setData(next);
+    return next;
+  }, [fetchHistory, setData]);
 
   const rows = data?.rows || [];
   const meta = data?.meta || {};
@@ -532,12 +541,36 @@ export default function IncompleteOrdersPage() {
 
     try {
       const body = await api.patch(`api/admin/abandoned-checkouts/${row.id}`, { status });
-      toast.success(body?.message || "Status updated.");
-      reload();
+      try {
+        await refetchHistory();
+        toast.success(body?.message || "Status updated.");
+      } catch (refreshError) {
+        toast.success(body?.message || "Status updated.");
+        toast.error("Status was saved, but the latest checkout history could not be refreshed. Please refresh the list.");
+        reload();
+      }
     } catch (patchError) {
       toast.error(patchError?.message || "Could not update this status.");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleConverted = async (body) => {
+    // POST /convert already committed the real order and returned the persisted
+    // checkout link. Re-fetch scope=all so the history is API-backed after a
+    // reload or navigation rather than retained in temporary React state.
+    setConvertRow(null);
+    const orderId = body?.data?.order?.id;
+    const successMessage = body?.message || (orderId ? `Converted to order #${orderId}.` : "Checkout converted to an order.");
+
+    try {
+      await refetchHistory();
+      toast.success(successMessage);
+    } catch (refreshError) {
+      toast.success(successMessage);
+      toast.error("The order was created, but checkout history could not be refreshed. Please refresh this page to confirm the linked record.");
+      reload();
     }
   };
 
@@ -546,7 +579,7 @@ export default function IncompleteOrdersPage() {
       <AdminHeader
         eyebrow="Sales"
         title="Incomplete orders"
-        subtitle="Checkouts where a shopper entered details but never placed the order."
+        subtitle="Abandoned checkout history, including records that were later converted into orders."
         actions={<Button variant="ghost" size="sm" onClick={reload}><FiRefreshCw aria-hidden="true" /> Refresh</Button>}
       />
 
@@ -597,7 +630,7 @@ export default function IncompleteOrdersPage() {
         <EmptyState
           icon={FiInbox}
           title="Nothing to chase"
-          text="No checkout needs follow-up with the current filters. Rows appear here when a shopper enters contact details and stops before placing an order, and leave once they are converted. Switch Show to All to see every checkout, including the ones that became orders."
+          text="No abandoned checkout records match the current filters. Converted records remain in this history with their linked order."
         />
       ) : (
         <Card>
@@ -645,21 +678,26 @@ export default function IncompleteOrdersPage() {
                       <CartItemsCell items={row.cart_items} />
                     </td>
                     <td data-col="status">
-                      {/* Same plain <Select> the Orders page uses - matched to the
-                          column so it sits in the cell without stretching it. */}
-                      <Select
-                        aria-label={`Status for checkout ${row.id}`}
-                        value={row.status || "pending"}
-                        onChange={(event) => setRowStatus(row, event.target.value)}
-                        options={CHECKOUT_STATUSES}
-                        disabled={busy}
-                        style={{ width: 150 }}
-                      />
+                      {converted ? (
+                        // The API stores the terminal workflow value "converted".
+                        // In the history UI that maps to the requested Completed
+                        // status because a real linked order exists.
+                        <Badge tone="success">Completed</Badge>
+                      ) : (
+                        <Select
+                          aria-label={`Status for checkout ${row.id}`}
+                          value={row.status || "pending"}
+                          onChange={(event) => setRowStatus(row, event.target.value)}
+                          options={CHECKOUT_STATUSES}
+                          disabled={busy}
+                          style={{ width: 150 }}
+                        />
+                      )}
                     </td>
                     <td data-col="conversion">
                       {row.converted_order_id ? (
                         <>
-                          <Badge tone="success">Converted</Badge>
+                          <Badge tone="success">Completed</Badge>
                           <span className="muted" style={{ display: "block", fontSize: "0.75rem", marginTop: 4 }}>
                             Order #{row.converted_order_id}
                           </span>
@@ -682,7 +720,7 @@ export default function IncompleteOrdersPage() {
                           size="sm"
                           variant="primary"
                           onClick={() => setConvertRow(row)}
-                          disabled={converted}
+                          disabled={converted || busy}
                           icon={FiRepeat}
                         >
                           {converted ? "Converted" : "Convert to Order"}
@@ -700,12 +738,10 @@ export default function IncompleteOrdersPage() {
 
       <div className="notice notice-info" role="note">
         <span>
-          A row is opened the moment an item is added to a cart, enriched as the shopper types on the
-          checkout form, and closed automatically — linked to the order — as soon as that order is placed.
-          This list keeps only checkouts that never became an order and still carry contact details,
-          so anything already converted or cart-only drops away on its own. <strong>Convert</strong>
-          opens a confirmation panel pre-filled with live prices and stock — an order is only created
-          once you confirm it there.
+          A row is opened when a cart is tracked and enriched as the shopper types on checkout. This history
+          keeps the original checkout after a real order is created, showing its linked order and completion
+          state for record-keeping. <strong>Convert</strong> opens a confirmation panel pre-filled with live
+          prices and stock. An order is only created once you confirm it there.
         </span>
       </div>
 
@@ -713,10 +749,7 @@ export default function IncompleteOrdersPage() {
         <ConvertModal
           row={convertRow}
           onClose={() => setConvertRow(null)}
-          onConverted={() => {
-            setConvertRow(null);
-            reload();
-          }}
+          onConverted={handleConverted}
         />
       ) : null}
     </div>

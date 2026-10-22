@@ -1,6 +1,18 @@
 import { imgUrl } from "@/lib/api";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// All customer and admin timestamps are shown in Bangladesh Standard Time,
+// independent of the device, server, or browser time zone.
+const BANGLADESH_TIME_ZONE = "Asia/Dhaka";
+
+function bangladeshDateParts(value, options) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BANGLADESH_TIME_ZONE,
+    ...options,
+  }).formatToParts(date);
+  return Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+}
 
 export function formatOrderNumber(order) {
   const value = typeof order === "object" && order !== null
@@ -12,28 +24,35 @@ export function formatOrderNumber(order) {
   return `ORD-${text.padStart(5, "0")}`;
 }
 
-/** "14 Oct 2026, 10:45" – built by hand so SSR and client output are identical. */
+/** "14 Oct 2026, 10:45" in Bangladesh Standard Time (Asia/Dhaka). */
 export function formatDateTime(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  if (!value) return "â€”";
+  const parts = bangladeshDateParts(value, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  if (!parts) return "â€”";
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute}`;
 }
 
+/** Date-only values are also derived in Bangladesh Standard Time. */
 export function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+  if (!value) return "â€”";
+  const parts = bangladeshDateParts(value, { day: "2-digit", month: "short", year: "numeric" });
+  if (!parts) return "â€”";
+  return `${parts.day} ${parts.month} ${parts.year}`;
 }
 
-/** YYYY-MM-DD in local time, for <input type="date"> and API params. */
-export function toDateInput(date) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+/** YYYY-MM-DD in Bangladesh Standard Time, for date inputs and API params. */
+export function toDateInput(value) {
+  const parts = bangladeshDateParts(value, { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (!parts) return "";
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
-
 export const ORDER_STATUS = {
   pending: { label: "Pending", tone: "warn" },
   confirmed: { label: "Confirmed", tone: "info" },

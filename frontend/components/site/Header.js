@@ -125,6 +125,8 @@ export default function Header() {
 
   const roots = categories.tree;
   const isActive = (href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
+  const drawerAccountActive = pathname === "/user" || pathname.startsWith("/user/profile");
+  const drawerOrdersActive = isActive("/user/orders");
   const logo = company.logo;
 
   return (
@@ -223,12 +225,15 @@ export default function Header() {
                 </Link>
                 {roots.map((category) => {
                   const hasChildren = category.children.length > 0;
-                  const expanded = openGroup === category.id;
+                  const categoryHref = `/${category.slug}`;
+                  const categoryActive = pathname === categoryHref;
+                  const activeChild = category.children.some((child) => pathname === `/${child.slug}`);
+                  const expanded = openGroup === category.id || activeChild;
                   const count = category.productCount;
                   return (
-                    <div className="drawer-card-group" key={category.id}>
-                      <div className={cx("drawer-card", hasChildren && "has-chevron")}>
-                        <Link href={`/${category.slug}`} className="drawer-card-link">
+                    <div className={cx("drawer-card-group", activeChild && "has-active-child")} key={category.id}>
+                      <div className={cx("drawer-card", hasChildren && "has-chevron", categoryActive && "is-active")}>
+                        <Link href={categoryHref} className="drawer-card-link" aria-current={categoryActive ? "page" : undefined}>
                           <FiTag aria-hidden="true" className="drawer-card-icon" />
                           <span className="drawer-card-label">{category.name}</span>
                           {Number.isFinite(count) ? <span className="drawer-card-count">{count}</span> : null}
@@ -251,11 +256,15 @@ export default function Header() {
                       {hasChildren && expanded ? (
                         <div className="drawer-sub anim-fade-in">
                           <Link href={`/${category.slug}`}>All {category.name}</Link>
-                          {category.children.map((child) => (
-                            <Link key={child.id} href={`/${child.slug}`}>
-                              {child.name}
-                            </Link>
-                          ))}
+                          {category.children.map((child) => {
+                            const childHref = `/${child.slug}`;
+                            const childActive = pathname === childHref;
+                            return (
+                              <Link key={child.id} href={childHref} className={cx(childActive && "is-active")} aria-current={childActive ? "page" : undefined}>
+                                {child.name}
+                              </Link>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -267,42 +276,42 @@ export default function Header() {
             <div className="drawer-section">
               <h2 className="drawer-section-title">Quick Links</h2>
               <nav className="drawer-cards" aria-label="Quick links">
-                <Link href="/" className="drawer-card">
+                <Link href="/" className={cx("drawer-card", isActive("/") && "is-active")} aria-current={isActive("/") ? "page" : undefined}>
                   <FiHome aria-hidden="true" className="drawer-card-icon" />
                   <span className="drawer-card-label">Home</span>
                 </Link>
-                <Link href="/shop" className="drawer-card">
+                <Link href="/shop" className={cx("drawer-card", isActive("/shop") && "is-active")} aria-current={isActive("/shop") ? "page" : undefined}>
                   <FiShoppingBag aria-hidden="true" className="drawer-card-icon" />
                   <span className="drawer-card-label">Shop</span>
                 </Link>
-                <Link href="/track-order" className="drawer-card">
+                <Link href="/track-order" className={cx("drawer-card", isActive("/track-order") && "is-active")} aria-current={isActive("/track-order") ? "page" : undefined}>
                   <FiTruck aria-hidden="true" className="drawer-card-icon" />
                   <span className="drawer-card-label">Track Order</span>
                 </Link>
                 {isAuthenticated ? (
                   <>
-                    <Link href="/user" className="drawer-card">
+                    <Link href="/user" className={cx("drawer-card", drawerAccountActive && "is-active")} aria-current={drawerAccountActive ? "page" : undefined}>
                       <FiUser aria-hidden="true" className="drawer-card-icon" />
                       <span className="drawer-card-label">My account</span>
                     </Link>
-                    <Link href="/user/orders" className="drawer-card">
+                    <Link href="/user/orders" className={cx("drawer-card", drawerOrdersActive && "is-active")} aria-current={drawerOrdersActive ? "page" : undefined}>
                       <FiShoppingBag aria-hidden="true" className="drawer-card-icon" />
                       <span className="drawer-card-label">My orders</span>
                     </Link>
                   </>
                 ) : (
                   <>
-                    <Link href="/login" className="drawer-card">
+                    <Link href="/login" className={cx("drawer-card", isActive("/login") && "is-active")} aria-current={isActive("/login") ? "page" : undefined}>
                       <FiUser aria-hidden="true" className="drawer-card-icon" />
                       <span className="drawer-card-label">Sign in</span>
                     </Link>
-                    <Link href="/register" className="drawer-card">
+                    <Link href="/register" className={cx("drawer-card", isActive("/register") && "is-active")} aria-current={isActive("/register") ? "page" : undefined}>
                       <FiUser aria-hidden="true" className="drawer-card-icon" />
                       <span className="drawer-card-label">Create account</span>
                     </Link>
                   </>
                 )}
-                <Link href="/cart" className="drawer-card">
+                <Link href="/cart" className={cx("drawer-card", isActive("/cart") && "is-active")} aria-current={isActive("/cart") ? "page" : undefined}>
                   <FiShoppingCart aria-hidden="true" className="drawer-card-icon" />
                   <span className="drawer-card-label">Cart</span>
                   <span className="drawer-card-count">{count}</span>

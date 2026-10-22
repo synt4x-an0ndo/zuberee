@@ -139,7 +139,7 @@ function ThemePanel({ initial, onSaved }) {
   ];
 
   return (
-    <div className="grid-2" style={{ alignItems: "start" }}>
+    <div className="grid-2 settings-theme-grid">
       <Card>
         <CardHeader title="Brand colour" subtitle="Changes preview live. Save to publish to the storefront." />
         <div className="stack">
@@ -173,12 +173,12 @@ function ThemePanel({ initial, onSaved }) {
       <div className="stack" style={{ gap: "1.25rem" }}>
         <Card>
           <CardHeader title="Derived palette" subtitle="Shades are generated from the brand colour." />
-          <ul className="palette-strip" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          <ul className="settings-palette-list">
             {swatches.map(([label, value]) => (
-              <li key={label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ width: 44, height: 28, borderRadius: 8, background: value, border: "1px solid var(--line)" }} aria-hidden="true" />
-                <span style={{ flex: 1 }}>{label}</span>
-                <span className="num muted">{value}</span>
+              <li key={label}>
+                <span className="settings-palette-swatch" style={{ background: value }} aria-hidden="true" />
+                <span className="settings-palette-label">{label}</span>
+                <span className="settings-palette-value num muted">{value}</span>
               </li>
             ))}
           </ul>

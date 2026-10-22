@@ -145,6 +145,10 @@ export function SiteProvider({ children }) {
   // Theme: derived from the admin-chosen primary colour.
   const primary = normalizeHex(state.settings?.primary_color);
   useEffect(() => {
+    // The layout restores the returning visitor's colour before first paint.
+    // Do not overwrite it with the green fallback while site settings load.
+    if (state.loading) return;
+
     const hex = primary || DEFAULT_BRAND;
     applyPalette(buildPalette(hex));
     try {
@@ -152,7 +156,7 @@ export function SiteProvider({ children }) {
     } catch {
       /* storage unavailable */
     }
-  }, [primary]);
+  }, [primary, state.loading]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;

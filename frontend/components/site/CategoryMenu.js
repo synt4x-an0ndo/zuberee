@@ -7,33 +7,36 @@ import { FiChevronDown, FiMenu } from "react-icons/fi";
 import { cx } from "@/components/ui";
 import { useSite } from "@/context/SiteContext";
 
-/**
- * "All Categories" dropdown, replicating the Zuberee storefront pattern:
- * a compact panel the same width as the button opens below it (on hover
- * for desktop pointers, on click for touch/keyboard); every category is
- * a link, and one that has children shows a down chevron — hovering the
- * row (or pressing the chevron) expands its sub-categories inline under
- * it, recursively for deeper levels. The mobile bottom-nav variant keeps
- * a tap-to-expand sheet.
- * Closes on outside click, Escape or navigation, and renders nothing
- * when the store has no categories yet.
- */
+function categoryHref(category) {
+  return `/${category.slug}`;
+}
 
-function InlineRows({ items }) {
+function hasActiveRoute(category, pathname) {
+  if (pathname === categoryHref(category)) return true;
+  return category.children?.some((child) => hasActiveRoute(child, pathname)) || false;
+}
+
+/** Recursive inline rows used by the desktop category accordion. */
+function InlineRows({ items, pathname }) {
   const [hovered, setHovered] = useState(null);
   const [toggled, setToggled] = useState(null);
+
   return items.map((category) => {
     const hasChildren = category.children.length > 0;
-    const isOpen = hovered === category.id || toggled === category.id;
+    const href = categoryHref(category);
+    const active = pathname === href;
+    const activeChild = category.children.some((child) => hasActiveRoute(child, pathname));
+    const isOpen = hovered === category.id || toggled === category.id || activeChild;
+
     return (
       <div
         key={category.id}
-        className={cx("category-menu-group", isOpen && "is-open")}
+        className={cx("category-menu-group", isOpen && "is-open", activeChild && "has-active-child")}
         onMouseEnter={() => setHovered(category.id)}
         onMouseLeave={() => setHovered((current) => (current === category.id ? null : current))}
       >
         <div className="category-menu-row">
-          <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
+          <Link href={href} className={cx("category-menu-item", active && "is-active")} role="menuitem" aria-current={active ? "page" : undefined}>
             <span>{category.name}</span>
           </Link>
           {hasChildren && (
@@ -50,7 +53,7 @@ function InlineRows({ items }) {
         </div>
         {hasChildren && isOpen && (
           <div className="category-menu-sub-inline anim-fade-in">
-            <InlineRows items={category.children} />
+            <InlineRows items={category.children} pathname={pathname} />
           </div>
         )}
       </div>
@@ -58,6 +61,10 @@ function InlineRows({ items }) {
   });
 }
 
+/**
+ * Store category dropdown. Desktop uses a refined fixed-position panel under
+ * the header control; mobile bottom navigation uses an expandable sheet.
+ */
 export default function CategoryMenu({ label = "All Categories", className = "" }) {
   const { categories } = useSite();
   const pathname = usePathname() || "/";
@@ -66,19 +73,14 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
   const [expanded, setExpanded] = useState(null);
   const [panelPos, setPanelPos] = useState(null);
   const ref = useRef(null);
-
-  // The mobile bottom-nav variant is a fixed bottom sheet in CSS. The header
-  // variant must also be fixed-positioned (measured from the button): as an
-  // absolutely-positioned panel inside the sticky header it painted *under*
-  // the hero/page content, so real mouse clicks landed on the page behind
-  // it and the menu closed without navigating.
   const isBottomSheet = className.includes("category-menu--bottom");
 
-  // Collapse whenever the route changes.
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setOpen(false);
+    setHovered(null);
+    setExpanded(null);
+  }, [pathname]);
 
-  // Measure (and keep measuring) the header panel's fixed position so the
-  // panel hugs the button exactly like Zuberee (same width, flush below).
   useEffect(() => {
     if (!open || isBottomSheet) return undefined;
     const update = () => {
@@ -97,7 +99,6 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
     };
   }, [open, isBottomSheet]);
 
-  // Close on outside click or Escape.
   useEffect(() => {
     if (!open) return undefined;
     const onClick = (event) => {
@@ -110,7 +111,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open ]);
+  }, [open]);
 
   const roots = categories.tree;
   if (roots.length === 0) return null;
@@ -133,7 +134,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
         className="category-menu-btn"
         aria-expanded={open}
         aria-haspopup="true"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
       >
         <FiMenu aria-hidden="true" />
         <span>{label}</span>
@@ -152,16 +153,18 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
         >
           {roots.map((category) => {
             const hasChildren = category.children.length > 0;
+            const href = categoryHref(category);
+            const active = pathname === href;
+            const activeChild = category.children.some((child) => hasActiveRoute(child, pathname));
 
-            // Mobile sheet: tap a parent to expand its children inline.
             if (isBottomSheet) {
-              const isExpanded = expanded === category.id;
+              const isExpanded = expanded === category.id || activeChild;
               return (
-                <div key={category.id} className={cx("category-menu-group", isExpanded && "is-expanded")}>
+                <div key={category.id} className={cx("category-menu-group", isExpanded && "is-expanded", activeChild && "has-active-child")}>
                   {hasChildren ? (
                     <button
                       type="button"
-                      className="category-menu-item is-toggle"
+                      className={cx("category-menu-item", "is-toggle", active && "is-active")}
                       aria-expanded={isExpanded}
                       onClick={() => setExpanded(isExpanded ? null : category.id)}
                     >
@@ -169,38 +172,39 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
                       <FiChevronDown aria-hidden="true" className="category-menu-chevron-mobile" />
                     </button>
                   ) : (
-                    <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
+                    <Link href={href} className={cx("category-menu-item", active && "is-active")} role="menuitem" aria-current={active ? "page" : undefined}>
                       <span>{category.name}</span>
                     </Link>
                   )}
                   {hasChildren && (
                     <div className={cx("category-menu-sub", "anim-fade-in", isExpanded && "is-expanded")}>
-                      <Link href={`/${category.slug}`}>All {category.name}</Link>
-                      {category.children.map((child) => (
-                        <Link key={child.id} href={`/${child.slug}`}>
-                          {child.name}
-                        </Link>
-                      ))}
+                      <Link href={href} className={cx(active && "is-active")} aria-current={active ? "page" : undefined}>All {category.name}</Link>
+                      {category.children.map((child) => {
+                        const childHref = categoryHref(child);
+                        const childActive = pathname === childHref;
+                        return (
+                          <Link key={child.id} href={childHref} className={cx(childActive && "is-active")} aria-current={childActive ? "page" : undefined}>
+                            {child.name}
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               );
             }
 
-            // Desktop header: the row itself is the link; children expand
-            // inline under the row (down chevron) while it is hovered, or
-            // stay open when the chevron is pressed.
             const isHovered = hovered === category.id;
-            const isOpen = isHovered || expanded === category.id;
+            const isOpen = isHovered || expanded === category.id || activeChild;
             return (
               <div
                 key={category.id}
-                className={cx("category-menu-group", isHovered && "is-hovered", isOpen && "is-open")}
+                className={cx("category-menu-group", isHovered && "is-hovered", isOpen && "is-open", activeChild && "has-active-child")}
                 onMouseEnter={() => setHovered(category.id)}
                 onMouseLeave={() => setHovered((current) => (current === category.id ? null : current))}
               >
                 <div className="category-menu-row">
-                  <Link href={`/${category.slug}`} className="category-menu-item" role="menuitem">
+                  <Link href={href} className={cx("category-menu-item", active && "is-active")} role="menuitem" aria-current={active ? "page" : undefined}>
                     <span>{category.name}</span>
                   </Link>
                   {hasChildren && (
@@ -217,7 +221,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
                 </div>
                 {hasChildren && isOpen && (
                   <div className="category-menu-sub-inline anim-fade-in">
-                    <InlineRows items={category.children} />
+                    <InlineRows items={category.children} pathname={pathname} />
                   </div>
                 )}
               </div>

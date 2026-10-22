@@ -37,7 +37,12 @@ export default function LoginForm() {
       const target = next !== "/user" ? next : user?.role === "admin" ? "/admin" : "/user";
       router.replace(target);
     } catch (err) {
-      setError(err.message || "Sign-in failed. Please try again.");
+      const message = err.message || "Sign-in failed. Please try again.";
+      if (/verify your email/i.test(message)) {
+        router.replace(`/verify-email?email=${encodeURIComponent(form.email.trim())}`);
+        return;
+      }
+      setError(message);
     } finally {
       setBusy(false);
     }

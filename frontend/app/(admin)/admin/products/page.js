@@ -20,6 +20,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [specProduct, setSpecProduct] = useState(null);
+  const [colourProduct, setColourProduct] = useState(null);
 
   const { data, loading, error, reload, setData } = useAsync(async () => {
     const body = await api.get("api/products", { auth: false });
@@ -27,18 +28,20 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
-    if (!specProduct) return undefined;
+    if (!specProduct && !colourProduct) return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event) => {
-      if (event.key === "Escape") setSpecProduct(null);
+      if (event.key !== "Escape") return;
+      setSpecProduct(null);
+      setColourProduct(null);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [specProduct]);
+  }, [specProduct, colourProduct]);
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data || []).filter((p) => {
@@ -105,7 +108,28 @@ export default function ProductsPage() {
                 <td><span className="badge badge-neutral">{p.sku || "—"}</span></td>
                 <td>
                   <div className="product-color-list">
-                    {p.colors.length ? p.colors.map((color) => <span key={color.id || color.name} className="product-color"><span className="product-color-image">{color.image && <Img src={color.image} alt="" fill sizes="34px" />}</span>{color.name}</span>) : "—"}
+                    {p.colors.length ? (
+                      <>
+                        {p.colors.slice(0, 2).map((color) => (
+                          <span key={color.id || color.name} className="product-color" title={color.name || "Colour"}>
+                            <span className="product-color-image">{color.image && <Img src={color.image} alt="" fill sizes="26px" />}</span>
+                            {color.name}
+                          </span>
+                        ))}
+                        {p.colors.length > 2 ? (
+                          <button
+                            type="button"
+                            className="product-color-more"
+                            aria-haspopup="dialog"
+                            aria-label={`Show all ${p.colors.length} colours for ${p.title}`}
+                            title={`Show ${p.colors.length - 2} more colour${p.colors.length - 2 === 1 ? "" : "s"}`}
+                            onClick={() => setColourProduct(p)}
+                          >
+                            +{p.colors.length - 2}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : "—"}
                   </div>
                 </td>
                 <td><Badge tone={STATUS_TONE[p.status] || "neutral"}>{STATUS_LABEL[p.status] || p.status}</Badge></td>
@@ -130,6 +154,38 @@ export default function ProductsPage() {
             ))}
           </tbody>
         </DataTable>
+      )}
+      {colourProduct && (
+        <ViewportPortal>
+        <div className="product-spec-modal-backdrop" onClick={(event) => event.target === event.currentTarget && setColourProduct(null)}>
+          <section className="product-spec-modal product-colour-modal" role="dialog" aria-modal="true" aria-labelledby="product-colour-title">
+            <header className="product-spec-modal-header">
+              <div className="product-spec-modal-title-copy">
+                <span className="product-spec-eyebrow">Product colour options</span>
+                <h2 id="product-colour-title">Available colours</h2>
+                <p>{colourProduct.title}</p>
+              </div>
+              <button type="button" className="product-spec-modal-close" onClick={() => setColourProduct(null)} aria-label="Close colour options"><FiX aria-hidden="true" /></button>
+            </header>
+            <div className="product-spec-modal-body">
+              <ul className="product-colour-modal-list">
+                {colourProduct.colors.map((color, index) => (
+                  <li key={color.id || `${color.name || "colour"}-${index}`}>
+                    <span className="product-colour-modal-image">
+                      {color.image ? <Img src={color.image} alt="" fill sizes="44px" /> : null}
+                    </span>
+                    <strong>{color.name || "Colour"}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <footer className="product-spec-modal-footer">
+              <span>{colourProduct.colors.length} {colourProduct.colors.length === 1 ? "colour" : "colours"}</span>
+              <button type="button" className="product-spec-modal-done" onClick={() => setColourProduct(null)}>Done</button>
+            </footer>
+          </section>
+        </div>
+        </ViewportPortal>
       )}
       {specProduct && (
         <ViewportPortal>

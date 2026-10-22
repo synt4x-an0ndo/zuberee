@@ -42,8 +42,10 @@ model User {
   name         String
   email        String         @unique
   passwordHash String
-  phone        String?
-  image        String?
+  phone                     String?
+  image                     String?
+  emailVerificationRequired Boolean  @default(false)
+  emailVerifiedAt           DateTime?
   badge        String?
   role         SystemRoleEnum @default(CUSTOMER)
   createdAt    DateTime       @default(now())

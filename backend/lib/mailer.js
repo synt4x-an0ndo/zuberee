@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { readSetting } from "./settings-store.js";
 
 /**
@@ -101,6 +104,41 @@ function escapeHtml(value) {
         .replace(/"/g, "&quot;");
 }
 
+
+// The supplied Zuberee PNG travels with verification mail as a CID attachment.
+// It does not depend on a public URL, so recipients do not see a broken logo.
+const VERIFICATION_LOGO_CID = "zuberee-verification-logo@zuberee.email";
+const VERIFICATION_LOGO_PATH = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "assets",
+    "zuberee-email-logo.png"
+);
+
+async function prepareEmailVerificationLogo() {
+    try {
+        const content = await readFile(VERIFICATION_LOGO_PATH);
+        return {
+            logoSrc: `cid:${VERIFICATION_LOGO_CID}`,
+            attachments: [
+                {
+                    filename: "zuberee-email-logo.png",
+                    content,
+                    contentType: "image/png",
+                    contentDisposition: "inline",
+                    contentTransferEncoding: "base64",
+                    headers: { "X-Attachment-Id": VERIFICATION_LOGO_CID },
+                    cid: VERIFICATION_LOGO_CID,
+                },
+            ],
+        };
+    } catch (error) {
+        // Keep delivery usable if a deployment accidentally omits the asset.
+        console.warn("[mailer] Verification logo was unavailable; using text fallback.");
+        return { logoSrc: null, attachments: [] };
+    }
+}
+
 /**
  * Store branding for transactional mail: the same site name and primary
  * colour the admin sets in the admin panel (site-settings), so the email
@@ -120,14 +158,17 @@ function prepareEmailLogo(rawLogo, storeName) {
 
     const dataMatch = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
     if (dataMatch) {
-        const cid = "store-logo@zuberee";
+        const cid = "zuberee-logo@zuberee.email";
         return {
             logoSrc: `cid:${cid}`,
             attachments: [
                 {
-                    filename: "logo.png",
+                    filename: "zuberee-logo.png",
                     content: Buffer.from(dataMatch[2], "base64"),
                     contentType: dataMatch[1],
+                    contentDisposition: "inline",
+                    contentTransferEncoding: "base64",
+                    headers: { "X-Attachment-Id": cid },
                     cid,
                 },
             ],
@@ -295,4 +336,98 @@ export async function verifyMailer() {
             message: error?.message || String(error),
         };
     }
+}
+
+export function buildEmailVerificationEmail({ name, verificationLink, storeName, brand, logoSrc = null }) {
+    const store = escapeHtml(storeName);
+    const greeting = escapeHtml(name || "there");
+    const subject = `Verify your ${storeName} email address`;
+    const text = [
+        `${storeName} — Email verification`,
+        "",
+        `Hi ${name || "there"},`,
+        "",
+        `Confirm your email address to activate your ${storeName} account:`,
+        verificationLink,
+        "",
+        "This secure link expires in 24 hours. If you did not create this account, you can safely ignore this email.",
+        "",
+        `${storeName} Team`,
+    ].join("\n");
+
+    const logoMarkup = logoSrc
+        ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" width="164" style="display:block;width:164px;max-width:164px;height:auto;border:0;outline:none;text-decoration:none;">`
+        : `<div style="font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#ffffff;">${store}</div>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#f3f5f4;font-family:Arial,Helvetica,sans-serif;color:#18201c;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#f3f5f4;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e4e9e6;border-radius:20px;overflow:hidden;">
+        <tr><td align="center" bgcolor="#14231c" style="padding:24px 40px 22px;background-color:#14231c;text-align:center;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+            <td align="center">${logoMarkup}</td>
+          </tr><tr>
+            <td align="center" style="padding-top:11px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;line-height:1.2;letter-spacing:0.14em;text-transform:uppercase;color:#c6d0ca;">Account verification</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:36px 40px 16px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${brand};">Welcome to ${store}</div>
+          <h1 style="margin:10px 0 0;font-size:29px;line-height:1.2;font-weight:800;letter-spacing:-0.03em;color:#142019;">Verify your email</h1>
+          <p style="margin:24px 0 0;font-size:16px;line-height:1.65;color:#34413a;">Hi ${greeting},</p>
+          <p style="margin:12px 0 0;font-size:16px;line-height:1.65;color:#34413a;">Confirm this email address to activate your ${store} account and finish setting up your profile.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 0;"><tr>
+            <td align="center" bgcolor="${brand}" style="border-radius:10px;background-color:${brand};">
+              <a href="${escapeHtml(verificationLink)}" target="_blank" style="display:inline-block;padding:15px 26px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;line-height:1;color:#ffffff;text-decoration:none;">Verify email address</a>
+            </td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:12px 40px 30px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#f7f9f8;border:1px solid #e6ece8;border-radius:12px;"><tr>
+            <td style="padding:15px 16px;font-size:13px;line-height:1.55;color:#68746d;">
+              <strong style="color:#415048;">Having trouble with the button?</strong><br>
+              Copy this secure link into your browser:<br>
+              <a href="${escapeHtml(verificationLink)}" target="_blank" style="display:block;margin-top:5px;color:${brand};word-break:break-all;text-decoration:underline;">${escapeHtml(verificationLink)}</a>
+            </td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:0 40px;"><div style="height:1px;line-height:1px;font-size:1px;background-color:#e8ece9;">&nbsp;</div></td></tr>
+        <tr><td style="padding:20px 40px 28px;font-size:13px;line-height:1.6;color:#708078;">
+          This link expires in <strong style="color:#435149;">24 hours</strong>. If you did not create this account, you can safely ignore this email.
+          <br><br><strong style="color:#243129;">${store} Team</strong>
+        </td></tr>
+      </table>
+      <div style="max-width:600px;padding-top:16px;font-size:12px;line-height:1.5;color:#8a9690;text-align:center;">This is an automated security email from ${store}. Please do not reply to this message.</div>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+    return { subject, text, html };
+}
+export async function sendEmailVerificationEmail({ to, name, verificationLink }) {
+    if (!isSmtpConfigured()) {
+        throw new Error("Email verification is unavailable because SMTP is not configured.");
+    }
+    const transporter = await createTransporter();
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@zuberee";
+    const { storeName, brand } = await getStoreBranding();
+    const verificationLogo = await prepareEmailVerificationLogo();
+    const email = buildEmailVerificationEmail({
+        name,
+        verificationLink,
+        storeName,
+        brand,
+        logoSrc: verificationLogo.logoSrc,
+    });
+    await transporter.sendMail({
+        from,
+        to,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        attachments: verificationLogo.attachments,
+    });
+    return { delivered: true, channel: "smtp" };
 }

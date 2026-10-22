@@ -6,14 +6,14 @@ import { useSite } from "@/context/SiteContext";
 
 /** Footer content comes entirely from admin-managed settings; empty fields are simply omitted. */
 
-/** Payment methods shown under "Pay With" (text badges — no external assets). */
+/** Payment-brand artwork stored locally so the footer never relies on an external image host. */
 const PAY_METHODS = [
-  { label: "VISA", color: "#1a1f71" },
-  { label: "Mastercard", color: "#eb001b" },
-  { label: "bKash", color: "#e2136e" },
-  { label: "Nagad", color: "#f6921e" },
-  { label: "Rocket", color: "#8c3494" },
-  { label: "Upay", color: "#00a99d" },
+  { label: "Visa", logo: "/payment-logos/visa.png" },
+  { label: "Mastercard", logo: "/payment-logos/mastercard.png" },
+  { label: "bKash", logo: "/payment-logos/bkash.png" },
+  { label: "Nagad", logo: "/payment-logos/nagad.png" },
+  { label: "Rocket", logo: "/payment-logos/rocket.png", className: "pay-logo--rocket" },
+  { label: "Upay", logo: "/payment-logos/upay.png", className: "pay-logo--upay" },
 ];
 export default function Footer({ siteName, company, social, roots }) {
   const { logoSizes } = useSite();
@@ -95,7 +95,9 @@ export default function Footer({ siteName, company, social, roots }) {
             <h3 style={{ marginTop: "1.5rem" }}>Pay With</h3>
             <div className="pay-with" aria-label="Accepted payment methods">
               {PAY_METHODS.map((method) => (
-                <span key={method.label} className="pay-badge" title={method.label} style={{ color: method.color }}>{method.label}</span>
+                <span key={method.label} className={`pay-logo ${method.className || ""}`} title={method.label}>
+                  <Img src={method.logo} alt={method.label} width={104} height={40} className="pay-logo-image" />
+                </span>
               ))}
             </div>
           </div>
@@ -110,7 +112,7 @@ export default function Footer({ siteName, company, social, roots }) {
     href="https://therawbros.pages.dev"
     target="_blank"
     rel="noopener noreferrer"
-    className="hover:underline"
+    className="footer-developer-link"
   >
     The Raw Bros
   </a>

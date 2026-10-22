@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FiChevronDown, FiChevronUp, FiFilter, FiSearch, FiX } from "react-icons/fi";
+import { FiArrowLeft, FiChevronDown, FiChevronUp, FiFilter, FiSearch } from "react-icons/fi";
 import ProductCard from "@/components/ProductCard";
 import ViewportPortal from "@/components/ViewportPortal";
 import { Button, cx, EmptyState, ErrorState, Skeleton } from "@/components/ui";
@@ -44,9 +44,11 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersClosing, setFiltersClosing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [suggest, setSuggest] = useState({ loading: false, items: [], error: "" });
   const filterCloseRef = useRef(null);
+  const filterCloseTimer = useRef(null);
   const requestRef = useRef(0);
   const lastLoadedRef = useRef({ key: "", page: 0 });
 
@@ -192,18 +194,35 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
   const activeCategory = categories.bySlug.get(category);
   const hasFilters = Boolean(q || (!fixedCategory && category) || sizeFilter || status || min || max);
 
+  const openFilters = useCallback(() => {
+    window.clearTimeout(filterCloseTimer.current);
+    setFiltersClosing(false);
+    setFiltersOpen(true);
+  }, []);
+
+  const closeFilters = useCallback(() => {
+    if (!filtersOpen || filtersClosing) return;
+    setFiltersClosing(true);
+    window.clearTimeout(filterCloseTimer.current);
+    filterCloseTimer.current = window.setTimeout(() => {
+      setFiltersOpen(false);
+      setFiltersClosing(false);
+    }, 260);
+  }, [filtersClosing, filtersOpen]);
+
+  useEffect(() => () => window.clearTimeout(filterCloseTimer.current), []);
   const clearFilters = () => {
     setSearchDraft("");
     setMinDraft("");
     setMaxDraft("");
     update({ q: "", category: fixedCategory ? category : "", size: "", status: "", min: "", max: "" });
-    setFiltersOpen(false);
+    closeFilters();
   };
 
   const applyPrice = (event) => {
     event.preventDefault();
     update({ min: minDraft, max: maxDraft });
-    setFiltersOpen(false);
+    closeFilters();
   };
 
   // The mobile filter is a modal drawer: keep scrolling inside it and return
@@ -216,7 +235,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     filterCloseRef.current?.focus();
     const keydown = (event) => {
       if (event.key === "Escape") {
-        setFiltersOpen(false);
+        closeFilters();
         return;
       }
       if (event.key !== "Tab") return;
@@ -239,17 +258,12 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
       window.removeEventListener("keydown", keydown);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [filtersOpen]);
+  }, [filtersOpen, closeFilters]);
 
   const renderFilters = (inDrawer = false) => (
     <aside className={cx("filters", inDrawer && "in-drawer")} aria-label="Product filters">
       <div className="filter-panel-head">
         <h2>Filters</h2>
-        {inDrawer && (
-          <button type="button" className="icon-btn" ref={filterCloseRef} onClick={() => setFiltersOpen(false)} aria-label="Close filters">
-            <FiX aria-hidden="true" />
-          </button>
-        )}
       </div>
 
       <div className="filter-group filter-search-group">
@@ -444,7 +458,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
           <span className="listing-total num" aria-live="polite">
             {loading && meta.total === 0 ? "Loading products…" : `${meta.total} ${meta.total === 1 ? "product" : "products"}`}
           </span>
-          <Button variant="outline" className="mobile-filter-btn" icon={FiFilter} onClick={() => setFiltersOpen(true)}>
+          <Button variant="outline" className="mobile-filter-btn" icon={FiFilter} onClick={openFilters}>
             Filters
           </Button>
         </div>
@@ -513,9 +527,12 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
 
       <ViewportPortal>
       {filtersOpen && (
-        <div className="overlay filter-overlay" onMouseDown={(event) => event.target === event.currentTarget && setFiltersOpen(false)}>
+        <div className={cx("overlay filter-overlay", filtersClosing && "is-closing")} onMouseDown={(event) => event.target === event.currentTarget && closeFilters()}>
           <div className="mobile-drawer-panel" role="dialog" aria-modal="true" aria-label="Product filters" style={{ width: "min(360px, 90vw)", height: "100%", overflowY: "auto", padding: "1rem" }}>
-            {renderFilters(true)}
+              <button type="button" className="icon-btn filter-drawer-close" ref={filterCloseRef} onClick={closeFilters} aria-label="Close filters and return to products">
+                <FiArrowLeft aria-hidden="true" />
+              </button>
+              {renderFilters(true)}
           </div>
         </div>
       )}

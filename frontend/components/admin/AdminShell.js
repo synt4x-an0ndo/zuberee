@@ -112,6 +112,14 @@ export default function AdminShell({ children }) {
     window.localStorage.setItem("zuberee-admin-sidebar-collapsed", String(collapsed));
   }, [collapsed]);
 
+  // Product dialogs are portaled to <body>. Give them the current desktop
+  // sidebar width so they center in the working area, not under the sidebar.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--admin-sidebar-offset", collapsed ? "76px" : "252px");
+    return () => root.style.removeProperty("--admin-sidebar-offset");
+  }, [collapsed]);
+
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => e.key === "Escape" && setOpen(false);

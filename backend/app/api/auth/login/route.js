@@ -62,6 +62,17 @@ export async function POST(request) {
             );
         }
 
+        if (user.emailVerificationRequired && !user.emailVerifiedAt) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Verify your email address before signing in. Check your inbox or request a new verification email.",
+                    data: { verificationRequired: true, email: user.email },
+                },
+                { status: 403 }
+            );
+        }
+
         const token = await new SignJWT({
             userId: user.id,
             email: user.email,

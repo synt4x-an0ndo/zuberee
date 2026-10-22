@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { FiCamera, FiEdit2, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
 import RoleBadges from "@/components/RoleBadges";
 import UserAvatar from "@/components/UserAvatar";
-import { DEFAULT_AVATAR } from "@/lib/avatar";
 import PasswordInput from "@/components/PasswordInput";
 import { Button, Card, CardHeader, EmptyState, Field, Input, Modal } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
@@ -24,18 +23,19 @@ export default function ProfilePage() {
         <p className="eyebrow">Account</p>
         <h1>Profile & addresses</h1>
       </div>
-      <PersonalCard user={user} refresh={refresh} toast={toast} />
+      <PersonalCard user={user} refresh={refresh} toast={toast} confirm={confirm} />
       <AddressCard user={user} refresh={refresh} toast={toast} confirm={confirm} />
       <PasswordCard toast={toast} />
     </div>
   );
 }
 
-function PersonalCard({ user, refresh, toast }) {
+function PersonalCard({ user, refresh, toast, confirm }) {
   const [form, setForm] = useState({ name: user?.name || "", phone: user?.phone || "" });
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [removingPhoto, setRemovingPhoto] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileRef = useRef(null);
 
   const save = async (event) => {
@@ -55,26 +55,46 @@ function PersonalCard({ user, refresh, toast }) {
     }
   };
 
-  const upload = async (file) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return toast.error("Please choose an image file.");
-    if (file.size > 5 * 1024 * 1024) return toast.error("Images must be under 5 MB.");
-    const data = new FormData();
-    data.append("image", file);
-    setUploading(true);
+
+  const removePhoto = async () => {
+    const approved = await confirm({
+      title: "Remove profile photo?",
+      message: "Your profile will return to the default account image.",
+      confirmText: "Remove photo",
+      danger: true,
+    });
+    if (!approved) return;
+    setRemovingPhoto(true);
     try {
-      await api.upload("api/account/upload-avatar", data);
+      await api.delete("api/account/avatar");
       await refresh();
-      toast.success("Photo updated.");
+      toast.success("Profile photo removed.");
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setUploading(false);
+      setRemovingPhoto(false);
+    }
+  };
+
+  const uploadPhoto = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Please choose an image file.");
+    if (file.size > 2 * 1024 * 1024) return toast.error("Images must be under 2 MB.");
+    const data = new FormData();
+    data.append("image", file);
+    setUploadingPhoto(true);
+    try {
+      await api.upload("api/account/upload-avatar", data);
+      await refresh();
+      toast.success("Profile photo updated.");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUploadingPhoto(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const hasCustomAvatar = Boolean(user?.image && user.image !== DEFAULT_AVATAR);
   return (
     <Card>
       <CardHeader title="Personal details" subtitle={user?.email} />
@@ -82,14 +102,16 @@ function PersonalCard({ user, refresh, toast }) {
         <div className="avatar avatar-lg" style={{ position: "relative", width: 84, height: 84 }}>
           <UserAvatar image={user?.image} alt="Profile photo" fill sizes="84px" />
         </div>
-        <div>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
-          <Button variant="outline" size="sm" loading={uploading} onClick={() => fileRef.current?.click()}>
-            <FiCamera aria-hidden="true" /> {hasCustomAvatar ? "Change photo" : "Upload photo"}
+        <div style={{ display: "grid", gap: 8 }}>
+          <Button variant="outline" size="sm" loading={removingPhoto} disabled={removingPhoto} onClick={removePhoto}>
+            <FiTrash2 aria-hidden="true" /> Remove photo
           </Button>
-          <RoleBadges roles={user?.roles} className="profile-role-badges" />
-          <p className="muted" style={{ fontSize: "0.85rem", marginTop: 6 }}>JPG or PNG, up to 5 MB.</p>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => uploadPhoto(event.target.files?.[0])} />
+          <Button variant="outline" size="sm" loading={uploadingPhoto} disabled={uploadingPhoto} onClick={() => fileRef.current?.click()}>
+            <FiCamera aria-hidden="true" /> Change photo
+          </Button>
         </div>
+        <RoleBadges roles={user?.roles} className="profile-role-badges" />
       </div>
       <form onSubmit={save} className="stack" noValidate>
         {error && <p className="notice notice-danger" role="alert">{error}</p>}

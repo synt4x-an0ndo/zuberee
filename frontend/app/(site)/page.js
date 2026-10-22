@@ -46,7 +46,7 @@ export default function HomePage() {
     <>
       <div className="container" style={{ paddingTop: "1.25rem" }}>
         {banners.loading ? (
-          <div className="hero">
+          <div className="hero hero--loading" aria-busy="true">
             <Skeleton style={{ position: "absolute", inset: 0, borderRadius: 0 }} />
           </div>
         ) : banners.error ? (
