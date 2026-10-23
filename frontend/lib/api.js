@@ -12,8 +12,20 @@ import { clearUpdateReads, observeUpdateRead } from "@/lib/chatUpdateCache";
  */
 
 const rawBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
+
+/**
+ * Backend origin, without a trailing slash. Leave NEXT_PUBLIC_API_BASE_URL
+ * EMPTY when nginx serves the frontend and the backend from one host: every
+ * request then goes to "/api/..." on the current host, so it works on the apex
+ * domain, on www and on an IP without CORS.
+ *
+ * NEXT_PUBLIC_* values are baked in at `next build`, so changing this needs a
+ * rebuild - editing it on a running server changes nothing.
+ */
 export const API_BASE = rawBase.replace(/\/+$/, "");
-export const API_CONFIGURED = Boolean(API_BASE);
+
+/** An empty base is valid: the API lives on the same origin as the site. */
+export const API_CONFIGURED = true;
 
 export const AUTH_EXPIRED_EVENT = "zuberee:auth-expired";
 const TOKEN_KEY = "token";
@@ -72,8 +84,10 @@ export function imgUrl(input) {
   if (/^(data|blob):/i.test(value)) return value;
   if (value.startsWith("//")) return `https:${value}`;
   if (/^https?:\/\//i.test(value)) return value;
-  if (!API_BASE) return null;
-  return `${API_BASE}/${value.replace(/^\/+/, "")}`;
+  const relative = `/${value.replace(/^\/+/, "")}`;
+  // No base configured: uploaded files are served from this same origin, so a
+  // root-relative path is already correct on any domain.
+  return API_BASE ? `${API_BASE}${relative}` : relative;
 }
 
 /** Return the payload of `{ success, message, data }` (or the bare response when there is no envelope). */
@@ -145,18 +159,19 @@ function errorMessage(status, data) {
 async function performRequest(path, options = {}) {
   const { method = "GET", body, auth = true, params, signal, headers: extra = {} } = options;
 
-  if (!API_CONFIGURED) {
-    throw new ApiError("The storefront API is not configured yet.", 0, { code: "API_NOT_CONFIGURED" });
-  }
-
-  const url = new URL(`${API_BASE}/${String(path).replace(/^\/+/, "")}`);
+  const query = new URLSearchParams();
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value === undefined || value === null || value === "") continue;
-      if (Array.isArray(value)) value.forEach((item) => url.searchParams.append(key, String(item)));
-      else url.searchParams.set(key, String(value));
+      if (Array.isArray(value)) value.forEach((item) => query.append(key, String(item)));
+      else query.set(key, String(value));
     }
   }
+
+  // Relative when API_BASE is empty: the browser resolves it against the host
+  // the page was loaded from, which is the one nginx forwards to the backend.
+  const search = query.toString();
+  const url = `${API_BASE}/${String(path).replace(/^\/+/, "")}${search ? `?${search}` : ""}`;
 
   const headers = { Accept: "application/json", ...extra };
   const token = auth ? getToken() : null;
@@ -172,7 +187,7 @@ async function performRequest(path, options = {}) {
 
   let response;
   try {
-    response = await fetch(url.toString(), {
+    response = await fetch(url, {
       method,
       headers,
       body: payload,
