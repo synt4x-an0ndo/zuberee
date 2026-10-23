@@ -1,7 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import { saveMediaFile } from "@/lib/media-store.js";
 
 /**
  * POST /api/admin/upload-image  (ADMIN only, multipart/form-data)
@@ -17,11 +15,10 @@ import { authenticateRequest } from "@/directory/auth/auth.js";
  *   folder  optional allow-listed sub-folder under public/storage
  *           (general | about | logos | colors | products | banners | settings)
  *
- * The file is stored exactly like product images are
- * (backend/public/storage/<folder>/<uuid>.<ext>) and the stored path is
- * returned, ready to paste straight into the field it was uploaded for:
+ * The bytes are stored in Postgres (media_assets, base64 text) and served by
+ * GET /api/media/:id, so an upload is usable immediately even in production:
  *   201 { success: true, message: "Image uploaded successfully.",
- *         data: { image: "/storage/about/<uuid>.jpg", url: "/storage/about/<uuid>.jpg" } }
+ *         data: { image: "/api/media/<uuid>", url: "/api/media/<uuid>" } }
  */
 
 const ALLOWED_IMAGE_TYPES = new Map([
@@ -81,13 +78,10 @@ export async function POST(request) {
             .toLowerCase();
         const folder = ALLOWED_FOLDERS.has(requestedFolder) ? requestedFolder : "general";
 
-        const storageDirectory = path.join(process.cwd(), "public", "storage", folder);
-        await mkdir(storageDirectory, { recursive: true });
-
-        const fileName = `${randomUUID()}${extension}`;
-        await writeFile(path.join(storageDirectory, fileName), Buffer.from(await image.arrayBuffer()));
-
-        const imagePath = `/storage/${folder}/${fileName}`;
+        // Postgres, not public/: an upload made while the server is running has
+        // to be servable without a rebuild or a restart (lib/media-store.js).
+        const stored = await saveMediaFile(image, folder);
+        const imagePath = stored.url;
 
         return Response.json(
             {

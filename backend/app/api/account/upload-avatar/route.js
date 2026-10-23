@@ -1,7 +1,8 @@
-import { writeFile, mkdir, unlink } from "fs/promises";
+import { unlink } from "fs/promises";
 import path from "path";
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
+import { deleteMediaFileByUrl, isMediaUrl, saveMediaFile } from "@/lib/media-store.js";
 
 const MAX_SIZE = 2 * 1024 * 1024;
 
@@ -12,12 +13,6 @@ const ALLOWED_TYPES = [
     "image/webp",
 ];
 
-const EXT_MAP = {
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/png": "png",
-    "image/webp": "webp",
-};
 
 export async function POST(request) {
     try {
@@ -70,51 +65,29 @@ export async function POST(request) {
             );
         }
 
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-
-        const ext = EXT_MAP[file.type];
-        const filename = `avatar-${auth.user.userId}-${Date.now()}.${ext}`;
-
-        const uploadDir = path.join(
-            process.cwd(),
-            "public",
-            "uploads",
-            "avatars"
-        );
-
-        await mkdir(uploadDir, { recursive: true });
-
-        const filePath = path.join(uploadDir, filename);
-
-        await writeFile(filePath, buffer);
-
         const currentUser = await prisma.user.findUnique({
             where: { id: auth.user.userId },
             select: { image: true },
         });
 
-        const imageUrl = `/uploads/avatars/${filename}`;
+        // Stored in Postgres so the running server serves it immediately.
+        const stored = await saveMediaFile(file, "avatars");
+        const imageUrl = stored.url;
 
         await prisma.user.update({
             where: { id: auth.user.userId },
             data: { image: imageUrl },
         });
 
-        if (
-            currentUser?.image &&
-            currentUser.image.startsWith("/uploads/avatars/")
-        ) {
-            const oldPath = path.join(
-                process.cwd(),
-                "public",
-                currentUser.image
-            );
-
-            try {
-                await unlink(oldPath);
-            } catch (err) {
-                console.error("Failed to delete old avatar:", err);
+        if (currentUser?.image) {
+            if (isMediaUrl(currentUser.image)) {
+                await deleteMediaFileByUrl(currentUser.image);
+            } else if (currentUser.image.startsWith("/uploads/avatars/")) {
+                try {
+                    await unlink(path.join(process.cwd(), "public", currentUser.image));
+                } catch (err) {
+                    console.error("Failed to delete old avatar:", err);
+                }
             }
         }
 

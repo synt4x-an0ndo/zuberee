@@ -634,3 +634,21 @@ model ProductStockMovement {
   @@index([createdAt])
   @@map("product_stock_movements")
 }
+
+/// Uploaded images live in Postgres (base64 text) and are served by
+/// GET /api/media/:id. Next.js only serves files that were inside `public/`
+/// when the production build ran, so runtime uploads written to disk 404 until
+/// a rebuild/restart; keeping the bytes here lets a running server serve them.
+model MediaAsset {
+  id        String   @id @default(uuid())
+  folder    String
+  mimeType  String
+  extension String
+  byteSize  Int
+  data      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([folder])
+  @@index([createdAt])
+  @@map("media_assets")
+}

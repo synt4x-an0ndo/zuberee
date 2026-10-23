@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { deleteMediaFileByUrl } from "@/lib/media-store.js";
 import { getPreorderRemaining, getProductOrderCapacity, getVariantOrderCapacity, isPreorderEligible, isProductPreorder, tracksStockPerSize } from "@/lib/preorder.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import {
@@ -590,9 +591,20 @@ export async function DELETE(request, { params }) {
             );
         }
 
+        const productImages = await prisma.productImage.findMany({
+            where: { productId: id },
+            select: { imageUrl: true },
+        });
+
         await prisma.product.delete({
             where: { id },
         });
+
+        // The product rows are gone, so drop the matching media assets too;
+        // otherwise the table keeps growing with unreachable images.
+        await Promise.all(
+            productImages.map((image) => deleteMediaFileByUrl(image.imageUrl))
+        );
 
         return Response.json({
             success: true,

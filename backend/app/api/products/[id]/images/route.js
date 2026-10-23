@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import prisma from "@/directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import { deleteMediaFileByUrl, saveMediaFile } from "@/lib/media-store.js";
 
 const ALLOWED_IMAGE_TYPES = new Map([
     ["image/jpeg", ".jpg"],
@@ -12,7 +10,7 @@ const ALLOWED_IMAGE_TYPES = new Map([
 ]);
 
 export async function POST(request, { params }) {
-    let savedFilePath = null;
+    let savedImageUrl = null;
 
     try {
         const auth = await authenticateRequest(request);
@@ -60,22 +58,14 @@ export async function POST(request, { params }) {
             );
         }
 
-        const storageDirectory = path.join(
-            process.cwd(),
-            "public",
-            "storage",
-            "products"
-        );
-        await mkdir(storageDirectory, { recursive: true });
-
-        const fileName = `${randomUUID()}${extension}`;
-        savedFilePath = path.join(storageDirectory, fileName);
-        await writeFile(savedFilePath, Buffer.from(await image.arrayBuffer()));
+        // Stored in Postgres so the running server serves it immediately.
+        const stored = await saveMediaFile(image, "products");
+        savedImageUrl = stored.url;
 
         const imageCount = await prisma.productImage.count({
             where: { productId: id },
         });
-        const imageUrl = `/storage/products/${fileName}`;
+        const imageUrl = stored.url;
         const savedImage = await prisma.productImage.create({
             data: {
                 productId: id,
@@ -102,8 +92,8 @@ export async function POST(request, { params }) {
             { status: 201 }
         );
     } catch (error) {
-        if (savedFilePath) {
-            await unlink(savedFilePath).catch(() => { });
+        if (savedImageUrl) {
+            await deleteMediaFileByUrl(savedImageUrl);
         }
         console.error("Upload product image API error:", error);
         return Response.json(
