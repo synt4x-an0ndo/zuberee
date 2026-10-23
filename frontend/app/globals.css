@@ -15414,3 +15414,37 @@ body {
     margin-left: 76px;
   }
 }
+/* =====================================================================
+   UNIFORM PRODUCT CARDS
+   A card must look identical in every grid, rail and carousel no matter
+   what the product has. Three things used to make cards differ in height:
+     1. a card with no colours had no swatch row at all
+        -> the swatch row now always reserves its height
+     2. `.product-card .product-title { min-height: 0 }` (this file) threw
+        away the two-line reservation from the base `.product-title` rule,
+        so a one-line title was shorter than a two-line one
+        -> the two-line height is reserved again
+     3. cards with no sale price rendered a one-line price, cards with a
+        sale rendered the same one line, but rounding could differ
+        -> the price row reserves one line
+   `.product-card { height: 100% }` plus the grid's default `stretch`
+   alignment then makes every card in a row exactly the same box.
+   ===================================================================== */
+.product-card {
+  height: 100%;
+  align-self: stretch;
+}
+
+.product-card .product-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.7em;
+}
+
+
+.product-card .product-body > a.viewProduct,
+.product-card .product-body > .btn {
+  margin-top: auto;
+}

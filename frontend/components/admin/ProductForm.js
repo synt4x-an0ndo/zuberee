@@ -75,6 +75,8 @@ export default function ProductForm({ mode, productId, initial }) {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [sizeMaster, setSizeMaster] = useState([]);
+  const [sizeQuery, setSizeQuery] = useState("");
+  const [showAllSizes, setShowAllSizes] = useState(false);
   const [newFiles, setNewFiles] = useState([]); // { file, preview }
   const [photoUrl, setPhotoUrl] = useState("");
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -105,6 +107,77 @@ export default function ProductForm({ mode, productId, initial }) {
     setList("sizes", (list) =>
       list.some((s) => s.label === label) ? list.filter((s) => s.label !== label) : [...list, { id: null, label, stock: 0, price: "", allowPreorder: false, preorderLimit: "" }]
     );
+  };
+
+  // The size master grows over time and can hold 40+ entries, so the full list
+  // is no longer dumped into the form. Only a short strip is shown and a search
+  // box narrows it down; anything that is not in the master can be typed in and
+  // becomes a size on this product straight away.
+  const SIZE_CHIP_LIMIT = 12;
+  const sizeQueryTrimmed = sizeQuery.trim();
+  const sizePicker = useMemo(() => {
+    const selected = new Set(form.sizes.map((s) => s.label));
+    const query = sizeQueryTrimmed.toLowerCase();
+    const matches = (label) => label.toLowerCase().includes(query);
+    const chosen = sizeLabels.filter((label) => selected.has(label));
+    const others = sizeLabels.filter((label) => !selected.has(label));
+
+    if (!query) {
+      const room = Math.max(0, SIZE_CHIP_LIMIT - chosen.length);
+      const shown = showAllSizes ? others : others.slice(0, room);
+      return {
+        chips: [...chosen, ...shown],
+        hidden: others.length - shown.length,
+        canCollapse: showAllSizes && others.length > room,
+        canAddCustom: false,
+      };
+    }
+
+    const exact = sizeLabels.some((label) => label.toLowerCase() === query);
+    return {
+      chips: [...chosen.filter(matches), ...others.filter(matches)],
+      hidden: 0,
+      canCollapse: false,
+      canAddCustom: !exact && !selected.has(sizeQueryTrimmed),
+    };
+  }, [sizeLabels, form.sizes, sizeQueryTrimmed, showAllSizes]);
+  /**
+   * "+ Add ..." promotes the typed size into the size master (POST api/admin/sizes)
+   * so every future product can pick it, then selects it on this product.
+   * If the master write fails the size is still usable here, so the admin is
+   * never blocked mid-edit.
+   */
+  const addCustomSize = async (rawLabel) => {
+    const label = String(rawLabel || "").replace(/\s+/g, " ").trim();
+    if (!label) return;
+
+    const known = sizeMaster.find(
+      (s) => String(s.size ?? s.name ?? s.value ?? "").toLowerCase() === label.toLowerCase()
+    );
+    setSizeQuery("");
+
+    if (known) {
+      toggleSize(String(known.size ?? known.name ?? known.value));
+      return;
+    }
+
+    try {
+      const body = await api.post("api/admin/sizes", { size: label });
+      const created = body?.data ?? body;
+      const saved = created && typeof created === "object" ? created : { size: label };
+      setSizeMaster((list) => [...list, saved]);
+      toggleSize(String(saved.size ?? label));
+      toast.success(`"${saved.size ?? label}" added to the sizes list.`);
+    } catch (err) {
+      if (err?.status === 409) {
+        // Already in the master under a different casing - mirror it locally.
+        setSizeMaster((list) => [...list, { size: label }]);
+        toggleSize(label);
+        return;
+      }
+      toast.error(err?.message || `"${label}" could not be saved to the sizes list.`);
+      toggleSize(label);
+    }
   };
 
   const validate = () => {
@@ -287,12 +360,12 @@ export default function ProductForm({ mode, productId, initial }) {
           </Card>
 
           <Card>
-            <CardHeader title="Specifications" subtitle="Shown in the product's Specifications tab." actions={<Button size="sm" variant="ghost" onClick={() => setList("specifications", (l) => [...l, { key: "", value: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            <CardHeader title="Specifications" subtitle="Shown in the product's Specifications tab." actions={<Button type="button" size="sm" variant="ghost" onClick={() => setList("specifications", (l) => [...l, { key: "", value: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
             <RowList rows={form.specifications} onChange={(rows) => set("specifications", rows)} fields={[{ key: "key", placeholder: "Fabric" }, { key: "value", placeholder: "Cotton" }]} empty="No specifications yet." />
           </Card>
 
           <Card>
-            <CardHeader title="Questions & answers" actions={<Button size="sm" variant="ghost" onClick={() => setList("faqs", (l) => [...l, { question: "", answer: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            <CardHeader title="Questions & answers" actions={<Button type="button" size="sm" variant="ghost" onClick={() => setList("faqs", (l) => [...l, { question: "", answer: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
             <RowList rows={form.faqs} onChange={(rows) => set("faqs", rows)} fields={[{ key: "question", placeholder: "Question" }, { key: "answer", placeholder: "Answer", textarea: true }]} empty="No questions yet." />
           </Card>
         </div>
@@ -350,12 +423,42 @@ export default function ProductForm({ mode, productId, initial }) {
                   <Input id="product-stock" type="number" min="0" step="1" value={form.stock} onChange={(e) => set("stock", e.target.value)} style={{ width: 160 }} />
                 </Field>
               )}
-              <div className="chip-row" role="group" aria-label="Sizes offered">
-                {sizeLabels.length === 0 && <span className="muted" style={{ fontSize: "0.9rem" }}>No sizes have been added in the Sizes section yet.</span>}
-                {sizeLabels.map((label) => {
-                  const on = form.sizes.some((s) => s.label === label);
-                  return <button key={label} type="button" className={cx("chip", on && "is-active")} aria-pressed={on} onClick={() => toggleSize(label)}>{label}</button>;
-                })}
+              <div className="stack" style={{ gap: 8 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <Input
+                    aria-label="Search sizes"
+                    placeholder={sizeLabels.length ? `Search ${sizeLabels.length} sizes` : "Search sizes"}
+                    value={sizeQuery}
+                    onChange={(e) => setSizeQuery(e.target.value)}
+                    style={{ maxWidth: 240 }}
+                  />
+                  {sizePicker.hidden > 0 && (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowAllSizes(true)}>Show all sizes (+{sizePicker.hidden})</Button>
+                  )}
+                  {sizePicker.canCollapse && (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowAllSizes(false)}>Show fewer</Button>
+                  )}
+                </div>
+                <div className="chip-row" role="group" aria-label="Sizes offered">
+                  {sizeLabels.length === 0 && <span className="muted" style={{ fontSize: "0.9rem" }}>No sizes have been added in the Sizes section yet.</span>}
+                  {sizePicker.chips.map((label) => {
+                    const on = form.sizes.some((s) => s.label === label);
+                    return <button key={label} type="button" className={cx("chip", on && "is-active")} aria-pressed={on} onClick={() => toggleSize(label)}>{label}</button>;
+                  })}
+                  {sizePicker.canAddCustom && (
+                    <button
+                      type="button"
+                      className="chip"
+                      title={`Add "${sizeQueryTrimmed}" to the sizes list for every product`}
+                      onClick={() => { addCustomSize(sizeQueryTrimmed); }}
+                    >
+                      <FiPlus aria-hidden="true" /> Add &ldquo;{sizeQueryTrimmed}&rdquo;
+                    </button>
+                  )}
+                  {sizeLabels.length > 0 && sizePicker.chips.length === 0 && !sizePicker.canAddCustom && (
+                    <span className="muted" style={{ fontSize: "0.9rem" }}>No size matches &ldquo;{sizeQueryTrimmed}&rdquo;.</span>
+                  )}
+                </div>
               </div>
               {form.sizes.length > 0 && (
                 <div className="table-wrap">
@@ -381,7 +484,7 @@ export default function ProductForm({ mode, productId, initial }) {
           </Card>
 
           <Card>
-            <CardHeader title="Colours" subtitle="Swatches shown on the product page." actions={<Button size="sm" variant="ghost" onClick={() => setList("colors", (l) => [...l, { name: "", code: "#000000", image: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
+            <CardHeader title="Colours" subtitle="Swatches shown on the product page." actions={<Button type="button" size="sm" variant="ghost" onClick={() => setList("colors", (l) => [...l, { name: "", code: "#000000", image: "" }])}><FiPlus aria-hidden="true" /> Add</Button>} />
             {form.colors.length === 0 ? <p className="muted" style={{ fontSize: "0.9rem" }}>No colours added.</p> : (
               <div className="stack" style={{ gap: 10 }}>
                 {form.colors.map((c, i) => (

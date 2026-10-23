@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../generated/prisma/client.ts";
 
 export function inventoryError(message, status = 409) {
     const error = new Error(message);

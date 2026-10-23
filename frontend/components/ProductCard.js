@@ -110,7 +110,7 @@ export default function ProductCard({ product: raw, index = 0 }) {
   if (!product) return null;
 
   const status = AVAILABILITY[product.availability];
-  const swatches = product.colors.slice(0, 5);
+  const swatches = product.colors.slice(0, 4);
   const extraColors = Math.max(0, product.colors.length - swatches.length);
   // Gallery fallback: the backend can reference files that are no longer on
   // disk, so drop any image that has failed and use what is left. images[0]
