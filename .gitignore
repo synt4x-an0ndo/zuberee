@@ -17,3 +17,6 @@ backend/generated/
 # OS files
 .DS_Store
 Thumbs.db
+# Local edit backups (timestamped copies taken before edits)
+*.backup-*
+_backups/
