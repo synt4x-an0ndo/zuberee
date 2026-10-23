@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { deleteMediaFileByUrl, saveMediaFile } from "@/lib/media-store.js";
 
@@ -15,7 +16,7 @@ export async function POST(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { success: false, message: "Admin access required." },
                 { status: 403 }

@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
 const VALID_SIZE_GUIDE_TYPES = ["NONE", "SHOE", "DRESS"];
@@ -108,7 +109,7 @@ export async function PUT(request, { params }) {
             );
         }
 
-        if (auth.user.role !== "ADMIN") {
+        if (!isStaffRole(auth.user.role)) {
             return Response.json(
                 {
                     success: false,
@@ -450,7 +451,7 @@ export async function DELETE(request, { params }) {
             );
         }
 
-        if (auth.user.role !== "ADMIN") {
+        if (!isStaffRole(auth.user.role)) {
             return Response.json(
                 {
                     success: false,

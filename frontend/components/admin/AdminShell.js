@@ -51,7 +51,6 @@ const NAV = [
     label: "Management",
     items: [
       { href: "/admin/users", label: "Users", icon: FiUsers, permission: "view users" },
-      { href: "/admin/roles", label: "Roles", icon: FiShield, permission: "view roles" },
     ],
   },
   {

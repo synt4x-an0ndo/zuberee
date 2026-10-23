@@ -27,7 +27,7 @@ export default function AccountOverview() {
   }, []);
 
   const stats = user?.stats || { total_orders: 0, pending_orders: 0, delivered_orders: 0 };
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "moderator";
 
   return (
     <div className="stack" style={{ gap: "1.5rem" }}>

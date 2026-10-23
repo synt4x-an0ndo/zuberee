@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "../../../../directory/auth/auth.js";
 
 function formatSize(size) {
@@ -16,7 +17,7 @@ export async function GET(request) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { message: "failed", data: "Admin access required." },
                 { status: 403 }
@@ -67,7 +68,7 @@ export async function POST(request) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { message: "failed", data: "Admin access required." },
                 { status: 403 }

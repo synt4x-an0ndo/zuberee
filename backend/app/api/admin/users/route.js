@@ -1,8 +1,10 @@
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
-import { getUserRolesAndPermissions } from "@/lib/permissions.js";
+import { getDisplayRoleDefinition, isAdminRole } from "@/lib/access.js";
 
 function formatUser(user) {
+    const definition = getDisplayRoleDefinition(user.role);
+
     return {
         id: user.id,
         name: user.name,
@@ -11,18 +13,22 @@ function formatUser(user) {
         email_verified_at: null,
         created_at: user.createdAt,
         updated_at: user.updatedAt,
-        roles: user.userRoles.map((ur) => ({
-            id: ur.role.id,
-            name: ur.role.name,
-            guard_name: ur.role.guardName,
-            created_at: ur.role.createdAt,
-            updated_at: ur.role.updatedAt,
-            pivot: {
-                model_type: "User",
-                model_id: user.id,
-                role_id: ur.role.id,
+        // The role now comes from users.role - no join, no pivot table.
+        roles: [
+            {
+                id: definition.id,
+                name: definition.name,
+                label: definition.label,
+                guard_name: "sanctum",
+                created_at: null,
+                updated_at: null,
+                pivot: {
+                    model_type: "User",
+                    model_id: user.id,
+                    role_id: definition.id,
+                },
             },
-        })),
+        ],
     };
 }
 
@@ -33,19 +39,20 @@ export async function GET(request) {
             return Response.json({ status: false, message: "Auth required." }, { status: 401 });
         }
 
-        const { permissions } = await getUserRolesAndPermissions(auth.user.userId);
-        if (!permissions.includes("view users")) {
+        if (!isAdminRole(auth.user.role)) {
             return Response.json({ status: false, message: "Permission denied." }, { status: 403 });
         }
 
         const users = await prisma.user.findMany({
             orderBy: { createdAt: "asc" },
-            include: {
-                userRoles: {
-                    include: {
-                        role: true,
-                    },
-                },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                image: true,
+                role: true,
+                createdAt: true,
+                updatedAt: true,
             },
         });
 

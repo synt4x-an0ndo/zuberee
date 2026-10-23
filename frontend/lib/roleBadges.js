@@ -18,6 +18,8 @@ const DEFAULT_ROLE_KEYS = new Set([
 const KNOWN_ROLE_LABELS = new Map([
   ["superadmin", "Super Admin"],
   ["admin", "Admin"],
+  ["moderator", "Moderator"],
+  ["user", "Customer"],
   ["administrator", "Admin"],
   ["ordermanager", "Order Manager"],
   ["Manager", "Manager"],
@@ -46,6 +48,7 @@ function titleCaseRoleName(name) {
 function rolePriority(key) {
   if (key === "superadmin") return 0;
   if (key === "admin" || key === "administrator") return 10;
+  if (key === "moderator") return 15;
   if (key.includes("Manager")) return 20;
   return 30;
 }
@@ -53,6 +56,7 @@ function rolePriority(key) {
 function roleTone(key) {
   if (key === "superadmin") return "solid";
   if (key === "admin" || key === "administrator") return "brand";
+  if (key === "moderator") return "info";
   if (key.includes("Manager")) return "info";
   return "neutral";
 }

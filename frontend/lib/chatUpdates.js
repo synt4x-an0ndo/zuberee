@@ -9,8 +9,8 @@ const productLink = id => `/product-page/${encodeURIComponent(id)}`;
 export function updateAccess(user) {
   const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
   return {
-    inventory: user?.role === 'admin' && permissions.includes('manage inventory'),
-    sales: user?.role === 'admin' && permissions.includes('view dashboard summary'),
+    inventory: (user?.role === 'admin' || user?.role === 'moderator') && permissions.includes('manage inventory'),
+    sales: (user?.role === 'admin' || user?.role === 'moderator') && permissions.includes('view dashboard summary'),
   };
 }
 export function buildChatUpdates({ catalogue, orders, inventory, sales, aiProducts = [] }, now = Date.now()) {

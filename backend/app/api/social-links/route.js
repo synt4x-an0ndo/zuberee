@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 
 function formatSocialLinks(s) {
@@ -21,7 +22,7 @@ export async function PUT(request) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { success: false, message: "Admin access required." },
                 { status: 403 }

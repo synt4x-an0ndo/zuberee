@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { CHECKOUT_STATUSES as VALID_STATUSES } from "@/lib/checkoutStatuses.js";
 
@@ -93,7 +94,7 @@ export async function GET(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { success: false, message: "Admin access required." },
                 { status: 403 }
@@ -209,7 +210,7 @@ export async function PATCH(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
 
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json(
                 { success: false, message: "Admin access required." },
                 { status: 403 }

@@ -117,7 +117,7 @@ export function AuthProvider({ children }) {
       user,
       loading,
       isAuthenticated: Boolean(user),
-      isAdmin: user?.role === "admin",
+      isAdmin: user?.role === "admin" || user?.role === "moderator",
       login,
       logout,
       refresh,

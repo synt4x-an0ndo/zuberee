@@ -34,7 +34,7 @@ export default function LoginForm() {
       // Role-based destination: admins land in the admin panel, customers in their
       // account — unless a safe ?next= destination is present (e.g. the admin guard
       // sent them here via /login?next=/admin).
-      const target = next !== "/user" ? next : user?.role === "admin" ? "/admin" : "/user";
+      const target = next !== "/user" ? next : user?.role === "admin" || user?.role === "moderator" ? "/admin" : "/user";
       router.replace(target);
     } catch (err) {
       const message = err.message || "Sign-in failed. Please try again.";

@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
 import { isValidBdPhone, isValidEmail, normalizeBdPhone, normalizeEmail } from "@/lib/contactValidation.js";
 import { getItemPreorderQuantity, getItemStockQuantity, getPreorderRemaining, isPreorderEligible, isProductPreorder } from "@/lib/preorder.js";
@@ -748,7 +749,7 @@ async function replaceOrderItems(tx, existingOrder, desiredItems) {
 export async function GET(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
-        if (!auth.authenticated || auth.user.role !== "ADMIN") return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
         const { id } = await params;
         const orderId = Number(id);
         if (!Number.isInteger(orderId) || orderId <= 0) return Response.json({ success: false, message: "Invalid order ID." }, { status: 400 });
@@ -765,7 +766,7 @@ export async function GET(request, { params }) {
 export async function PATCH(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
-        if (!auth.authenticated || auth.user.role !== "ADMIN") return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
 
         const { id } = await params;
         const orderId = Number(id);
@@ -1039,7 +1040,7 @@ export async function PATCH(request, { params }) {
 export async function DELETE(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
-        if (!auth.authenticated || auth.user.role !== "ADMIN") return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) return Response.json({ success: false, message: "Admin access required." }, { status: 403 });
 
         const { id } = await params;
         const orderId = Number(id);

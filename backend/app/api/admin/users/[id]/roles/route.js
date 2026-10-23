@@ -1,7 +1,19 @@
 import prisma from "../../../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
-import { getUserRolesAndPermissions } from "@/lib/permissions.js";
+import {
+    ROLE_DEFINITIONS,
+    getDisplayRoleDefinition,
+    isAdminRole,
+    roleFromIds,
+} from "@/lib/access.js";
 
+/**
+ * PATCH /api/admin/users/:id/roles
+ *
+ * The admin UI still sends a list of role ids (that is what its modal already
+ * builds), but a user holds exactly one role, so the strongest id wins:
+ * 1 = Admin, 2 = Moderator, anything else = Customer.
+ */
 export async function PATCH(request, { params }) {
     try {
         const auth = await authenticateRequest(request);
@@ -9,8 +21,7 @@ export async function PATCH(request, { params }) {
             return Response.json({ status: false, message: "Auth required." }, { status: 401 });
         }
 
-        const { permissions } = await getUserRolesAndPermissions(auth.user.userId);
-        if (!permissions.includes("assign roles")) {
+        if (!isAdminRole(auth.user.role)) {
             return Response.json({ status: false, message: "Permission denied." }, { status: 403 });
         }
 
@@ -21,60 +32,72 @@ export async function PATCH(request, { params }) {
             return Response.json({ status: false, message: "Invalid user ID." }, { status: 400 });
         }
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (userId === auth.user.userId) {
+            return Response.json(
+                { status: false, message: "You cannot change your own role. Ask another admin." },
+                { status: 400 }
+            );
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, role: true },
+        });
         if (!user) {
             return Response.json({ status: false, message: "User not found." }, { status: 404 });
         }
 
         let body = {};
-        try { body = await request.json(); } catch {
+        try {
+            body = await request.json();
+        } catch {
             return Response.json({ status: false, message: "Request body required." }, { status: 400 });
         }
 
         const { role_ids, roleIds, roles } = body;
-        const finalRoleIds = role_ids ?? roleIds ?? roles;
+        const submitted = role_ids ?? roleIds ?? roles;
 
-        if (!Array.isArray(finalRoleIds)) {
+        if (!Array.isArray(submitted)) {
             return Response.json({ status: false, message: "role_ids must be an array." }, { status: 400 });
         }
 
-        const roleIdsParsed = finalRoleIds.map((r) => Number(r)).filter((r) => Number.isInteger(r) && r > 0);
-        const existingRoles = await prisma.role.findMany({ where: { id: { in: roleIdsParsed } } });
+        const parsed = submitted
+            .map((value) => Number(value))
+            .filter((value) => Number.isInteger(value) && value > 0);
 
-        if (existingRoles.length !== roleIdsParsed.length) {
+        const known = new Set(ROLE_DEFINITIONS.map((entry) => entry.id));
+        if (parsed.some((value) => !known.has(value))) {
             return Response.json({ status: false, message: "One or more roles not found." }, { status: 404 });
         }
 
-        await prisma.$transaction(async (tx) => {
-            await tx.userRole.deleteMany({ where: { userId } });
-            if (roleIdsParsed.length > 0) {
-                await tx.userRole.createMany({
-                    data: roleIdsParsed.map((roleId) => ({ userId, roleId })),
-                });
-            }
+        const nextRole = roleFromIds(parsed);
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: { role: nextRole },
+            select: { id: true, name: true, email: true, role: true },
         });
 
-        const updated = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { userRoles: { include: { role: true } } },
-        });
+        const definition = getDisplayRoleDefinition(updated.role);
 
         return Response.json({
             status: true,
-            message: "Roles assigned.",
+            message: "Role assigned.",
             data: {
                 id: updated.id,
                 name: updated.name,
                 email: updated.email,
-                roles: updated.userRoles.map((ur) => ({
-                    id: ur.role.id,
-                    name: ur.role.name,
-                    guard_name: ur.role.guardName,
-                })),
+                roles: [
+                    {
+                        id: definition.id,
+                        name: definition.name,
+                        label: definition.label,
+                        guard_name: "sanctum",
+                    },
+                ],
             },
         });
     } catch (error) {
-        console.error("Assign roles API error:", error);
-        return Response.json({ status: false, message: "Failed to assign roles." }, { status: 500 });
+        console.error("Assign role API error:", error);
+        return Response.json({ status: false, message: "Failed to assign role." }, { status: 500 });
     }
 }

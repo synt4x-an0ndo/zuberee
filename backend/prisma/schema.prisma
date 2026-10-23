@@ -11,6 +11,7 @@ datasource db {
 enum SystemRoleEnum {
   CUSTOMER
   ADMIN
+  MODERATOR
 
   @@map("UserRole")
 }

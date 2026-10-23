@@ -1,4 +1,5 @@
 import { authenticateRequest } from "@/directory/auth/auth.js";
+import { isStaffRole } from "@/lib/access.js";
 import prisma from "@/directory/prisma/prisma.js";
 import { purgeExpiredConversations } from "@/lib/chat-retention.js";
 
@@ -13,7 +14,7 @@ import { purgeExpiredConversations } from "@/lib/chat-retention.js";
 
 async function adminConversation(request, conversationId) {
     const auth = await authenticateRequest(request);
-    if (!auth.authenticated || auth.user.role !== "ADMIN") {
+    if (!auth.authenticated || !isStaffRole(auth.user.role)) {
         return {
             error: Response.json(
                 { success: false, message: "Admin access required." },

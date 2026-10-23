@@ -1,33 +1,25 @@
 import prisma from "../directory/prisma/prisma.js";
+import { permissionsForRole, roleNamesForRole } from "./access.js";
 
+/**
+ * Effective roles and permissions for a user.
+ *
+ * Reads `users.role` and nothing else, so a role change takes effect on the
+ * very next request with no cache to clear.
+ */
 export async function getUserRolesAndPermissions(userId) {
-    const userRoles = await prisma.userRole.findMany({
-        where: { userId },
-        include: {
-            role: {
-                include: {
-                    permissions: {
-                        include: {
-                            permission: true,
-                        },
-                    },
-                },
-            },
-        },
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
     });
 
-    const roles = userRoles.map((ur) => ur.role.name);
-    const permissions = new Set();
-
-    for (const ur of userRoles) {
-        for (const rp of ur.role.permissions) {
-            permissions.add(rp.permission.name);
-        }
+    if (!user) {
+        return { roles: [], permissions: [] };
     }
 
     return {
-        roles,
-        permissions: Array.from(permissions),
+        roles: roleNamesForRole(user.role),
+        permissions: permissionsForRole(user.role),
     };
 }
 

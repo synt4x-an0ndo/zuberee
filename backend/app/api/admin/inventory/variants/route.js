@@ -1,4 +1,5 @@
 import prisma from "@/directory/prisma/prisma.js";
+import { isStaffRole } from "@/lib/access.js";
 import { authenticateRequest } from "../../../../../directory/auth/auth.js";
 
 const VALID_FILTERS = ["all", "in_stock", "low_stock", "out_of_stock", "preorder", "tracked"];
@@ -98,7 +99,7 @@ function matchesFilter(row, filter) {
 export async function GET(request) {
     try {
         const auth = await authenticateRequest(request);
-        if (!auth.authenticated || auth.user.role !== "ADMIN") {
+        if (!auth.authenticated || !isStaffRole(auth.user.role)) {
             return Response.json({ message: "failed", data: "Admin access required." }, { status: 403 });
         }
         const { searchParams } = new URL(request.url);
