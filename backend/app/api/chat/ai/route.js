@@ -36,6 +36,9 @@ const STOPWORDS = new Set([
     "without", "that", "this", "it", "my", "your", "price", "cost", "much",
     "how", "when", "will", "available", "availability", "stock", "buy", "here",
     "order", "product", "products", "item", "items", "something", "anything",
+    "under", "below", "above", "over", "less", "more", "than", "within",
+    "max", "min", "maximum", "minimum", "budget", "around", "cheap", "cheapest",
+    "expensive", "range", "taka", "bdt", "tk",
 ]);
 
 function searchTokens(texts) {
@@ -275,7 +278,7 @@ export async function POST(request) {
         }
         const storeName = (settings?.siteName || "").trim() || "our store";
 
-        const [categories, footer, shipping, about] = await Promise.all([
+        const [categories, footer, shipping, about, adminSizes] = await Promise.all([
             prisma.category.findMany({ select: { name: true }, orderBy: { name: "asc" } }),
             prisma.footerSettings.findFirst({
                 orderBy: { createdAt: "asc" },
@@ -289,16 +292,27 @@ export async function POST(request) {
                 orderBy: { createdAt: "asc" },
                 select: { title: true, content: true },
             }),
+            prisma.size.findMany({
+                where: { isActive: true },
+                orderBy: { position: "asc" },
+                select: { size: true },
+            }),
         ]);
 
         const recentUserTexts = [
             message,
             ...history.filter((h) => h.role === "user").slice(-2).map((h) => h.text),
         ];
-        const tokens = searchTokens(recentUserTexts);
         const ceiling = priceCeiling(message);
+        // Price words ("under", "budget"...) and the price number itself are
+        // browse intent, not product keywords. Without this, "show me products
+        // under 2000" demanded a product literally named "2000" and found
+        // nothing even when a ৳599 item was sitting in the catalogue.
+        const tokens = searchTokens(recentUserTexts).filter(
+            (token) => ceiling === null || !/^\d+$/.test(token) || Number(token) !== ceiling
+        );
         let products = await searchProducts(tokens, ceiling);
-        if (products.length === 0 && tokens.length === 0) {
+        if (products.length === 0 && tokens.length === 0 && ceiling === null) {
             // Greetings / "show me products": offer the newest items.
             products = await searchProducts([], null);
         }
@@ -319,6 +333,7 @@ export async function POST(request) {
             about,
             faqs: faqRows,
             products: contextProducts,
+            sizes: adminSizes,
         });
         // The signed-in customer's own orders, so "where is my order" can be
         // answered from real data instead of "chat with the admin".
@@ -362,17 +377,21 @@ export async function POST(request) {
 
         const systemInstruction = [
             `You are the friendly shopping assistant for ${storeName}, an online store in Bangladesh. Currency is Bangladeshi taka (\u09F3).`,
-            "Reply in the same language the customer writes in (English, Bangla, or a mix). Keep answers short, warm and helpful - a few sentences, or a short list when comparing products.",
-            "You have exactly two sources of truth: (1) the STORE FACTS block below - size charts, delivery charges, about-the-store text and product FAQs; and (2) the catalogue search results included in the customer's message - product names, prices, sizes, colours and stock. Use only these.",
+            "ALWAYS reply in the language of the customer's latest message: an English message gets an English reply, a Bangla message gets a Bangla reply. Keep answers short, warm and helpful - a few sentences, or a short list when comparing products.",
+            "You have exactly two sources of truth: (1) the STORE FACTS block below - the store's size information, delivery charges, about-the-store text and product FAQs; and (2) the catalogue search results included in the customer's message - product names, prices, sizes, colours and stock. Use only these.",
+            "You are connected to the store's live database through these blocks: products, sizes, delivery information, FAQs and the customer's own orders are real, current store data that you can look up right here in this chat.",
+            "NEVER say that you cannot access a database, that you are 'just an AI', or that you have no way to check store information. If the customer asks what you can access, tell them plainly that you can look up the store's products, prices, sizes, delivery charges and their orders here - then actually do it.",
             "Never invent a product, price, size, colour, stock level, delivery charge or measurement. If neither source answers the question, say so plainly and invite the customer to use the \"Chat with Admin\" option.",
-            "If the customer asks about a size guide, size chart, measurements, or which size to pick, quote the STORE FACTS size charts directly, including the actual numbers. The store does have size charts - never say you cannot find a size guide.",
-            "If the customer asks generally what sizes are available (for example \"what sizes do you have\", \"which sizes\", \"size options\"), list BOTH ranges from STORE FACTS - the clothing sizes XS to XXL with their bust/waist/hip measurements, and the shoe sizes EU 36 to 42 with foot length - then invite them to name a product for exact stock. That is a complete answer; do not say you cannot find products.",
+            "If the customer asks to see, browse or list products (for example \"show me products\", \"what do you have\", \"show me something nice\"), answer ONLY with the catalogue search results as short bullet lines (**Name** - price - available sizes), never a markdown table, and never talk about orders in that reply.",
+            "If the customer asks about a size guide, size chart, measurements, or which size to pick, quote the STORE FACTS size information directly, including the actual numbers. The store does have size information - never say you cannot find a size guide.",
+            "If the customer asks generally what sizes are available (for example \"what sizes do you have\", \"which sizes\", \"size options\"), first list the clothing sizes the store sells from STORE FACTS (the admin-configured size list) together with their measurements, then the shoe size chart, then invite them to name a product for exact stock. Never offer a clothing size that is not on the store's size list. That is a complete answer; do not say you cannot find products.",
             "If the customer asks about delivery, shipping or charges, quote the exact inside/outside Dhaka amounts from STORE FACTS.",
             "If the customer asks about their order, order status, tracking, shipping progress, delivery date or whether something was dispatched, answer ONLY from the CUSTOMER ORDERS block. First list every order they have with its number, status and what that status means (for example \"Order #15 is SHIPPED - handed to the courier and on its way\"), plus the items. Only after that may you mention that courier tracking numbers are not stored. If the CUSTOMER ORDERS block says they have no orders, open by saying clearly that their account has no orders yet - do not talk about couriers, consignment numbers or tracking in that case, just offer the Chat with Admin option - and never imply an order exists.",
             "This store does not keep courier consignment/tracking numbers, hub scans or guaranteed delivery dates. Never invent a tracking number, scan event, courier location or delivery date. If a courier is assigned, name it and say the admin can share the consignment details; otherwise say tracking details are not available yet.",
             "For changing an order, cancelling, refunds or payment problems, invite the customer to use the \"Chat with Admin\" option.",
-            "When you recommend a product, mention its name, its price (the sale price when one is given), and the sizes/colours actually available. Sizes listed with stock 0 are unavailable - do not offer them. Format with simple markdown only: **bold** for product names and prices, and short bullet lists. NEVER use a markdown table or pipe characters - when listing several orders or products, use one bullet line each.",
+            "When you recommend a product, mention its name, its price (the sale price when one is given), and the sizes/colours actually available. Product status 'in-stock' means it can be ordered now; 'pre-order' means the customer can order it now and it ships when stock arrives - present pre-order products as available on pre-order and NEVER call a pre-order product out of stock or unavailable, even when its stock numbers are 0 or it has no size variants listed yet; 'out-of-stock' and 'sold-out' cannot be ordered. For an in-stock product, sizes listed with stock 0 are unavailable - do not offer them; for a pre-order product every listed size is orderable even when its stock shows 0. Format with simple markdown only: **bold** for product names and prices, and short bullet lists. NEVER use a markdown table or pipe characters - when listing several orders or products, use one bullet line each.",
             "For orders, returns or account problems you cannot solve, invite the customer to use the \"Chat with Admin\" option in this same chat window.",
+            "For a greeting or vague opener, briefly say what you can help with right here: finding products with prices and stock, size advice, delivery charges, and tracking the customer's orders.",
             `Store categories: ${categories.map((c) => c.name).join(", ") || "-"}.`,
             footer?.companyPhone || footer?.companyEmail
                 ? `Store contact: ${[footer.companyPhone, footer.companyEmail, footer.companyAddress].filter(Boolean).join(" | ")}.`
@@ -392,7 +411,7 @@ export async function POST(request) {
                     `[Catalogue search results for this question — the only product facts you may use]\n` +
                     (contextProducts.length
                         ? JSON.stringify(contextProducts, null, 1)
-                        : "(no specific product matched this question. If the customer is asking about sizes, measurements, delivery charges or store policies, answer from the STORE FACTS block above - do NOT reply that you have no information.)") +
+                        : "(no specific product matched this question. If the customer is asking about sizes, measurements, delivery charges or store policies, answer from the STORE FACTS block above - do NOT reply that you have no information. If the customer set a price limit and nothing fits it, say plainly that nothing matched within their budget and suggest trying a higher range - never invent a product.)") +
                     `\n\nCustomer question: ${message}`,
             },
         ];

@@ -79,18 +79,60 @@ export async function saveMediaFile(file, folder = "general") {
     };
 }
 
+/**
+ * Small in-process cache of decoded media bytes. Ids are immutable UUIDs, so
+ * this avoids re-reading and re-decoding base64 from Postgres on every hit
+ * (dozens of product images land at once on category pages). TTL + LRU cap
+ * bound memory; deletions invalidate explicitly.
+ */
+const mediaCache = new Map(); // id -> { buffer, mimeType, expires }
+const mediaInFlight = new Map(); // id -> Promise
+const MEDIA_CACHE_MAX = 240;
+const MEDIA_CACHE_TTL_MS = 10 * 60 * 1000;
+
 /** Reads one asset back as bytes, or returns null when it does not exist. */
 export async function readMediaFile(id) {
     if (!id || typeof id !== "string") return null;
 
-    const asset = await prisma.mediaAsset.findUnique({
-        where: { id },
-        select: { data: true, mimeType: true },
-    });
+    const hit = mediaCache.get(id);
+    if (hit && hit.expires > Date.now()) {
+        mediaCache.delete(id);
+        mediaCache.set(id, hit); // refresh LRU position
+        return { buffer: hit.buffer, mimeType: hit.mimeType };
+    }
 
+    // Collapse concurrent misses for the same id into one query.
+    let pending = mediaInFlight.get(id);
+    if (!pending) {
+        pending = (async () => {
+            const asset = await prisma.mediaAsset.findUnique({
+                where: { id },
+                select: { data: true, mimeType: true },
+            });
+            if (!asset) return null;
+            return { buffer: Buffer.from(asset.data, "base64"), mimeType: asset.mimeType };
+        })();
+        mediaInFlight.set(id, pending);
+    }
+
+    let asset;
+    try {
+        asset = await pending;
+    } finally {
+        mediaInFlight.delete(id);
+    }
     if (!asset) return null;
 
-    return { buffer: Buffer.from(asset.data, "base64"), mimeType: asset.mimeType };
+    if (mediaCache.size >= MEDIA_CACHE_MAX) {
+        const oldest = mediaCache.keys().next().value;
+        mediaCache.delete(oldest);
+    }
+    mediaCache.set(id, {
+        buffer: asset.buffer,
+        mimeType: asset.mimeType,
+        expires: Date.now() + MEDIA_CACHE_TTL_MS,
+    });
+    return asset;
 }
 
 /**
@@ -104,6 +146,7 @@ export async function deleteMediaFileByUrl(url) {
 
     try {
         await prisma.mediaAsset.delete({ where: { id } });
+        mediaCache.delete(id);
         return true;
     } catch {
         return false;

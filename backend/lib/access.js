@@ -6,7 +6,9 @@
  * no longer read for authorization.
  *
  *   ADMIN      full access: everything, including users and roles
- *   MODERATOR  the whole admin panel except users and roles
+ *   MODERATOR  the admin panel, narrowed by the per-user moderator grants in
+ *              `users.moderatorPermissions` (JSON array of permission names;
+ *              null means every moderator permission)
  *   CUSTOMER   the storefront only
  */
 
@@ -60,6 +62,62 @@ export const MODERATOR_PERMISSIONS = [
     "view statistics",
 ];
 
+/** Fast membership checks for moderator grants. */
+export const MODERATOR_PERMISSION_SET = new Set(MODERATOR_PERMISSIONS);
+
+/**
+ * Moderator permissions grouped for the admin UI, so the admin can tick which
+ * areas a moderator may access. The union of every group is exactly
+ * MODERATOR_PERMISSIONS.
+ */
+export const MODERATOR_PERMISSION_GROUPS = [
+    {
+        key: "dashboard",
+        label: "Dashboard & statistics",
+        permissions: ["view dashboard", "view dashboard summary", "view statistics", "view leaderboard"],
+    },
+    {
+        key: "products",
+        label: "Products",
+        permissions: ["view products", "create products", "edit products", "delete products", "manage inventory", "reOrderImage"],
+    },
+    {
+        key: "variants",
+        label: "Product variants",
+        permissions: ["view product variants", "create product variants", "edit product variants", "delete product variants"],
+    },
+    {
+        key: "categories",
+        label: "Categories",
+        permissions: ["view categories", "create categories", "edit categories", "delete categories"],
+    },
+    {
+        key: "sizes",
+        label: "Sizes",
+        permissions: ["view sizes", "create sizes", "edit sizes", "delete sizes"],
+    },
+    {
+        key: "orders",
+        label: "Orders",
+        permissions: ["view orders", "order show", "create orders", "edit orders", "update orders", "delete orders", "download orders", "order_status", "incomplete_order"],
+    },
+    {
+        key: "customers",
+        label: "Customers",
+        permissions: ["view customers", "view customer details", "edit customers"],
+    },
+    {
+        key: "banners",
+        label: "Banners",
+        permissions: ["view banners", "create banners", "edit banners", "delete banners"],
+    },
+    {
+        key: "settings",
+        label: "Settings",
+        permissions: ["view settings", "edit settings"],
+    },
+];
+
 /** Reserved for ADMIN: user and role management. */
 export const ADMIN_ONLY_PERMISSIONS = [
     "assign roles",
@@ -89,6 +147,43 @@ export function permissionsForRole(role) {
     if (role === ROLE.ADMIN) return ALL_PERMISSIONS;
     if (role === ROLE.MODERATOR) return MODERATOR_PERMISSIONS;
     return [];
+}
+
+/**
+ * Parse the `users.moderatorPermissions` column (JSON array of permission
+ * names). Returns `null` when unset/unreadable, meaning "unrestricted".
+ */
+export function parseModeratorPermissions(value) {
+    if (Array.isArray(value)) {
+        return value.filter((name) => typeof name === "string" && MODERATOR_PERMISSION_SET.has(name));
+    }
+    if (typeof value === "string" && value.trim()) {
+        try {
+            const parsed = JSON.parse(value);
+            if (Array.isArray(parsed)) {
+                return parsed.filter((name) => typeof name === "string" && MODERATOR_PERMISSION_SET.has(name));
+            }
+        } catch {
+            /* corrupt column - treat as unrestricted */
+        }
+    }
+    return null;
+}
+
+/**
+ * Effective permissions for a user, honouring per-moderator grants.
+ * - ADMIN: every permission.
+ * - MODERATOR: the moderator permissions, narrowed by `moderatorPermissions`
+ *   (a JSON array of names on the user row; null = all of them).
+ * - CUSTOMER: none.
+ */
+export function effectivePermissions(role, moderatorPermissions) {
+    if (role === ROLE.ADMIN) return ALL_PERMISSIONS;
+    if (role !== ROLE.MODERATOR) return [];
+    const granted = parseModeratorPermissions(moderatorPermissions);
+    if (!granted) return MODERATOR_PERMISSIONS;
+    const allow = new Set(granted);
+    return MODERATOR_PERMISSIONS.filter((name) => allow.has(name));
 }
 
 /**

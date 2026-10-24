@@ -62,6 +62,21 @@ function InlineRows({ items, pathname }) {
 }
 
 /**
+ * Customer-facing category visibility. The "Archived" bucket exists for
+ * order-history placeholder products and must stay in the database/admin,
+ * but it must never appear in any client-side category listing.
+ */
+const HIDDEN_CATEGORY_SLUGS = new Set(["archived"]);
+
+function pruneHiddenCategories(nodes) {
+  return (nodes || [])
+    .filter((n) => n && !HIDDEN_CATEGORY_SLUGS.has(String(n.slug || "").toLowerCase()))
+    .map((n) =>
+      n.children && n.children.length ? { ...n, children: pruneHiddenCategories(n.children) } : n
+    );
+}
+
+/**
  * Store category dropdown. Desktop uses a refined fixed-position panel under
  * the header control; mobile bottom navigation uses an expandable sheet.
  */
@@ -113,7 +128,7 @@ export default function CategoryMenu({ label = "All Categories", className = "" 
     };
   }, [open]);
 
-  const roots = categories.tree;
+  const roots = pruneHiddenCategories(categories.tree);
   if (roots.length === 0) return null;
 
   const closeAll = () => {

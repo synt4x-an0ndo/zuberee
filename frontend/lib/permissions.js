@@ -45,6 +45,7 @@ export function normalizeUser(raw) {
     name: raw.name || "",
     email: raw.email || "",
     image: raw.image || null,
+    moderatorPermissions: parsePermissionList(raw.moderator_permissions),
     createdAt: raw.created_at || raw.createdAt || null,
     updatedAt: raw.updated_at || raw.updatedAt || null,
     roles: roles
@@ -167,3 +168,32 @@ export function byName(a, b) {
   if (left === right) return 0;
   return left < right ? -1 : 1;
 }
+
+/**
+ * Per-moderator access grants come back from the API as an array of permission
+ * names, or null when the moderator is unrestricted (every moderator
+ * permission). Mirrors backend/lib/access.js parseModeratorPermissions().
+ */
+function parsePermissionList(value) {
+  if (Array.isArray(value)) return value.filter((name) => typeof name === "string");
+  return null;
+}
+
+/**
+ * Moderator permissions grouped for the "Moderator access" checklist in the
+ * user role modal. Keep in sync with backend/lib/access.js
+ * MODERATOR_PERMISSION_GROUPS - the union is exactly the moderator set.
+ */
+export const MODERATOR_PERMISSION_GROUPS = [
+  { key: "dashboard", label: "Dashboard & statistics", permissions: ["view dashboard", "view dashboard summary", "view statistics", "view leaderboard"] },
+  { key: "products", label: "Products", permissions: ["view products", "create products", "edit products", "delete products", "manage inventory", "reOrderImage"] },
+  { key: "variants", label: "Product variants", permissions: ["view product variants", "create product variants", "edit product variants", "delete product variants"] },
+  { key: "categories", label: "Categories", permissions: ["view categories", "create categories", "edit categories", "delete categories"] },
+  { key: "sizes", label: "Sizes", permissions: ["view sizes", "create sizes", "edit sizes", "delete sizes"] },
+  { key: "orders", label: "Orders", permissions: ["view orders", "order show", "create orders", "edit orders", "update orders", "delete orders", "download orders", "order_status", "incomplete_order"] },
+  { key: "customers", label: "Customers", permissions: ["view customers", "view customer details", "edit customers"] },
+  { key: "banners", label: "Banners", permissions: ["view banners", "create banners", "edit banners", "delete banners"] },
+  { key: "settings", label: "Settings", permissions: ["view settings", "edit settings"] },
+];
+
+export const MODERATOR_PERMISSIONS_FLAT = MODERATOR_PERMISSION_GROUPS.flatMap((group) => group.permissions);

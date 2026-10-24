@@ -5,12 +5,12 @@
 .selected { z-index: 2; outline: 2px solid var(--brand, #f44000); outline-offset: 1px; }
 .option:focus-visible { z-index: 4; outline: 3px solid var(--brand, #f44000); outline-offset: 2px; }
 .option:disabled { cursor: wait; opacity: 0.65; }
-.more { display: inline-grid; place-items: center; flex: 0 0 auto; min-width: 20px; height: 24px; color: var(--muted); font-size: 0.62rem; cursor: default; }
+.more { display: inline-grid; place-items: center; flex: 0 0 auto; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 999px; background: var(--ink, #1a2420); color: #fff; font-size: 0.62rem; font-weight: 700; line-height: 1; cursor: default; box-shadow: 0 2px 8px rgb(0 0 0 / 12%); }
 @media (prefers-reduced-motion: reduce) { .option { transition: none; } }
 
 /* Card information follows the existing Zuberee typography and button tokens. */
-.metadata { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; min-width: 0; min-height: 24px; }
-.sku { flex: 0 0 auto; color: var(--muted); font-size: 0.75rem; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+.metadata { display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 6px; min-width: 0; min-height: 24px; }
+.sku { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 0.75rem; font-weight: 700; line-height: 1.4; white-space: nowrap; }
 .metadata .group { flex: 0 0 auto; min-width: 0; margin-top: 0; margin-left: auto; justify-content: flex-end; }
 a.viewProduct { width: 100%; min-height: 44px; margin-top: auto; padding: 0.55rem 0.75rem; gap: 7px; font-size: 0.82rem; text-align: center; white-space: normal; }
 a.viewProduct > span { white-space: nowrap; }
@@ -21,11 +21,19 @@ a.viewProduct > span { white-space: nowrap; }
 .preview { display: inline-grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; box-sizing: border-box; overflow: hidden; border: 2px solid #fff; border-radius: 50%; background: var(--surface, #fff); box-shadow: 0 2px 8px rgb(0 0 0 / 12%); cursor: default; }
 .preview * { cursor: default; }
 .preview:not(:last-child) { margin-right: -5px; }
-.preview img { object-fit: contain; }
+.preview img { object-fit: cover; }
 
 /* Follow the existing admin-driven primary colour and contrast palette. */
 a.viewProduct:hover:not(:disabled), a.viewProduct:focus-visible {
   background: var(--brand);
   border-color: var(--brand);
   color: var(--brand-contrast);
+}
+
+/* Keep SKU + colour circles on one line on small screens: shrink the
+   circles slightly so both fit without wrapping. */
+@media (max-width: 480px) {
+  .preview { flex: 0 0 20px; width: 20px; height: 20px; }
+  .preview:not(:last-child) { margin-right: -4px; }
+  .more { min-width: 20px; height: 20px; padding: 0 4px; font-size: 0.56rem; }
 }

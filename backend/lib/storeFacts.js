@@ -95,15 +95,37 @@ export function shoeChartText() {
  * when the corresponding row actually exists, so an empty FAQ table does not
  * produce a stray heading.
  */
-export function buildStoreKnowledge({ shipping, about, faqs, products } = {}) {
+export function buildStoreKnowledge({ shipping, about, faqs, products, sizes } = {}) {
     const sections = [];
 
+    // Sizes the admin configured in Settings > Sizes are the source of truth
+    // for what the store sells; the measurement chart below only fills in
+    // numbers for those labels (and falls back to the full chart when the
+    // admin list is empty, e.g. before setup).
+    const offered = (Array.isArray(sizes) ? sizes : [])
+        .map((row) => clean(row?.size ?? row, 20))
+        .filter(Boolean);
+    const chartRows = offered.length
+        ? DRESS_SIZE_CHART.filter((row) =>
+              offered.some((size) => size.toLowerCase() === row.size.toLowerCase())
+          )
+        : DRESS_SIZE_CHART;
+    const dressMeasurements = chartRows
+        .map((row) => `${row.size} (bust ${row.bust}", waist ${row.waist}", hip ${row.hip}")`)
+        .join("; ");
     sections.push(
         [
-            "Size charts - the only size charts this store has:",
-            `- Clothing sizes (inches): ${dressChartText()}.`,
-            `- Shoe sizes: ${shoeChartText()}.`,
-        ].join("\n")
+            "Size information - the only size information this store has:",
+            offered.length
+                ? `- Clothing sizes the store sells right now (configured by the store admin): ${offered.join(", ")}. A clothing size not on this list is NOT sold in this store.`
+                : `- Clothing sizes (inches): ${dressChartText()}.`,
+            offered.length && dressMeasurements
+                ? `- Clothing measurements (inches) for those sizes: ${dressMeasurements}.`
+                : "",
+            `- Shoe sizes (for shoes): ${shoeChartText()}.`,
+        ]
+            .filter(Boolean)
+            .join("\n")
     );
 
     if (shipping) {

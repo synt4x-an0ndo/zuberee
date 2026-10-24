@@ -25,6 +25,21 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useSite } from "@/context/SiteContext";
 
+/**
+ * Customer-facing category visibility. The "Archived" bucket exists for
+ * order-history placeholder products and must stay in the database/admin,
+ * but it must never appear in any client-side category listing.
+ */
+const HIDDEN_CATEGORY_SLUGS = new Set(["archived"]);
+
+function pruneHiddenCategories(nodes) {
+  return (nodes || [])
+    .filter((n) => n && !HIDDEN_CATEGORY_SLUGS.has(String(n.slug || "").toLowerCase()))
+    .map((n) =>
+      n.children && n.children.length ? { ...n, children: pruneHiddenCategories(n.children) } : n
+    );
+}
+
 export default function Header() {
   const pathname = usePathname() || "/";
   const { siteName, company, categories, loading, logoSizes } = useSite();
@@ -123,7 +138,7 @@ export default function Header() {
     };
   }, [menuPresent]);
 
-  const roots = categories.tree;
+  const roots = pruneHiddenCategories(categories.tree);
   const isActive = (href) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`));
   const drawerAccountActive = pathname === "/user" || pathname.startsWith("/user/profile");
   const drawerOrdersActive = isActive("/user/orders");

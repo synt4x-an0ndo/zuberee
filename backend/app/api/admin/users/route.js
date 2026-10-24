@@ -1,6 +1,6 @@
 import prisma from "../../../../directory/prisma/prisma.js";
 import { authenticateRequest } from "@/directory/auth/auth.js";
-import { getDisplayRoleDefinition, isAdminRole } from "@/lib/access.js";
+import { getDisplayRoleDefinition, isAdminRole, parseModeratorPermissions } from "@/lib/access.js";
 
 function formatUser(user) {
     const definition = getDisplayRoleDefinition(user.role);
@@ -13,6 +13,7 @@ function formatUser(user) {
         email_verified_at: null,
         created_at: user.createdAt,
         updated_at: user.updatedAt,
+        moderator_permissions: parseModeratorPermissions(user.moderatorPermissions),
         // The role now comes from users.role - no join, no pivot table.
         roles: [
             {
@@ -51,6 +52,7 @@ export async function GET(request) {
                 email: true,
                 image: true,
                 role: true,
+                moderatorPermissions: true,
                 createdAt: true,
                 updatedAt: true,
             },

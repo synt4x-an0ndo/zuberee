@@ -33,7 +33,10 @@ export default function UsersPage() {
     const map = new Map();
     users.forEach((entry) => {
       const owned = entry.roles.map((role) => roleById.get(role.id)).filter(Boolean);
-      map.set(entry.id, permissionsForRoles(owned));
+      const full = permissionsForRoles(owned);
+      const grants = entry.moderatorPermissions;
+      const isModerator = entry.roles.some((role) => (role.name || "").toLowerCase() === "moderator");
+      map.set(entry.id, isModerator && Array.isArray(grants) ? full.filter((name) => grants.includes(name)) : full);
     });
     return map;
   }, [users, roleById]);
@@ -72,9 +75,9 @@ export default function UsersPage() {
     ];
   }, [users]);
 
-  const assignRoles = async ({ role_ids }) => {
+  const assignRoles = async ({ role_ids, permissions }) => {
     if (!assigning || !can(PERM.ASSIGN_ROLES)) throw new Error("Role assignment permission is not verified.");
-    await api.patch(`api/admin/users/${assigning.id}/roles`, { role_ids });
+    await api.patch(`api/admin/users/${assigning.id}/roles`, { role_ids, permissions });
     toast.success(`Roles updated for ${assigning.name || assigning.email}.`);
     setAssigning(null);
     // Re-read so the table, the role list and the caller's own permissions stay in sync

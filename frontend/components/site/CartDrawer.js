@@ -25,11 +25,27 @@ export default function CartDrawer() {
       touch.current.active = false;
       return undefined;
     }
-    document.body.style.overflow = "hidden";
+    // Freeze the page behind the drawer. `overflow: hidden` alone still lets
+    // mobile browsers scroll the body by touch, so pin the body in place and
+    // restore the exact scroll position on close.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
     const onKey = (e) => e.key === "Escape" && closeDrawer();
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = "";
+      body.style.overflow = "";
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
       window.removeEventListener("keydown", onKey);
     };
   }, [drawerOpen, closeDrawer]);

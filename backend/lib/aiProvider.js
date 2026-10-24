@@ -9,9 +9,9 @@ const DEFAULT_MODELS = {
         "gemini-3.8-flash",
     ],
     groq: [
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
         "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
         // Kept last for enterprise accounts that still have access;
         // Groq retired these IDs for free/developer usage in Aug 2026.
         "llama-3.1-8b-instant",

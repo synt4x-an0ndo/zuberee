@@ -41,7 +41,11 @@ export async function GET(request, { params }) {
             status: 200,
             headers: {
                 "Content-Type": banner.imageType || "image/jpeg",
-                "Cache-Control": "public, max-age=3600",
+                "Content-Length": String(imageBuffer.byteLength),
+                // Banner rows are replaced (new ids) rather than edited in
+                // place, so long-lived caching is safe and repeat visits hit
+                // the browser cache instead of the database.
+                "Cache-Control": "public, max-age=604800, stale-while-revalidate=2592000",
             },
         });
     } catch (error) {

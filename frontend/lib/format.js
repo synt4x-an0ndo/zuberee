@@ -125,7 +125,7 @@ export function normalizeProduct(raw) {
   const rawStatus = String(raw.status || "in-stock").toLowerCase().replaceAll("_", "-");
   const productPreorder = rawStatus === "pre-order" || rawStatus === "preorder";
 
-  const sizes = (Array.isArray(raw.sizes) ? raw.sizes : []).map((size) => {
+  const sizesRaw = (Array.isArray(raw.sizes) ? raw.sizes : []).map((size) => {
     const pivot = size?.pivot || {};
     const sizePrice = pivot.price === null || pivot.price === undefined ? null : num(pivot.price);
     const stock = num(pivot.stock, 0);
@@ -150,6 +150,19 @@ export function normalizeProduct(raw) {
       orderCapacity,
     };
   });
+
+  // Size variants are stored per colour (one row per colorId), so the same
+  // size value can arrive many times. Show one button per distinct size and
+  // keep the most purchasable row (available > preorder > in stock).
+  const sizeScore = (s) =>
+    (s.orderCapacity === null || s.orderCapacity > 0 ? 4 : 0) + (s.allowPreorder ? 2 : 0) + (s.stock > 0 ? 1 : 0);
+  const sizeByLabel = new Map();
+  for (const s of sizesRaw) {
+    const key = String(s.label || "").trim().toLowerCase();
+    const prev = sizeByLabel.get(key);
+    if (!prev || sizeScore(s) > sizeScore(prev)) sizeByLabel.set(key, s);
+  }
+  const sizes = sizeByLabel.size > 0 ? Array.from(sizeByLabel.values()) : sizesRaw;
 
   const category = Array.isArray(raw.category) ? raw.category[0] : raw.category;
   const status = rawStatus;

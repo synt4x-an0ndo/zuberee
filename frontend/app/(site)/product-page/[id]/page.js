@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+    FiArrowLeft,
     FiChevronLeft,
   FiChevronRight,
   FiMinus,
@@ -288,6 +289,14 @@ export default function ProductPage() {
   return (
     <div className="pd2-bg">
       <div className="container section" style={{ paddingTop: "1.25rem" }}>
+        <button
+          type="button"
+          className="pd2-back"
+          onClick={() => (typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push("/shop"))}
+          aria-label="Go back to the previous page"
+        >
+          <FiArrowLeft aria-hidden="true" /> Back
+        </button>
         <nav className="crumbs" aria-label="Breadcrumb">
           <Link href="/">Home</Link>
           <span>/</span>
@@ -622,7 +631,7 @@ export default function ProductPage() {
         </div>
 
         {related.length > 0 && (
-          <section style={{ marginTop: "3.5rem" }}>
+          <section className="pd2-related">
             <div className="section-head">
               <div>
                 <p className="eyebrow">You may also like</p>

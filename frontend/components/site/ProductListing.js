@@ -19,6 +19,21 @@ const STATUS_FILTERS = [
   { value: "pre-order", label: "Pre-order" },
 ];
 
+/**
+ * Customer-facing category visibility. The "Archived" bucket exists for
+ * order-history placeholder products and must stay in the database/admin,
+ * but it must never appear in any client-side category listing.
+ */
+const HIDDEN_CATEGORY_SLUGS = new Set(["archived"]);
+
+function pruneHiddenCategories(nodes) {
+  return (nodes || [])
+    .filter((n) => n && !HIDDEN_CATEGORY_SLUGS.has(String(n.slug || "").toLowerCase()))
+    .map((n) =>
+      n.children && n.children.length ? { ...n, children: pruneHiddenCategories(n.children) } : n
+    );
+}
+
 /** Filterable catalogue used by /shop and category collection routes. */
 export default function ProductListing({ fixedCategory = null, heading, eyebrow, subtitle, showCategoryFilter = true }) {
   const router = useRouter();
@@ -190,8 +205,10 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
     run();
   }, [q, category, sizeFilter, status, min, max, page, reloadKey]);
 
-  const roots = categories.tree;
-  const activeCategory = categories.bySlug.get(category);
+  const roots = pruneHiddenCategories(categories.tree);
+  const activeCategory = HIDDEN_CATEGORY_SLUGS.has(String(category || "").toLowerCase())
+    ? undefined
+    : categories.bySlug.get(category);
   const hasFilters = Boolean(q || (!fixedCategory && category) || sizeFilter || status || min || max);
 
   const openFilters = useCallback(() => {
@@ -314,7 +331,7 @@ export default function ProductListing({ fixedCategory = null, heading, eyebrow,
             <button type="button" className={cx(!category && "is-active")} onClick={() => update({ category: "" })} aria-pressed={!category}>
               All categories
             </button>
-            {categories.flat.map((item) => (
+            {pruneHiddenCategories(categories.flat).map((item) => (
               <button
                 key={item.id}
                 type="button"

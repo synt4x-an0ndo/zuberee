@@ -54,7 +54,11 @@ export default function Hero({ banners, siteName, primaryAction = { href: "/shop
           className={cx("hero-slide", i === index && "is-active", banner.link && "is-link")}
           aria-hidden={i !== index}
         >
-          {banner.image && <Img src={banner.image} alt={banner.title || siteName || "Banner"} fill priority={i === 0} sizes="100vw" />}
+          {/* Load only the active slide and its neighbours so the first view
+              downloads 2-3 banners instead of the whole carousel. */}
+          {banner.image && (i === index || i === (index + 1) % count || i === (index + count - 1) % count) && (
+            <Img src={banner.image} alt={banner.title || siteName || "Banner"} fill priority={i === 0} sizes="100vw" />
+          )}
           {banner.link && <Link href={banner.link} className="hero-link" aria-label={banner.title || "Open banner link"} />}
         </div>
       ))}
