@@ -23,7 +23,5 @@ _backups/
 
 # Never commit these (cleaned 2026-10-24)
 *.bak-*
-backend/.env
-frontend/.env
 migrate/
 *.tgz
