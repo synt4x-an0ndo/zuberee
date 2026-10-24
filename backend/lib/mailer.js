@@ -448,7 +448,7 @@ export function buildEmailVerificationEmail({ name, verificationLink, storeName,
     ].join("\n");
 
     const logoMarkup = logoSrc
-        ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" width="164" style="display:block;width:164px;max-width:164px;height:auto;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:10px;padding:7px 12px;box-sizing:content-box;">`
+        ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;">`
         : `<div style="font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#ffffff;">${store}</div>`;
 
     const html = `<!DOCTYPE html>
