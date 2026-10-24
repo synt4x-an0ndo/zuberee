@@ -20,3 +20,10 @@ Thumbs.db
 # Local edit backups (timestamped copies taken before edits)
 *.backup-*
 _backups/
+
+# Never commit these (cleaned 2026-10-24)
+*.bak-*
+backend/.env
+frontend/.env
+migrate/
+*.tgz
