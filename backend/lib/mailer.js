@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readSetting } from "./settings-store.js";
+import prisma from "../directory/prisma/prisma.js";
+import { mediaIdFromUrl, readMediaFile } from "./media-store.js";
 
 /**
  * Password-reset mailer.
@@ -105,38 +107,53 @@ function escapeHtml(value) {
 }
 
 
-// The supplied Zuberee PNG travels with verification mail as a CID attachment.
+// The supplied Zuberee PNG travels with mail as a CID attachment.
 // It does not depend on a public URL, so recipients do not see a broken logo.
 const VERIFICATION_LOGO_CID = "zuberee-verification-logo@zuberee.email";
-const VERIFICATION_LOGO_PATH = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "assets",
-    "zuberee-email-logo.png"
-);
+const STORE_LOGO_CID = "zuberee-logo@zuberee.email";
+
+// Next.js bundles server code into .next/server/chunks, so the old
+// import.meta.url-relative lookup silently missed the asset in production.
+// Try every plausible location instead.
+function verificationLogoCandidates() {
+    return [
+        path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "assets", "zuberee-email-logo.png"),
+        path.join(process.cwd(), "assets", "zuberee-email-logo.png"),
+        path.join(process.cwd(), "backend", "assets", "zuberee-email-logo.png"),
+        path.join(process.cwd(), "..", "assets", "zuberee-email-logo.png"),
+    ];
+}
+
+/** Build one inline CID attachment + the matching cid: src for the HTML. */
+function cidLogoAttachment(cid, filename, content, contentType) {
+    return {
+        logoSrc: `cid:${cid}`,
+        attachments: [
+            {
+                filename,
+                content,
+                contentType,
+                contentDisposition: "inline",
+                contentTransferEncoding: "base64",
+                headers: { "X-Attachment-Id": cid },
+                cid,
+            },
+        ],
+    };
+}
 
 async function prepareEmailVerificationLogo() {
-    try {
-        const content = await readFile(VERIFICATION_LOGO_PATH);
-        return {
-            logoSrc: `cid:${VERIFICATION_LOGO_CID}`,
-            attachments: [
-                {
-                    filename: "zuberee-email-logo.png",
-                    content,
-                    contentType: "image/png",
-                    contentDisposition: "inline",
-                    contentTransferEncoding: "base64",
-                    headers: { "X-Attachment-Id": VERIFICATION_LOGO_CID },
-                    cid: VERIFICATION_LOGO_CID,
-                },
-            ],
-        };
-    } catch (error) {
-        // Keep delivery usable if a deployment accidentally omits the asset.
-        console.warn("[mailer] Verification logo was unavailable; using text fallback.");
-        return { logoSrc: null, attachments: [] };
+    for (const candidate of verificationLogoCandidates()) {
+        try {
+            const content = await readFile(/* turbopackIgnore: true */ candidate);
+            return cidLogoAttachment(VERIFICATION_LOGO_CID, "zuberee-email-logo.png", content, "image/png");
+        } catch {
+            /* try the next location */
+        }
     }
+    // Keep delivery usable if a deployment accidentally omits the asset.
+    console.warn("[mailer] Verification logo was unavailable; using text fallback.");
+    return { logoSrc: null, attachments: [] };
 }
 
 /**
@@ -146,54 +163,119 @@ async function prepareEmailVerificationLogo() {
  * the site-settings route when nothing has been saved yet.
  */
 /**
- * The store logo (Admin -> Footer settings) prepared for email:
- * - data-URI logos (how the admin panel stores uploads) become a CID
- *   attachment, which even Gmail renders; the HTML references the cid.
+ * The store logo (Admin -> Footer settings) prepared for email.
+ * The admin panel now stores uploads in Postgres and saves the logo value as
+ * "/api/media/<uuid>" (older data used data-URIs or /storage/... paths):
+ * - /api/media/<id> logos are loaded from Postgres and sent as a CID
+ *   attachment, which even Gmail renders without any public URL.
+ * - data-URI logos and raw base64 image text also become CID attachments.
  * - http(s) logos are referenced directly.
  * - relative paths are made absolute with FRONTEND_URL when configured.
  */
-function prepareEmailLogo(rawLogo, storeName) {
+function frontendBase() {
+    return (process.env.FRONTEND_URL || "").replace(/\/+$/, "");
+}
+
+function extensionForMime(mimeType) {
+    const subtype = String(mimeType || "image/png").split("/")[1] || "png";
+    return subtype.replace(/^x-/, "").replace(/\+.*$/, "") || "png";
+}
+
+async function prepareEmailLogo(rawLogo) {
     const raw = typeof rawLogo === "string" ? rawLogo.trim() : "";
     if (!raw) return { logoSrc: null, attachments: [] };
 
+    // 1) data: URI (legacy admin uploads kept whole images as data URIs).
     const dataMatch = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
     if (dataMatch) {
-        const cid = "zuberee-logo@zuberee.email";
-        return {
-            logoSrc: `cid:${cid}`,
-            attachments: [
-                {
-                    filename: "zuberee-logo.png",
-                    content: Buffer.from(dataMatch[2], "base64"),
-                    contentType: dataMatch[1],
-                    contentDisposition: "inline",
-                    contentTransferEncoding: "base64",
-                    headers: { "X-Attachment-Id": cid },
-                    cid,
-                },
-            ],
-        };
+        return cidLogoAttachment(
+            STORE_LOGO_CID,
+            `zuberee-logo.${extensionForMime(dataMatch[1])}`,
+            Buffer.from(dataMatch[2], "base64"),
+            dataMatch[1]
+        );
     }
 
+    // 2) /api/media/<id> - the current upload scheme: bytes live in Postgres.
+    const mediaId = mediaIdFromUrl(raw);
+    if (mediaId) {
+        try {
+            const asset = await readMediaFile(mediaId);
+            if (asset?.buffer?.length) {
+                return cidLogoAttachment(
+                    STORE_LOGO_CID,
+                    `zuberee-logo.${extensionForMime(asset.mimeType)}`,
+                    asset.buffer,
+                    asset.mimeType
+                );
+            }
+        } catch (error) {
+            console.error("[mailer] Could not load logo from media store:", error?.message || error);
+        }
+        // Fall back to a hotlink on the site origin (nginx proxies /api/).
+        const base = frontendBase();
+        if (base) return { logoSrc: `${base}${raw}`, attachments: [] };
+        return { logoSrc: null, attachments: [] };
+    }
+
+    // 3) Raw base64 image text without a data: prefix.
+    if (raw.length >= 256 && /^[A-Za-z0-9+/=\r\n]+$/.test(raw)) {
+        return cidLogoAttachment(
+            STORE_LOGO_CID,
+            "zuberee-logo.png",
+            Buffer.from(raw, "base64"),
+            "image/png"
+        );
+    }
+
+    // 4) Absolute URL -> referenced directly.
     if (/^https?:\/\//i.test(raw)) return { logoSrc: raw, attachments: [] };
 
-    const base = (process.env.FRONTEND_URL || "").replace(/\/+$/, "");
+    // 5) Legacy relative path (/storage/..., /uploads/...) -> absolute URL.
+    const base = frontendBase();
     if (base) return { logoSrc: `${base}/${raw.replace(/^\/+/, "")}`, attachments: [] };
 
     return { logoSrc: null, attachments: [] };
 }
 
 export async function getStoreBranding() {
-    const settings = await readSetting("site-settings", SITE_SETTING_DEFAULTS);
-    const footer = await readSetting("footer-settings", {});
-    const storeName = (settings.site_name || "").trim() || "Zuberee";
-    const { logoSrc, attachments } = prepareEmailLogo(
-        footer.company_logo || footer.logo_path,
-        storeName
-    );
+    let siteName = "";
+    let brandRaw = "";
+    let logoRaw = "";
+
+    // Live configuration first: the admin panel writes to Postgres now.
+    try {
+        const settings = await prisma.siteSettings.findFirst({ orderBy: { id: "asc" } });
+        const footer = await prisma.footerSettings.findFirst({ orderBy: { createdAt: "asc" } });
+        siteName = settings?.siteName || "";
+        brandRaw = settings?.primaryColor || "";
+        logoRaw = footer?.logoPath || "";
+    } catch (error) {
+        console.error("[mailer] Could not read settings from Postgres:", error?.message || error);
+    }
+
+    // Legacy file store (older deployments) fills any gaps.
+    if (!siteName || !brandRaw || !logoRaw) {
+        const settings = await readSetting("site-settings", SITE_SETTING_DEFAULTS);
+        const footer = await readSetting("footer-settings", {});
+        siteName = siteName || settings.site_name || "";
+        brandRaw = brandRaw || settings.primary_color || "";
+        logoRaw = logoRaw || footer.company_logo || footer.logo_path || "";
+    }
+
+    const storeName = (siteName || "").trim() || "Zuberee";
+    let { logoSrc, attachments } = await prepareEmailLogo(logoRaw);
+
+    // Last resort: the bundled Zuberee PNG, so every email still has a logo.
+    if (!logoSrc) {
+        const fallback = await prepareEmailVerificationLogo();
+        logoSrc = fallback.logoSrc;
+        attachments = fallback.attachments;
+    }
+
     return {
         storeName,
-        brand: normalizeHex(settings.primary_color) || SITE_SETTING_DEFAULTS.primary_color,
+        brand: normalizeHex(brandRaw) || SITE_SETTING_DEFAULTS.primary_color,
         logoSrc,
         logoAttachments: attachments,
     };
@@ -356,7 +438,7 @@ export function buildEmailVerificationEmail({ name, verificationLink, storeName,
     ].join("\n");
 
     const logoMarkup = logoSrc
-        ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" width="164" style="display:block;width:164px;max-width:164px;height:auto;border:0;outline:none;text-decoration:none;">`
+        ? `<img src="${escapeHtml(logoSrc)}" alt="${store}" width="164" style="display:block;width:164px;max-width:164px;height:auto;border:0;outline:none;text-decoration:none;background:#ffffff;border-radius:10px;padding:7px 12px;box-sizing:content-box;">`
         : `<div style="font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#ffffff;">${store}</div>`;
 
     const html = `<!DOCTYPE html>
@@ -412,14 +494,13 @@ export async function sendEmailVerificationEmail({ to, name, verificationLink })
     }
     const transporter = await createTransporter();
     const from = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@zuberee";
-    const { storeName, brand } = await getStoreBranding();
-    const verificationLogo = await prepareEmailVerificationLogo();
+    const { storeName, brand, logoSrc, logoAttachments } = await getStoreBranding();
     const email = buildEmailVerificationEmail({
         name,
         verificationLink,
         storeName,
         brand,
-        logoSrc: verificationLogo.logoSrc,
+        logoSrc,
     });
     await transporter.sendMail({
         from,
@@ -427,7 +508,7 @@ export async function sendEmailVerificationEmail({ to, name, verificationLink })
         subject: email.subject,
         text: email.text,
         html: email.html,
-        attachments: verificationLogo.attachments,
+        attachments: logoAttachments,
     });
     return { delivered: true, channel: "smtp" };
 }
