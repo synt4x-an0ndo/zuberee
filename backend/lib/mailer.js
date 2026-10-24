@@ -164,13 +164,14 @@ async function prepareEmailVerificationLogo() {
  */
 /**
  * The store logo (Admin -> Footer settings) prepared for email.
- * The admin panel now stores uploads in Postgres and saves the logo value as
- * "/api/media/<uuid>" (older data used data-URIs or /storage/... paths):
- * - /api/media/<id> logos are loaded from Postgres and sent as a CID
- *   attachment, which even Gmail renders without any public URL.
- * - data-URI logos and raw base64 image text also become CID attachments.
- * - http(s) logos are referenced directly.
- * - relative paths are made absolute with FRONTEND_URL when configured.
+ * The admin panel stores uploads in Postgres and saves the logo value as
+ * "/api/media/<uuid>" (older data used data-URIs or /storage/... paths).
+ *
+ * Gmail (web + Android app) does NOT resolve cid: inline images - it rewrites
+ * image sources through its own proxy, which cannot fetch cid: references, so
+ * recipients see a broken-image icon. The reliable approach for Gmail is a
+ * publicly hosted HTTPS URL, which is what /api/media/<id> already provides.
+ * CID embedding is kept only for sources that have no public URL at all.
  */
 function frontendBase() {
     return (process.env.FRONTEND_URL || "").replace(/\/+$/, "");
@@ -185,20 +186,13 @@ async function prepareEmailLogo(rawLogo) {
     const raw = typeof rawLogo === "string" ? rawLogo.trim() : "";
     if (!raw) return { logoSrc: null, attachments: [] };
 
-    // 1) data: URI (legacy admin uploads kept whole images as data URIs).
-    const dataMatch = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
-    if (dataMatch) {
-        return cidLogoAttachment(
-            STORE_LOGO_CID,
-            `zuberee-logo.${extensionForMime(dataMatch[1])}`,
-            Buffer.from(dataMatch[2], "base64"),
-            dataMatch[1]
-        );
-    }
+    const base = frontendBase();
 
-    // 2) /api/media/<id> - the current upload scheme: bytes live in Postgres.
+    // 1) /api/media/<id> - current upload scheme; the path is publicly served.
     const mediaId = mediaIdFromUrl(raw);
     if (mediaId) {
+        if (base) return { logoSrc: `${base}${raw}`, attachments: [] };
+        // No public origin configured: fall back to an inline CID attachment.
         try {
             const asset = await readMediaFile(mediaId);
             if (asset?.buffer?.length) {
@@ -212,13 +206,26 @@ async function prepareEmailLogo(rawLogo) {
         } catch (error) {
             console.error("[mailer] Could not load logo from media store:", error?.message || error);
         }
-        // Fall back to a hotlink on the site origin (nginx proxies /api/).
-        const base = frontendBase();
-        if (base) return { logoSrc: `${base}${raw}`, attachments: [] };
         return { logoSrc: null, attachments: [] };
     }
 
-    // 3) Raw base64 image text without a data: prefix.
+    // 2) Absolute URL -> referenced directly.
+    if (/^https?:\/\//i.test(raw)) return { logoSrc: raw, attachments: [] };
+
+    // 3) data: URI (legacy uploads kept whole images as data URIs). Gmail
+    //    strips data: URIs and cid: is unreliable, but other clients render
+    //    the CID attachment, so it beats showing nothing everywhere.
+    const dataMatch = raw.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+    if (dataMatch) {
+        return cidLogoAttachment(
+            STORE_LOGO_CID,
+            `zuberee-logo.${extensionForMime(dataMatch[1])}`,
+            Buffer.from(dataMatch[2], "base64"),
+            dataMatch[1]
+        );
+    }
+
+    // 4) Raw base64 image text without a data: prefix.
     if (raw.length >= 256 && /^[A-Za-z0-9+/=\r\n]+$/.test(raw)) {
         return cidLogoAttachment(
             STORE_LOGO_CID,
@@ -228,11 +235,7 @@ async function prepareEmailLogo(rawLogo) {
         );
     }
 
-    // 4) Absolute URL -> referenced directly.
-    if (/^https?:\/\//i.test(raw)) return { logoSrc: raw, attachments: [] };
-
-    // 5) Legacy relative path (/storage/..., /uploads/...) -> absolute URL.
-    const base = frontendBase();
+    // 5) Legacy relative path (/storage/..., /uploads/..., /images/...) -> absolute URL.
     if (base) return { logoSrc: `${base}/${raw.replace(/^\/+/, "")}`, attachments: [] };
 
     return { logoSrc: null, attachments: [] };
@@ -268,9 +271,16 @@ export async function getStoreBranding() {
 
     // Last resort: the bundled Zuberee PNG, so every email still has a logo.
     if (!logoSrc) {
-        const fallback = await prepareEmailVerificationLogo();
-        logoSrc = fallback.logoSrc;
-        attachments = fallback.attachments;
+        const base = frontendBase();
+        if (base) {
+            // Served from frontend/public/images - Gmail-compatible.
+            logoSrc = `${base}/images/zuberee-email-logo.png`;
+            attachments = [];
+        } else {
+            const fallback = await prepareEmailVerificationLogo();
+            logoSrc = fallback.logoSrc;
+            attachments = fallback.attachments;
+        }
     }
 
     return {
